@@ -409,6 +409,10 @@ Implements "Licence key format" from the Nag-ware Licensing Design doc.
 - CMake: Monocypher's two C files added to the plug-in with target_sources;
   linux-validate excludes LicenceViews and adds Monocypher. Linux build +
   validator + ProcessorTests pass with the licence code in (29 Sep).
-- NOT YET verified on the Mac: Xcode build, the dialog in a real host (VST3
-  and AU, incl. Logic's sandbox writing the file), docs/panel.png (no badge).
+- VERIFIED on the Mac (Andy, 29 Sep): Xcode build; Reaper (VST3) incl. Cmd+V;
+  Logic Pro (AU). A licence entered in Reaper was already active in Logic, so
+  the sandboxed AU reads the same ~/Library/Application Support/R2Project/
+  licence.json - the design doc's sandbox risk is closed, no app-group
+  fallback needed. Not yet: auval (should show no UI); docs/panel.png has
+  no badge.
 
