@@ -179,12 +179,16 @@ void SimpleSynthEditor::addControl (const Layout::Control& c)
 
 		// THE NAMES COME FROM enumName(), the same list the controller's
 		// toString reads, so the panel and the host's automation lane
-		// say the same word. selectorText() puts the label in front,
-		// because SpySelector draws no label of its own.
+		// say the same word.
+		//
+		// COMPACT: the switch is drawn the height of a slider's bar, with
+		// its label underneath like a slider's - see SpySelector::
+		// setCompact.
 		std::vector<std::string> names;
 		for (int i = 0; i <= paramDef (tag).stepCount; ++i)
 			names.push_back (selectorText (tag, i));
 		sel->setNames (names);
+		sel->setCompact (true);
 		sel->setLabel (shortLabel (tag));
 		registerControl (tag, sel);
 		return;

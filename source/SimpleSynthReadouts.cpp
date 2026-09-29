@@ -37,7 +37,7 @@ std::string shortLabel (ParamID tag)
 //------------------------------------------------------------------------
 std::string selectorText (ParamID tag, int position)
 {
-	return shortLabel (tag) + ": " + enumName (tag, position);
+	return enumName (tag, position);
 }
 
 //------------------------------------------------------------------------

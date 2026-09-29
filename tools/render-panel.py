@@ -151,10 +151,14 @@ def slider(c):
 
 
 def selector(c):
-    """SpySelector: a box nearly the full height, the position's name at the top."""
+    """SpySelector, compact (setCompact): an outlined box exactly where a
+    slider's bar is, the position's name where a slider's reading is, and
+    the label under it where a slider's label is."""
     x0, y0, x1, y1 = c['rect']
-    bevel(x0, y0, x1, y1 - 3, BAR_LO, BAR_HI)
-    fitted(x0 + (x1 - x0) / 2, y0 + 1, x1 - x0, c['text'], VALUE)
+    w = x1 - x0
+    bevel(x0, y1 - 15, x1, y1 - 3, BAR_LO, BAR_HI)
+    fitted(x0 + w / 2, y1 - 17, w, c['label'], LABEL)
+    fitted(x0 + w / 2, y0 + 1, w, c['text'], VALUE)
 
 
 def display(v):

@@ -127,8 +127,8 @@ display (both ADSRs on one time axis, key-up marked with dots) in a strip on
 the right. 1176 × 318.
 
 - **`SimpleSynthControls.*` is FilterDrum's control set**, namespace renamed,
-  plus two opt-in additions to `SpyEnvelopeView` (`setShowAmounts`,
-  `setGateMarker`) — see its banner. `diff` it against FilterDrum's to see
+  plus three opt-in additions — `SpyEnvelopeView::setShowAmounts` and
+  `setGateMarker`, and `SpySelector::setCompact` — see its banner. `diff` it against FilterDrum's to see
   exactly that.
 - **The layout is data** in `SimpleSynthLayout.h`, with no VSTGUI in it.
 - **Every string that depends on a value** is made in
@@ -136,8 +136,11 @@ the right. 1176 × 318.
 - Both, plus the DSP's trace functions, feed **`tools/dump-layout.cpp`**,
   whose JSON `tools/render-panel.py` draws into `docs/panel.png`. So the
   picture is drawn from the code the editor runs, not from a parsed copy.
-- `SpySelector` draws no label of its own, so the two switches read
-  "Wave: Saw" / "Output: Shape" (`selectorText()`).
+- **The switches are the height of a slider's bar** (`setCompact`): an
+  outlined box exactly where a slider's bar sits, the position's name
+  where a slider's reading is, the label ("Wave", "Output") under it. They
+  were FilterDrum's full-height selector box until 29 Sep; Andy asked for
+  them to match the sliders.
 
 ## Bugs found by the Linux validator, and fixed
 

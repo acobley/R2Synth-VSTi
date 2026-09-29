@@ -28,10 +28,10 @@ std::string readoutText (Steinberg::Vst::ParamID tag, double normalized);
     stripped - "VCF Attack" is "Attack" inside the VCF ENV box. */
 std::string shortLabel (Steinberg::Vst::ParamID tag);
 
-/** What a selector shows: its label and the position's name, from
-    enumName() - "Wave: Saw". The label is in the text because
-    SpySelector draws no label of its own, and "Square" alone could be
-    either of the two switches that have a Square. */
+/** What a selector shows as its reading: the position's name, from
+    enumName() - the same word the host's automation lane uses. The
+    label ("Wave", "Output") is drawn under it like a slider's, by the
+    compact SpySelector. */
 std::string selectorText (Steinberg::Vst::ParamID tag, int position);
 
 /** The LFO line beside the LFO group. `internalOf` gives a parameter's

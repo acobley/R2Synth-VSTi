@@ -391,12 +391,44 @@ int SpySelector::currentIndex () const
 	return std::clamp (static_cast<int> (getValueNormalized () * last + 0.5f), 0, last);
 }
 
+void SpySelector::setCompact (bool compact)
+{
+	// ADDED FOR SIMPLESYNTH - see the banner in SimpleSynthControls.h.
+	if (compact == mCompact)
+		return;
+	mCompact = compact;
+	invalid ();
+}
+
 void SpySelector::draw (CDrawContext* context)
 {
+	const CRect r = getViewSize ();
+
+	if (mCompact)
+	{
+		// ADDED FOR SIMPLESYNTH. The box is EXACTLY a slider's bar -
+		// same rectangle, same 3d edge - so a switch in a row of sliders
+		// lines up with them top and bottom. Outlined and never filled:
+		// a filled bar is a slider's value, and a switch that looked
+		// like a slider at 100 % would be read as one. The name goes
+		// where a slider's reading goes and the label where its label
+		// goes, so the row reads as one kind of control with two ways of
+		// moving.
+		draw3dRect (context,
+		            CRect (r.left, r.bottom - kBarBottomInset - kBarHeight,
+		                   r.right, r.bottom - kBarBottomInset),
+		            Colours::kBarLight, Colours::kBarHigh);
+		drawLabel (context, mLabel, Colours::kLabel);
+		if (! mNames.empty ())
+			drawFitted (context, mNames[static_cast<std::size_t> (currentIndex ())],
+			            r, Colours::kValue);
+		setDirty (false);
+		return;
+	}
+
 	// A multi-state control is a box the full height of the view with the
 	// name of the current value across it: PaintBk took Bar.top from
 	// rect.top and skipped the fill.
-	const CRect r = getViewSize ();
 	draw3dRect (context, CRect (r.left, r.top, r.right, r.bottom - kBarBottomInset),
 	            Colours::kBarLight, Colours::kBarHigh);
 

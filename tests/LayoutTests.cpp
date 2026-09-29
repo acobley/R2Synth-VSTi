@@ -154,6 +154,9 @@ int main ()
 				check (static_cast<int> (t.size ()) * kTinyCharWidth <= kColumnWidth,
 				       name (c) + " \"" + t + "\" fits");
 			}
+			// A compact selector draws its label like a slider does.
+			const std::string l = shortLabel (c.tag);
+			check (static_cast<int> (l.size ()) * kTinyCharWidth <= kColumnWidth, name (c) + " label \"" + l + "\" fits");
 			continue;
 		}
 		for (double n : { 0.0, 0.001, 0.5, 0.999, 1.0 })

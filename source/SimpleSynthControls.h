@@ -5,13 +5,21 @@
 // which came from Project6, VocalFilter and SpyBand before it - the
 // "interface style from the KorgDrum" this plug-in was asked to use.
 //
-// TWO ADDITIONS ON THIS HOP, both to SpyEnvelopeView and both opt-in, so
-// every existing call behaves exactly as it did in FilterDrum:
+// THREE ADDITIONS ON THIS HOP, all opt-in, so every existing call
+// behaves exactly as it did in FilterDrum:
 //
-//   * setShowAmounts (false) hides the two Amount marker lines. The LFO
-//     display has no amounts, and an ADSR's depth is its curve.
-//   * setGateMarker (fraction) draws a dotted vertical line across the
-//     plot - where the key went up on the envelope display.
+//   * SpyEnvelopeView::setShowAmounts (false) hides the two Amount marker
+//     lines. The LFO display has no amounts, and an ADSR's depth is its
+//     curve.
+//   * SpyEnvelopeView::setGateMarker (fraction) draws a dotted vertical
+//     line across the plot - where the key went up on the envelope
+//     display.
+//   * SpySelector::setCompact (true) draws the switch the SAME HEIGHT AS A
+//     SLIDER'S BAR, in the same place, with the position's name where a
+//     slider has its reading and the label under it where a slider has
+//     its label. Without it a switch is a box nearly the full height of
+//     the control, which in a row of sliders reads as a different kind of
+//     panel altogether.
 //
 // Everything else - drawing, mouse handling, colours - is FilterDrum's
 // to the line, apart from the namespace. `diff` it against FilterDrum's
@@ -196,6 +204,10 @@ public:
 
 	void setNames (const std::vector<std::string>& names);
 
+	/** ADDED FOR SIMPLESYNTH - see the banner. The whole control still
+	    takes the click; only the drawing changes. */
+	void setCompact (bool compact);
+
 	void draw (VSTGUI::CDrawContext* context) override;
 	void onMouseDownEvent (VSTGUI::MouseDownEvent& event) override;
 	void onMouseMoveEvent (VSTGUI::MouseMoveEvent& event) override;
@@ -207,6 +219,7 @@ public:
 private:
 	int currentIndex () const;
 
+	bool mCompact = false;
 	std::vector<std::string> mNames;
 	VSTGUI::CCoord mAnchorY = 0.;
 	bool mMoved = false;
