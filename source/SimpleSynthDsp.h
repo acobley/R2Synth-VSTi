@@ -149,6 +149,11 @@ constexpr double kMaxLfoPitchSemis = 12.0;
 /** The LFO's reach on the cutoff, in octaves. */
 constexpr double kMaxLfoCutoffOctaves = 4.0;
 
+/** The LFO's reach on the resonance, in LOOP GAIN - the whole of the
+    Resonance knob's range, so at full depth a knob at 0 swings up to
+    self-oscillation on the LFO's peaks. */
+constexpr double kMaxLfoResonanceK = kMaxResonanceK;
+
 /** Envelope calibration: the Decay and Release knobs mean the time to
     fall to -60 dB of the distance remaining, which is what "release time"
     means on every synth that states it. The envelope then runs on to
@@ -230,6 +235,28 @@ inline double cutoffCeilingHz (double sampleRate)
 inline bool selfOscillating (double resonanceK)
 {
 	return resonanceK >= 1.0;
+}
+
+/** THE RESONANCE LFO 1 LEAVES THE FILTER AT: the knob, plus `depth`
+    times the LFO (-1..+1), clamped to the knob's own range. BIPOLAR,
+    round the knob, so the knob stays the centre of the wobble; the
+    clamp is what the ear hears as the wobble flattening at either end.
+    EXACTLY the knob at depth 0 - the tests hold it to that. All three
+    in loop gain. */
+inline double lfoResonance (double knobK, double depthK, double lfo)
+{
+	if (depthK <= 0.0)
+		return knobK;
+	const double k = knobK + depthK * lfo;
+	return (k < 0.0) ? 0.0 : (k > kMaxResonanceK) ? kMaxResonanceK : k;
+}
+
+/** The lowest and highest resonance lfoResonance() reaches over a
+    cycle, for the panel's readout. */
+inline void lfoResonanceRange (double knobK, double depthK, double& lo, double& hi)
+{
+	lo = lfoResonance (knobK, depthK, -1.0);
+	hi = lfoResonance (knobK, depthK, +1.0);
 }
 
 /** THE MS-20 SHAPE. `shape` runs -1..+1; phase 0..1.
@@ -685,6 +712,7 @@ public:
 	void setLfoPitchDepth (double semitones);
 	void setLfoCutoffDepth (double octaves);
 	void setLfoVcaDepth (double depth);                // 0..1
+	void setLfoResonanceDepth (double loopGain);       // 0..kMaxLfoResonanceK
 
 	void setLfo2Rate (double hz);
 	void setLfo2Level (double level);                  // 0..1
@@ -732,6 +760,10 @@ public:
 	    LFO 2 - for the tests. */
 	double lastLfoShape () const { return mLastLfoShape; }
 
+	/** The loop gain the filter was handed on the last sample - the
+	    knob moved by LFO 1 - for the tests. */
+	double lastResonance () const { return mLastResonance; }
+
 private:
 	float renderSample ();
 
@@ -756,6 +788,7 @@ private:
 	Smoother mLfoPitch;
 	Smoother mLfoCutoff;
 	Smoother mLfoVca;
+	Smoother mLfoRes;
 	Smoother mLfo2Level;
 	Smoother mEnvAmount;
 	Smoother mOutput;
@@ -763,6 +796,7 @@ private:
 	double mKeyTrack = 0.5;
 	double mLfoShapeKnob = 0.0;     // the Shape knob; LFO 2 sweeps around it
 	double mLastLfoShape = 0.0;
+	double mLastResonance = 0.0;
 	std::uint32_t mNoiseState = 0x12345678u;
 	double mLastCutoffHz = 1000.0;
 

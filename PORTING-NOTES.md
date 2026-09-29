@@ -178,7 +178,7 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
 Four rows in signal order — VCOs, LFO 1 + LFO 2, VCF + VCF ENV,
 VCA/OUTPUT + VCA ENV — with an LFO display (both outputs, the patched one marked) and an envelope
 display (both ADSRs on one time axis, key-up marked with dots) in a strip on
-the right. 1176 × 302.
+the right. 1270 × 302 (was 1176 until LFO 1 → resonance).
 
 - **`SimpleSynthControls.*` is FilterDrum's control set**, namespace renamed,
   plus four opt-in additions — `SpyEnvelopeView::setShowAmounts` and
@@ -193,6 +193,16 @@ the right. 1176 × 302.
   moved to the title row (`kEngineLineX`) and the retrigger note into the
   flow line. The title and flow text live in `SimpleSynthReadouts.cpp`
   (`panelTitleText()`, `panelFlowText()`) so the picture prints them too.
+- **LFO 1 → resonance grew the panel by one column.** "LFO Res"
+  (`kVcfLfoRes`, appended after `kLfo2Level`) sits in the VCF box next to
+  the cutoff depth, so the VCF and VCA/OUTPUT boxes are five columns and
+  both ADSR boxes moved one column right; rows 2–3 are now the widest,
+  and `kRowRight` takes the larger of the two candidates. The depth is
+  **bipolar round the Resonance knob in the knob's own units** (per cent
+  of its travel; loop gain 0..`kMaxResonanceK` internally), clamped to
+  0..`kMaxResonanceK` by `lfoResonance()` — so full depth from a knob at 0
+  swings into self-oscillation on the LFO's peaks. The lamp still shows
+  the knob only. Exactly the knob at depth 0 (tested bit-for-bit).
 - **Every string that depends on a value** is made in
   `SimpleSynthReadouts.cpp`, also VSTGUI-free.
 - Both, plus the DSP's trace functions, feed **`tools/dump-layout.cpp`**,

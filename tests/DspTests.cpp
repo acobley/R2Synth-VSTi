@@ -122,6 +122,7 @@ void applyDefaultPatch (SimpleSynthDsp& d)
 	d.setResonance (0.20 * kMaxResonanceK);
 	d.setKeyTrack (0.5);
 	d.setLfoCutoffDepth (0.0);
+	d.setLfoResonanceDepth (0.0);
 	d.setVcfEnvAmount (3.0);
 	d.setVcfEnvelope ({ 0.005, 0.300, 0.30, 0.300 });
 	d.setLfoVcaDepth (0.0);
@@ -1361,6 +1362,98 @@ static void measureDefaultLevel ()
 }
 
 //------------------------------------------------------------------------
+// 5c. LFO 1 -> resonance
+//------------------------------------------------------------------------
+static void testLfoResonance ()
+{
+	std::printf ("LFO 1 -> resonance\n");
+
+	// THE ARITHMETIC the panel's line and the DSP share.
+	for (double knob : { 0.0, 0.22, 0.9, kMaxResonanceK })
+		for (double lfo : { -1.0, -0.4, 0.0, 0.8, 1.0 })
+			check (lfoResonance (knob, 0.0, lfo) == knob,
+			       "depth 0 leaves the resonance EXACTLY on the knob (" + num (knob) + ", lfo " + num (lfo) + ")");
+	checkClose (lfoResonance (0.5, 0.2, 1.0), 0.7, 1e-15, "bipolar: up by the depth on the LFO's peak");
+	checkClose (lfoResonance (0.5, 0.2, -1.0), 0.3, 1e-15, "and down by it on the trough");
+	check (lfoResonance (0.9, kMaxLfoResonanceK, 1.0) == kMaxResonanceK, "clamped at the knob's top");
+	check (lfoResonance (0.1, kMaxLfoResonanceK, -1.0) == 0.0, "and at zero - never negative feedback");
+	{
+		double lo = 0.0, hi = 0.0;
+		lfoResonanceRange (0.22, 0.5, lo, hi);
+		checkClose (lo, 0.0, 1e-15, "knob 0.22 at depth 0.5 reaches down to 0");
+		checkClose (hi, 0.72, 1e-12, "and up to 0.72");
+	}
+
+	auto setup = [] (SimpleSynthDsp& d, double depth) {
+		d.setSampleRate (48000.0);
+		applyDefaultPatch (d);
+		d.setResonance (0.5);
+		d.setLfoRate (5.0);
+		d.setLfoOutput (LfoOutput::Sine);
+		d.setLfoResonanceDepth (depth);
+		d.reset ();
+		d.noteOn (48, 1.f);
+	};
+
+	// AT DEPTH 0 THE FILTER GETS THE KNOB on every sample, and the audio
+	// is bit-identical to a patch that never heard of the control.
+	{
+		SimpleSynthDsp a, b;
+		setup (a, 0.0);
+		setup (b, 0.0);
+		b.setLfoResonanceDepth (0.0);   // set twice, on purpose: no drift from the smoother
+		std::vector<float> la (48000), ra (la.size ()), lb (la.size ()), rb (la.size ());
+		bool onKnob = true;
+		for (size_t i = 0; i < la.size (); i += 480)
+		{
+			a.render (&la[i], &ra[i], 480);
+			b.render (&lb[i], &rb[i], 480);
+			onKnob = onKnob && (a.lastResonance () == static_cast<double> (static_cast<float> (0.5)));
+		}
+		check (onKnob, "at depth 0 the filter is handed the Resonance knob exactly");
+		check (la == lb, "at depth 0 the output is deterministic and unchanged");
+	}
+
+	// AT DEPTH THE RESONANCE SWINGS round the knob, at the LFO's rate,
+	// and the swing reaches the expected ends.
+	{
+		SimpleSynthDsp d;
+		setup (d, 0.3);
+		float l[1], r[1];
+		for (int i = 0; i < 4800; ++i) d.render (l, r, 1);   // the smoothers settle
+		std::vector<double> k (48000);
+		double lo = 9.0, hi = -9.0;
+		for (auto& v : k)
+		{
+			d.render (l, r, 1);
+			v = d.lastResonance ();
+			lo = std::min (lo, v); hi = std::max (hi, v);
+		}
+		checkClose (lo, 0.2, 0.01, "depth 0.3 round 0.5 swings down to 0.2 (" + num (lo, "%.3f") + ")");
+		checkClose (hi, 0.8, 0.01, "and up to 0.8 (" + num (hi, "%.3f") + ")");
+		for (auto& v : k) v -= 0.5;
+		checkClose (measureFrequency (k, 48000.0), 5.0, 0.05, "the resonance moves at LFO 1's rate");
+	}
+
+	// FULL DEPTH FROM A KNOB AT ZERO sings on the peaks: the swing crosses
+	// self-oscillation, and nothing blows up.
+	{
+		SimpleSynthDsp d;
+		setup (d, kMaxLfoResonanceK);
+		d.setResonance (0.0);
+		d.setLfoRate (1.0);
+		d.reset ();
+		d.noteOn (48, 1.f);
+		std::vector<float> l (48000 * 4), r (l.size ());
+		d.render (l.data (), r.data (), static_cast<int> (l.size ()));
+		bool finite = true;
+		for (float v : l) finite = finite && std::isfinite (v);
+		check (finite, "full depth from Resonance 0 stays finite");
+		check (peakDbFS (l, 0) < 6.0, "and bounded (" + num (peakDbFS (l, 0), "%.2f") + " dBFS)");
+	}
+}
+
+//------------------------------------------------------------------------
 int main ()
 {
 	std::printf ("SimpleSynth DSP tests\n");
@@ -1372,6 +1465,7 @@ int main ()
 	testVcos ();
 	testLfo ();
 	testLfo2 ();
+	testLfoResonance ();
 	testLadder ();
 	testAdsr ();
 	testNotes ();

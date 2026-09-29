@@ -304,6 +304,7 @@ void SimpleSynthEditor::refreshDependents (ParamID tag)
 		case kLfo2Rate:
 		case kLfoPitch:
 		case kVcfLfo:
+		case kVcfLfoRes:
 		case kVcaLfo:
 			refreshInfoLines ();
 			break;

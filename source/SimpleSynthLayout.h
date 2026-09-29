@@ -22,14 +22,20 @@
 //
 //   row 0   VCO 1        | VCO 2        | VCO 3          | LFO display
 //   row 1   LFO 1              | LFO 2    | readouts    |   (rows 0-1)
-//   row 2   VCF                | VCF ENV                | ENV display
-//   row 3   VCA / OUTPUT       | VCA ENV                |   (rows 2-3)
+//   row 2   VCF (five)           | VCF ENV              | ENV display
+//   row 3   VCA / OUTPUT         | VCA ENV              |   (rows 2-3)
 //
 // LFO 2 (29 Sep 2026) took the first two columns of what had been the
 // readout area, so the readouts are three short lines now, all about
 // the two LFOs; the engine line moved up to the title row, and the
 // note about retriggering into the signal-flow line. THE PANEL DID NOT
 // GROW: the same 1176 x 302.
+//
+// LFO 1 -> RESONANCE (29 Sep 2026, later) widened the VCF group to five
+// columns so the depth sits at its destination next to the cutoff
+// depth, and the two ADSR groups moved one column right with it. Rows
+// 2-3 are now the widest (ten columns, one boundary), so kRowRight is
+// theirs and THE PANEL GREW 94 pixels (one column): 1270 x 302.
 //
 // The two ADSR groups are one above the other so Attack sits over
 // Attack; the VCF and VCA groups likewise, so the two LFO depth knobs
@@ -108,7 +114,8 @@ constexpr int rowY (int row)
     therefore of every row: a row with fewer boxes stretches its last
     box to here, so the right-hand edges line up and the strip of
     displays beside them is one straight edge. */
-constexpr int kRowRight = columnX (9, 2) - kColumnGap + kGroupPadX;
+constexpr int kRowRight = ((columnX (9, 2) > columnX (10, 1)) ? columnX (9, 2) : columnX (10, 1))
+                         - kColumnGap + kGroupPadX;
 
 //------------------------------------------------------------------------
 // The displays, in a strip to the right, each spanning two rows
@@ -211,11 +218,12 @@ constexpr Control kControls[] = {
 	{ kResonance,    2, 1, 0, Kind::Slider   },
 	{ kKeyTrack,     2, 2, 0, Kind::Slider   },
 	{ kVcfLfo,       2, 3, 0, Kind::Slider   },
-	{ kVcfAttack,    2, 4, 1, Kind::Slider   },
-	{ kVcfDecay,     2, 5, 1, Kind::Slider   },
-	{ kVcfSustain,   2, 6, 1, Kind::Slider   },
-	{ kVcfRelease,   2, 7, 1, Kind::Slider   },
-	{ kVcfEnvAmount, 2, 8, 1, Kind::Slider   },
+	{ kVcfLfoRes,    2, 4, 0, Kind::Slider   },   // LFO 1 -> resonance, beside the cutoff depth
+	{ kVcfAttack,    2, 5, 1, Kind::Slider   },
+	{ kVcfDecay,     2, 6, 1, Kind::Slider   },
+	{ kVcfSustain,   2, 7, 1, Kind::Slider   },
+	{ kVcfRelease,   2, 8, 1, Kind::Slider   },
+	{ kVcfEnvAmount, 2, 9, 1, Kind::Slider   },
 
 	// The VCA's LFO depth directly under the VCF's, so the two depth
 	// knobs that live at their destinations share a column. The Output
@@ -223,10 +231,10 @@ constexpr Control kControls[] = {
 	// first sit at the left edge, one above the other.
 	{ kVcaLfo,       3, 3, 0, Kind::Slider   },
 	{ kOutputLevel,  3, 0, 0, Kind::Slider   },
-	{ kVcaAttack,    3, 4, 1, Kind::Slider   },
-	{ kVcaDecay,     3, 5, 1, Kind::Slider   },
-	{ kVcaSustain,   3, 6, 1, Kind::Slider   },
-	{ kVcaRelease,   3, 7, 1, Kind::Slider   },
+	{ kVcaAttack,    3, 5, 1, Kind::Slider   },
+	{ kVcaDecay,     3, 6, 1, Kind::Slider   },
+	{ kVcaSustain,   3, 7, 1, Kind::Slider   },
+	{ kVcaRelease,   3, 8, 1, Kind::Slider   },
 };
 
 constexpr int kNumControls = static_cast<int> (sizeof (kControls) / sizeof (kControls[0]));
@@ -237,10 +245,10 @@ constexpr Group kGroups[] = {
 	{ "VCO 3",        0, 6, 3, 2, true  },
 	{ "LFO 1",        1, 0, 4, 0, false },
 	{ "LFO 2 -> SHAPE", 1, 4, 2, 1, false },
-	{ "VCF",          2, 0, 4, 0, false },
-	{ "VCF ENV",      2, 4, 5, 1, true  },
-	{ "VCA / OUTPUT", 3, 0, 4, 0, false },
-	{ "VCA ENV",      3, 4, 5, 1, true  },
+	{ "VCF",          2, 0, 5, 0, false },
+	{ "VCF ENV",      2, 5, 5, 1, true  },
+	{ "VCA / OUTPUT", 3, 0, 5, 0, false },
+	{ "VCA ENV",      3, 5, 5, 1, true  },
 };
 
 constexpr int kNumGroups = static_cast<int> (sizeof (kGroups) / sizeof (kGroups[0]));
@@ -277,7 +285,7 @@ static_assert (kGroupPadTop >= 11,
                "a slider's reading must start below the title (11 pixels of lettering)");
 static_assert (kGroupTitleBand > 0 && kGroupTitleBand < kGroupPadTop,
                "the frame line must run through the title, above the sliders");
-static_assert (kEditorWidth == 1176 && kEditorHeight == 302,
+static_assert (kEditorWidth == 1270 && kEditorHeight == 302,
                "the panel changed size - update the banner, docs/panel.png and this assert together");
 
 //------------------------------------------------------------------------

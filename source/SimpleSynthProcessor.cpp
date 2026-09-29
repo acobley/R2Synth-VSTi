@@ -221,6 +221,7 @@ void SimpleSynthProcessor::applyParam (ParamID id, double normalized)
 		case kResonance:     mDsp.setResonance (v); break;
 		case kKeyTrack:      mDsp.setKeyTrack (v); break;
 		case kVcfLfo:        mDsp.setLfoCutoffDepth (v); break;
+		case kVcfLfoRes:     mDsp.setLfoResonanceDepth (v); break;
 		case kVcfEnvAmount:  mDsp.setVcfEnvAmount (v); break;
 
 		case kVcfAttack: case kVcfDecay: case kVcfSustain: case kVcfRelease:

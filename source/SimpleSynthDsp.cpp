@@ -532,6 +532,7 @@ void SimpleSynthDsp::setSampleRate (double sampleRate)
 	mLfoPitch.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mLfoCutoff.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mLfoVca.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
+	mLfoRes.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mLfo2Level.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mEnvAmount.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mOutput.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
@@ -567,6 +568,7 @@ void SimpleSynthDsp::reset ()
 	mLfoPitch.snap (mLfoPitch.target ());
 	mLfoCutoff.snap (mLfoCutoff.target ());
 	mLfoVca.snap (mLfoVca.target ());
+	mLfoRes.snap (mLfoRes.target ());
 	mLfo2Level.snap (mLfo2Level.target ());
 	mEnvAmount.snap (mEnvAmount.target ());
 	mOutput.snap (static_cast<float> (dbToGain (mOutputDb)));
@@ -641,6 +643,11 @@ void SimpleSynthDsp::setLfo2Level (double level)
 void SimpleSynthDsp::setLfoVcaDepth (double depth)
 {
 	mLfoVca.setTarget (static_cast<float> (std::clamp (depth, 0.0, 1.0)));
+}
+
+void SimpleSynthDsp::setLfoResonanceDepth (double loopGain)
+{
+	mLfoRes.setTarget (static_cast<float> (std::clamp (loopGain, 0.0, kMaxLfoResonanceK)));
 }
 
 void SimpleSynthDsp::setCutoffHz (double hz)
@@ -793,7 +800,11 @@ float SimpleSynthDsp::renderSample ()
 	mNoiseState = mNoiseState * 1664525u + 1013904223u;
 	const double noise = (static_cast<double> (mNoiseState) / 4294967296.0 * 2.0 - 1.0) * kFilterNoiseLevel;
 
-	const double filtered = mFilter.tick (mix + noise, coeff, mResonance.next () * unityFeedback);
+	// Resonance: the knob moved by LFO 1, in loop gain, then scaled to
+	// this cutoff's unity feedback exactly as the knob alone is - so a
+	// swing through 1.0 crosses self-oscillation at every cutoff.
+	mLastResonance = lfoResonance (mResonance.next (), mLfoRes.next (), lfo);
+	const double filtered = mFilter.tick (mix + noise, coeff, mLastResonance * unityFeedback);
 
 	// ---- VCA -----------------------------------------------------------
 	// The LFO's VCA depth is TREMOLO DOWNWARDS from the envelope: at

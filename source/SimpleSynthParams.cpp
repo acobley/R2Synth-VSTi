@@ -77,6 +77,12 @@ const ParamDef kParams[kNumParams] = {
 	// default patch is unchanged.
 	{kLfo2Rate,     "LFO2 Rate",         "Hz",   ParamType::Log,    0.02,    20.,     0.5,    0.02,    20.,     0,    false},
 	{kLfo2Level,    "LFO2 Level",        "%",    ParamType::Float,  0.,      100.,    0.,     0.,      1.,      0,    true },
+
+	// LFO 1 on the resonance, BIPOLAR round the Resonance knob and in
+	// the knob's own units: per cent of its travel on the panel, loop
+	// gain to the DSP. Smoothed like every depth. 0 by default, so the
+	// default patch is unchanged.
+	{kVcfLfoRes,    "VCF LFO Res",       "%",    ParamType::Float,  0.,      100.,    0.,     0.,      kMaxResonanceK, 0, true },
 };
 
 //------------------------------------------------------------------------

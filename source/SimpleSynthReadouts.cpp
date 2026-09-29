@@ -118,6 +118,11 @@ std::string readoutText (ParamID tag, double normalized)
 			std::snprintf (text, sizeof (text), (plain < 0.005) ? "off" : "%.2f oct", plain);
 			break;
 
+		case kVcfLfoRes:
+			// +/- because it swings both ways round the Resonance knob.
+			std::snprintf (text, sizeof (text), (plain < 0.5) ? "off" : "+/-%.0f %%", plain);
+			break;
+
 		case kVcfEnvAmount:
 			// SIGNED, EXPLICITLY: the negative half sweeps downwards,
 			// and a sign swallowed would make the two halves read alike.
@@ -187,8 +192,11 @@ std::string lfoLineText (const std::function<double (ParamID)>& internalOf)
 std::string lfoDepthsLineText (const std::function<double (ParamID)>& internalOf)
 {
 	char text[160] = {};
-	std::snprintf (text, sizeof (text), "   ->  pitch %.2f st, cutoff %.2f oct, VCA %.0f%%",
-	               internalOf (kLfoPitch), internalOf (kVcfLfo), internalOf (kVcaLfo) * 100.0);
+	// Resonance as +/- per cent of the knob, the way its own readout
+	// says it - the depth is in the knob's units.
+	std::snprintf (text, sizeof (text), "   ->  pitch %.2f st, cutoff %.2f oct, res +/-%.0f%%, VCA %.0f%%",
+	               internalOf (kLfoPitch), internalOf (kVcfLfo),
+	               internalOf (kVcfLfoRes) / kMaxResonanceK * 100.0, internalOf (kVcaLfo) * 100.0);
 	return std::string (text);
 }
 

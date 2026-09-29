@@ -18,7 +18,10 @@
 //     0..kMaxResonanceK, where 1.0 is self-oscillation at every cutoff;
 //   * LFO Shape is shown -100..+100 % and handed over as -1..+1;
 //   * LFO2 Level is shown 0..100 % and handed over as 0..1 - how far
-//     LFO 2 sweeps the Shape, in units of kMaxLfo2ShapeSweep.
+//     LFO 2 sweeps the Shape, in units of kMaxLfo2ShapeSweep;
+//   * VCF LFO Res is shown 0..100 % OF THE RESONANCE KNOB and handed
+//     over as loop gain, 0..kMaxResonanceK - the same scale as
+//     Resonance, so 20 % of depth swings exactly 20 % of the knob.
 //
 // Note what is NOT a range mapping: dB to linear gain, and Hz to the
 // ladder's coefficient. Those are the DSP's arithmetic and live in
@@ -80,6 +83,10 @@ enum Param : Steinberg::Vst::ParamID
 	// it next to LFO 1.
 	kLfo2Rate,
 	kLfo2Level,
+
+	// LFO 1 -> resonance depth, appended on 29 Sep 2026. On the panel it
+	// sits in the VCF group next to the cutoff depth; here, at the end.
+	kVcfLfoRes,
 
 	kNumParams,
 
