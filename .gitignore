@@ -6,6 +6,12 @@ external/
 # Standalone test binaries (built by hand outside cmake)
 dsptests
 
+# Licence tools build output, and the licence SIGNING seed (private key).
+# The public half is source/LicencePublicKey.h, which IS committed.
+build-licence/
+licence-dev/
+*signing-seed*.hex
+
 # Signing material. None of this should ever be in a repository.
 *.cer
 *.certSigningRequest

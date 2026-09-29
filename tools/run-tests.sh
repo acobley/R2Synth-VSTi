@@ -5,6 +5,7 @@
 #   DSP     tests/DspTests.cpp     - SDK-free, nothing but a compiler
 #   Layout  tests/LayoutTests.cpp  - needs ONE header-only SDK file
 #                                    (external/vst3sdk, or VST3_SDK_ROOT)
+#   Licence tests/LicenceTests.cpp - SDK-free; Monocypher built as C first
 #
 # tests/ProcessorTests.cpp needs the SDK built as libraries, so it runs
 # from tools/linux-validate/ alongside the validator - see the banner
@@ -14,6 +15,7 @@ set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CXX="${CXX:-c++}"
+CC="${CC:-cc}"
 SDK="${VST3_SDK_ROOT:-$ROOT/external/vst3sdk}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -46,6 +48,17 @@ if [ -f "$SDK/pluginterfaces/vst/vsttypes.h" ]; then
         "$ROOT/source/SimpleSynthParams.cpp" "$ROOT/source/SimpleSynthDsp.cpp"
 else
     printf '\n=== Layout ===\n  SKIPPED: no VST3 SDK at %s (run ./setup-xcode.sh once, or set VST3_SDK_ROOT)\n' "$SDK"
+fi
+
+MONO="$ROOT/third_party/monocypher"
+if "$CC" -std=c99 -O2 -c -o "$WORK/monocypher.o" "$MONO/monocypher.c" 2>"$WORK/build.err" &&
+   "$CC" -std=c99 -O2 -c -o "$WORK/monocypher-ed25519.o" "$MONO/monocypher-ed25519.c" 2>>"$WORK/build.err"; then
+    run "Licence" licencetests "-Wall -Wextra -I$MONO" \
+        "$ROOT/tests/LicenceTests.cpp" "$ROOT/source/LicenceKey.cpp" \
+        "$ROOT/source/LicenceSha256.cpp" "$ROOT/source/LicenceIssue.cpp" \
+        "$WORK/monocypher.o" "$WORK/monocypher-ed25519.o"
+else
+    printf '\n=== Licence ===\n  BUILD FAILED (Monocypher)\n'; head -20 "$WORK/build.err" | sed 's/^/  /'; fail=1
 fi
 
 echo

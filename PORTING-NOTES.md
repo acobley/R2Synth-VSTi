@@ -343,3 +343,34 @@ New files were added since the last configure, so **re-run `./setup-xcode.sh`
 before building** — otherwise the build compiles the old file list and fails
 with *"Bundle does not export the required 'GetPluginFactory' function"* or
 the source-manifest guard stops it.
+
+## Licensing (step 1: key format, dev keypair, Mac tools)
+
+Implements "Licence key format" from the Nag-ware Licensing Design doc. Not
+yet wired into the plugin (no licence file, no dialog, not in CMake).
+
+- Crypto: Monocypher 4.0.2 in `third_party/monocypher/`, using the OPTIONAL
+  `monocypher-ed25519.c` = standard RFC 8032 Ed25519 (SHA-512), so Java /
+  OpenSSL on the server can sign compatible keys. Monocypher's default
+  `crypto_eddsa_*` (BLAKE2b) is NOT compatible. Compile its .c files as C.
+- `source/LicenceKey.{h,cpp}` - 81-byte payload, Crockford Base32 `BNDL1-`
+  text, name hash (SHA-256 of trimmed, ASCII-lower-cased name; own
+  `LicenceSha256.cpp` since Monocypher has no SHA-256), `verifyKey()`.
+  Order: format, version, signature, name, blocklist, product (revoked
+  before out-of-scope, so a revoked key is never offered an upgrade).
+- `source/LicenceIssue.{h,cpp}` - signing; tools and tests only, never the plugin.
+- `source/LicenceConfig.h` - per-build knobs: `kEvaluationDays` (7),
+  `kAcceptedProducts`, `kRevokedLicenceIds`. None is in the key or the
+  licence file, so a rebuild never invalidates a licence or restarts a trial.
+- `source/LicencePublicKey.h` - GENERATED, committed, currently the
+  DEVELOPMENT key (`kPublicKeyIsDevelopment = true`). Its private seed is
+  `licence-dev/dev-signing-seed.hex` (gitignored, 0600). Replace both with
+  the production keypair before release; dev-signed keys then stop working.
+- Mac tools: `tools/licence/build.sh` -> `build-licence/r2-licence-keygen`,
+  `r2-licence-issue --seed licence-dev/dev-signing-seed.hex --name "..." [--id N]`,
+  `r2-licence-check "name" "key"` (same checks as the plugin build).
+- Tests: `tests/LicenceTests.cpp` in `tools/run-tests.sh` - RFC 8032 and
+  SHA-256 vectors, every single-bit tamper, wrong name/product, blocklist,
+  and a GOLDEN KEY made by `tools/licence/reference_key.py` (independent
+  Python, standing in for the Java server) that the C++ must match exactly.
+
