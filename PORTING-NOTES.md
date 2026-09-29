@@ -40,6 +40,11 @@ Level); from the first build on, append only.
 
 ## The signal path
 
+![Signal and modulation routing](docs/routing.png)
+
+`docs/routing.svg` is the source (hand-drawn; `routing.png` is a 2× render
+of it). Redraw it when a route or a depth range changes.
+
 ```
 VCO 1 --\                                          LFO (MS-20 MG)
 VCO 2 ---+-- mixer --> Moog ladder VCF --> VCA --> Output Level

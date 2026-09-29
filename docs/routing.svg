@@ -1,0 +1,204 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="705" viewBox="0 0 1200 705" font-family="Helvetica, Arial, sans-serif">
+  <title>SimpleSynth - signal and modulation routing</title>
+  <defs>
+    <marker id="aA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#222"/></marker>
+    <marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563a8"/></marker>
+    <marker id="aN" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d9480f"/></marker>
+    <marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#777"/></marker>
+    <style>
+      .box   { fill:#ffffff; stroke:#333; stroke-width:1.4; }
+      .src   { fill:#eef4fb; stroke:#2563a8; stroke-width:1.4; }
+      .env   { fill:#f3f3f3; stroke:#555; stroke-width:1.4; }
+      .att   { fill:#ffffff; stroke:#2563a8; stroke-width:1.2; }
+      .attN  { fill:#fff4ec; stroke:#d9480f; stroke-width:1.6; }
+      .knob  { fill:#f7f7f2; stroke:#999; stroke-width:1; }
+      .sum   { fill:#ffffff; stroke:#2563a8; stroke-width:1.4; }
+      .audio { fill:none; stroke:#222; stroke-width:2.6; marker-end:url(#aA); }
+      .mod   { fill:none; stroke:#2563a8; stroke-width:1.6; marker-end:url(#aM); }
+      .modN  { fill:none; stroke:#d9480f; stroke-width:2; marker-end:url(#aN); }
+      .bus   { fill:none; stroke:#2563a8; stroke-width:1.6; }
+      .gate  { fill:none; stroke:#777; stroke-width:1.4; stroke-dasharray:6 4; }
+      .gateA { fill:none; stroke:#777; stroke-width:1.4; stroke-dasharray:6 4; marker-end:url(#aG); }
+      .halo  { fill:none; stroke:#fbfaf7; stroke-width:9; }
+      .h     { font-size:14px; font-weight:bold; fill:#111; }
+      .t     { font-size:11.5px; fill:#333; }
+      .s     { font-size:10.5px; fill:#555; }
+      .m     { font-size:11px; fill:#2563a8; }
+      .n     { font-size:11px; fill:#d9480f; font-weight:bold; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="705" fill="#fbfaf7"/>
+  <text x="30" y="32" font-size="19" font-weight="bold" fill="#111">SimpleSynth — signal and modulation routing</text>
+  <text x="30" y="52" class="s">Mono, last-note priority. Every modulation depth is a panel knob; each is exactly off at 0.</text>
+
+  <!-- legend -->
+  <g transform="translate(905,20)">
+    <rect x="0" y="0" width="270" height="78" rx="6" fill="#fff" stroke="#ccc"/>
+    <line x1="12" y1="18" x2="52" y2="18" class="audio"/><text x="62" y="22" class="t">audio</text>
+    <line x1="12" y1="38" x2="52" y2="38" class="mod"/><text x="62" y="42" class="t">modulation (control voltage)</text>
+    <line x1="12" y1="58" x2="52" y2="58" class="gateA"/><text x="62" y="62" class="t">gate</text>
+    <line x1="140" y1="18" x2="180" y2="18" class="modN"/><text x="190" y="22" class="n">new: LFO Res</text>
+  </g>
+
+  <g transform="translate(0,40)">
+
+  <!-- ===== LFOs ===== -->
+  <rect x="70" y="40" width="180" height="60" rx="6" class="src"/>
+  <text x="160" y="64" text-anchor="middle" class="h">LFO 2</text>
+  <text x="160" y="83" text-anchor="middle" class="t">sine · 0.02–20 Hz</text>
+
+  <path d="M250,70 H396" class="mod"/>
+  <rect x="274" y="60" width="96" height="20" rx="10" class="att"/>
+  <text x="322" y="74" text-anchor="middle" class="m">Level 0–100 %</text>
+  <text x="323" y="54" text-anchor="middle" class="s">sweeps the Shape</text>
+
+  <rect x="400" y="30" width="280" height="80" rx="6" class="src"/>
+  <text x="540" y="52" text-anchor="middle" class="h">LFO 1  (MS-20)  ·  0.1–20 Hz</text>
+  <text x="540" y="71" text-anchor="middle" class="t">Shape: falling saw · triangle · rising saw</text>
+  <text x="540" y="89" text-anchor="middle" class="t">Output: Shape | Square | Sine</text>
+  <text x="540" y="104" text-anchor="middle" class="s">(0.5 ms slew on the output)</text>
+
+  <!-- LFO 1 output bus -->
+  <path d="M540,110 V150" class="bus"/>
+  <path d="M150,150 H900" class="bus"/>
+  <circle cx="540" cy="150" r="3.2" fill="#2563a8"/>
+  <text x="548" y="143" class="m">LFO 1 out, −1…+1</text>
+  <circle cx="580" cy="150" r="3.2" fill="#2563a8"/>
+  <circle cx="700" cy="150" r="3.2" fill="#d9480f"/>
+
+  <!-- taps to the four depth knobs -->
+  <path d="M150,150 V186" class="mod"/>
+  <path d="M580,150 V186" class="mod"/>
+  <path d="M700,150 V186" class="modN"/>
+  <path d="M900,150 V186" class="mod"/>
+
+  <rect x="92"  y="190" width="116" height="30" rx="4" class="att"/>
+  <text x="150" y="203" text-anchor="middle" class="m">LFO → Pitch</text>
+  <text x="150" y="215" text-anchor="middle" class="s">0–12 st</text>
+
+  <rect x="526" y="190" width="108" height="30" rx="4" class="att"/>
+  <text x="580" y="203" text-anchor="middle" class="m">VCF LFO</text>
+  <text x="580" y="215" text-anchor="middle" class="s">0–4 oct</text>
+
+  <rect x="646" y="190" width="108" height="30" rx="4" class="attN"/>
+  <text x="700" y="203" text-anchor="middle" class="n">VCF LFO Res</text>
+  <text x="700" y="215" text-anchor="middle" class="s">± 0–100 % of knob</text>
+
+  <rect x="842" y="190" width="116" height="30" rx="4" class="att"/>
+  <text x="900" y="203" text-anchor="middle" class="m">VCA LFO</text>
+  <text x="900" y="215" text-anchor="middle" class="s">0–100 %, tremolo ↓</text>
+
+  <!-- ===== pitch sum ===== -->
+  <path d="M150,220 V246" class="mod"/>
+  <circle cx="150" cy="262" r="15" class="sum"/>
+  <text x="150" y="267" text-anchor="middle" font-size="15" fill="#2563a8">Σ</text>
+  <text x="172" y="258" class="s">semitones</text>
+  <text x="172" y="271" class="s">+ Tune ±12 st per VCO</text>
+  <path d="M150,277 V316" class="mod"/>
+
+  <!-- ===== cutoff sum ===== -->
+  <path d="M580,220 V236" class="mod"/>
+  <rect x="556" y="240" width="48" height="62" rx="4" class="sum"/>
+  <text x="580" y="276" text-anchor="middle" font-size="15" fill="#2563a8">Σ</text>
+  <text x="580" y="296" text-anchor="middle" class="s">oct</text>
+  <rect x="424" y="243" width="116" height="18" rx="9" class="knob"/>
+  <text x="482" y="256" text-anchor="middle" class="s">Cutoff 20 Hz–20 kHz</text>
+  <path d="M540,252 H552" class="mod"/>
+
+  <!-- ===== resonance sum ===== -->
+  <path d="M700,220 V236" class="modN"/>
+  <rect x="676" y="240" width="48" height="62" rx="4" class="attN"/>
+  <text x="700" y="276" text-anchor="middle" font-size="15" fill="#d9480f">Σ</text>
+  <text x="700" y="296" text-anchor="middle" class="s">K</text>
+  <rect x="742" y="262" width="150" height="18" rx="9" class="knob"/>
+  <text x="817" y="275" text-anchor="middle" class="s">Resonance 0–100 % (K 0–1.1)</text>
+  <path d="M742,271 H728" class="mod"/>
+
+  <path d="M580,302 V326" class="mod"/>
+  <text x="590" y="318" class="s">2^x, 20 Hz…0.4 fs</text>
+  <path d="M700,302 V326" class="modN"/>
+  <text x="710" y="318" class="s">clamp 0…1.1</text>
+
+  <!-- ===== audio path ===== -->
+  <rect x="70" y="320" width="160" height="100" rx="6" class="box"/>
+  <text x="150" y="344" text-anchor="middle" class="h">VCO 1 · 2 · 3</text>
+  <text x="150" y="364" text-anchor="middle" class="t">saw | square each</text>
+  <text x="150" y="382" text-anchor="middle" class="t">Tune ±12 st · Level</text>
+  <text x="150" y="400" text-anchor="middle" class="s">all three free-running</text>
+
+  <path d="M230,370 H266" class="audio"/>
+  <rect x="270" y="345" width="80" height="50" rx="6" class="box"/>
+  <text x="310" y="366" text-anchor="middle" class="h">Mixer</text>
+  <text x="310" y="384" text-anchor="middle" class="t">× 0.5</text>
+
+  <path d="M350,370 H388" class="audio"/>
+  <circle cx="400" cy="370" r="10" class="box"/>
+  <text x="400" y="375" text-anchor="middle" font-size="14">+</text>
+  <rect x="350" y="424" width="100" height="20" rx="10" class="knob"/>
+  <text x="400" y="438" text-anchor="middle" class="s">noise −100 dBFS</text>
+  <path d="M400,424 V384" fill="none" stroke="#555" stroke-width="1.2" marker-end="url(#aA)"/>
+  <path d="M410,370 H516" class="audio"/>
+
+  <rect x="520" y="330" width="240" height="80" rx="6" class="box"/>
+  <text x="640" y="358" text-anchor="middle" class="h">Moog ladder VCF</text>
+  <text x="640" y="377" text-anchor="middle" class="t">4-pole (SpaceDub) · feedback-limited</text>
+  <text x="640" y="395" text-anchor="middle" class="s">self-oscillates at K ≥ 1 — the panel lamp</text>
+
+  <path d="M760,370 H836" class="audio"/>
+  <rect x="840" y="330" width="120" height="80" rx="6" class="box"/>
+  <text x="900" y="358" text-anchor="middle" class="h">VCA</text>
+  <text x="900" y="377" text-anchor="middle" class="t">× VCA ENV</text>
+  <text x="900" y="395" text-anchor="middle" class="t">× tremolo</text>
+  <path d="M900,220 V326" class="mod"/>
+
+  <path d="M960,370 H1006" class="audio"/>
+  <rect x="1010" y="330" width="120" height="80" rx="6" class="box"/>
+  <text x="1070" y="358" text-anchor="middle" class="h">Output Level</text>
+  <text x="1070" y="377" text-anchor="middle" class="t">−48…+6 dB</text>
+  <text x="1070" y="395" text-anchor="middle" class="s">× 0.9 voice gain</text>
+  <path d="M1130,370 H1170" class="audio"/>
+  <text x="1174" y="366" class="t">L</text>
+  <text x="1174" y="381" class="t">R</text>
+
+  <!-- ===== MIDI, envelopes ===== -->
+  <rect x="30" y="500" width="180" height="70" rx="6" class="src"/>
+  <text x="120" y="524" text-anchor="middle" class="h">MIDI notes</text>
+  <text x="120" y="542" text-anchor="middle" class="t">mono · last note wins</text>
+  <text x="120" y="559" text-anchor="middle" class="s">every new note retriggers</text>
+
+  <!-- note -> pitch sum -->
+  <path d="M50,500 V262 H131" class="mod"/>
+  <text x="56" y="480" class="m">note</text>
+
+  <!-- note -> key track -> cutoff sum (via x=470, enters at y=272) -->
+  <path d="M210,515 H470 V272" class="halo"/>
+  <path d="M210,515 H470 V272 H552" class="mod"/>
+  <rect x="262" y="506" width="120" height="18" rx="9" class="att"/>
+  <text x="322" y="519" text-anchor="middle" class="m">Key Track 0–100 %</text>
+
+  <!-- VCF ENV -> env amount -> cutoff sum (via x=490, enters at y=290) -->
+  <rect x="240" y="545" width="100" height="60" rx="6" class="env"/>
+  <text x="290" y="570" text-anchor="middle" class="h">VCF ENV</text>
+  <text x="290" y="588" text-anchor="middle" class="t">ADSR</text>
+  <path d="M340,575 H490 V290" class="halo"/>
+  <path d="M340,575 H490 V290 H552" class="mod"/>
+  <rect x="352" y="566" width="110" height="18" rx="9" class="att"/>
+  <text x="407" y="579" text-anchor="middle" class="m">Env Amount ±6 oct</text>
+  <!-- redraw the audio segment over the halos so it reads as a bridge -->
+  <path d="M410,370 H516" class="audio"/>
+
+  <!-- VCA ENV -> VCA -->
+  <rect x="850" y="545" width="100" height="60" rx="6" class="env"/>
+  <text x="900" y="570" text-anchor="middle" class="h">VCA ENV</text>
+  <text x="900" y="588" text-anchor="middle" class="t">ADSR</text>
+  <path d="M900,545 V414" class="mod"/>
+
+  <!-- gate bus -->
+  <path d="M120,570 V640 H900" class="gate"/>
+  <path d="M290,640 V609" class="gateA"/>
+  <path d="M900,640 V609" class="gateA"/>
+  <text x="560" y="634" text-anchor="middle" class="s">gate — both envelopes, retriggered by every new note</text>
+
+  </g>
+</svg>
