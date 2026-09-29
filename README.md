@@ -1,93 +1,59 @@
-# VST3 / AUv2 porting template
+# SimpleSynth
 
-The build system from the SpaceDub DXi→VST3 port, with the plug-in taken out
-of it. Copy this folder, edit one block, and you have a VST3 and an Audio Unit
-building on macOS — without rediscovering the SDK fetching, the AudioUnitSDK
-version pin, the code-signing workaround or the `CMAKE_MODULE_PATH` trap.
+A monophonic analogue-style synthesiser. VST3 and Audio Unit, for macOS.
 
-**`PORTING-GUIDE.md` next to this file is the other half**: how to get a DXi's
-DSP, parameters and dialog across. Read that first; this file is only about
-getting something to build.
+![The panel](docs/panel.png)
 
-**`PORT-CHECKLIST.md`** is the working copy — six phases, tickable, with the
-decisions to record at the top and the guide's section numbers against each
-step. It comes with the template, so a fresh copy already has one.
+## What it is
 
-## Using it
+* **Three VCOs.** Each one is sawtooth or square, with its own Tune
+  (±1 octave, continuous) and Level. The waves are band-limited with
+  polyBLEP.
+* **An MS-20-style LFO.** One **Shape** knob sweeps the wave from a falling
+  sawtooth, through a triangle, to a rising sawtooth. The **square** output's
+  duty cycle follows the same knob, as the MS-20's does. The **Output**
+  switch picks which of the two waves is used. The LFO's depth is set
+  separately for **pitch** (vibrato), **cutoff** and the **VCA** (tremolo).
+* **SpaceDub's Moog ladder filter**, using the same per-sample arithmetic,
+  with two additions:
+  * It is **tuned**: the resonant peak lands on the Cutoff frequency to
+    within about a cent at every sample rate.
+  * The Resonance knob **self-oscillates at the same point at every
+    cutoff**. A lamp on the knob lights when it does.
+  
+  The filter also has Key Track and an envelope amount of ±6 octaves.
+* **Two ADSRs**, one for the filter and one for the VCA. Their decay and
+  release times are the time to −60 dB. Each envelope restarts from its
+  current level, so a retrigger never clicks.
+* **Mono, last-note priority.** Every new note retriggers both envelopes.
+  Letting go of a key returns to the last key still held.
+* **Output Level**, −48 to +6 dB.
 
-```sh
-cp -R vst3-port-template ~/DXi-DEv/MyPlugin-VSTi
-cd ~/DXi-DEv/MyPlugin-VSTi
-```
+28 parameters, all automatable. The default patch peaks at about −7 dBFS.
 
-Then:
+## Building
 
-1. **Edit the `PLUG-IN IDENTITY` block** at the top of `CMakeLists.txt` — name,
-   version, description, company, and the two bundle identifiers. Nothing else
-   in that file needs changing.
-2. **Edit `resource/au-info.plist`** — every `<string>` marked `CHANGE ME`,
-   in particular the three four-character codes. Skip this if you pass
-   `--no-au`.
-3. **Put your sources in `source/`** and your artwork in `resource/`. Both are
-   globbed, so there is no file list to maintain.
-4. Build:
+You need macOS, the Xcode command-line tools and CMake.
 
 ```sh
 ./setup-xcode.sh
 ```
 
-The first configure clones the VST3 SDK (~250 MB) into `external/`, so it
-takes a few minutes; later ones reuse it. `./setup-xcode.sh --help` lists the
-options — `--no-au`, `--no-validator`, `--makefiles`, `--clean`.
-
-## What you must supply
-
-The template builds nothing on its own; `source/` is empty. A minimal VST3
-needs:
-
-| File | What it is |
-|---|---|
-| `<Name>IDs.h` | freshly generated class UIDs — **never change once shipped** |
-| `<Name>Params.*` | the parameter table (guide §4) |
-| `<Name>Processor.*` | `AudioEffect` — the DSP and `process()` |
-| `<Name>Controller.*` | `EditControllerEx1` — parameters and host plumbing |
-| `<Name>Entry.cpp` | the plug-in factory |
-| `<Name>Editor.*` | the window, if it has one |
-| `version.h` | version strings |
-
-`../Spaceduo-VSTi/source/` is a complete worked example of all seven.
-
-## Two things that are deliberate
-
-**Sources are globbed with `CONFIGURE_DEPENDS`,** so there is no file list to
-maintain — at the cost of one wrinkle under the Xcode generator: the first
-build after you *add* a source file regenerates the project mid-build and
-compiles the old file list anyway. It shows up as the SDK post-build check
-saying *"Bundle does not export the required 'GetPluginFactory' function"*.
-A PRE_BUILD check catches this: it compares `source/` against the list
-recorded when the project was generated and stops the build naming what
-changed. Re-run `./setup-xcode.sh --no-open` and build again. Guide §7 has
-the detail.
-
-**Cache options are prefixed `PORT_`,** not the plug-in's name:
-`-DPORT_BUILD_AU=OFF`, `-DPORT_CODE_SIGN_IDENTITY=...`,
-`-DPORT_AU_SDK_TAG=...`. That way the template needs no editing beyond the
-identity block. Rename them if you prefer, but rename them in
-`setup-xcode.sh` too.
-
-**`setup-xcode.sh` reads the plug-in name out of `CMakeLists.txt`** rather
-than keeping its own copy, so there is exactly one place the name lives.
-
-## Signing
-
-Both bundles are ad-hoc signed automatically, which needs no Apple developer
-certificate and is enough for macOS to load them, Apple Silicon included. To
-sign properly:
+The first configure downloads the VST3 SDK and Apple's AudioUnitSDK into
+`external/`. The build installs the VST3 and the AU into
+`~/Library/Audio/Plug-Ins/`. Then check the AU:
 
 ```sh
-cmake -B build -G Xcode -DPORT_CODE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+auval -v aumu SiSy AECo
 ```
 
-`security find-identity -v -p codesigning` lists what you have. The reasoning
-behind not leaving this to the SDK is in the `CMakeLists.txt` comments and in
-guide §9.
+## Tests
+
+```sh
+tools/run-tests.sh            # the DSP suite, then the layout and panel-text suite
+python3 tools/render-panel.py # redraws docs/panel.png from the code the editor runs
+```
+
+`tools/linux-validate/` builds the plug-in on Linux with the editor stubbed
+out. It runs the SDK validator and `tests/ProcessorTests.cpp`. See
+`PORTING-NOTES.md` for what was measured, what was found, and why.

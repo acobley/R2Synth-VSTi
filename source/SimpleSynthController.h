@@ -1,33 +1,17 @@
 //------------------------------------------------------------------------
 // SimpleSynth - edit controller
 //
-// The half of the plug-in that talks to the host about parameters. It
-// does NOT share memory with the processor - they may not even be in the
-// same process - which is the reason for two rules that run through this
-// project:
+// The half of the plug-in that talks to the host about parameters and
+// owns the panel. It does NOT share memory with the processor - they may
+// not even be in the same process - which is the reason for two rules
+// that run through this project:
 //
-//   * anything a panel displays that the DSP computes comes from one
+//   * anything the panel displays that the DSP computes comes from one
 //     shared function both call (SimpleSynthDsp.h), not from two copies
 //     of the arithmetic;
 //   * a value the DSP produces per block reaches here through
 //     data.outputParameterChanges, never through sendMessage from
 //     process() (SimpleSynthIDs.h).
-//
-// NO EDITOR YET, deliberately: PORTING-GUIDE.md step 6 is a silent
-// plug-in validating with processor, controller and entry and nothing
-// else. The host's generic editor shows the parameters. createView is
-// not overridden, so the base class returns null, which is how a VST3
-// says "use your own".
-//
-// WHEN THE EDITOR ARRIVES it needs five overrides here - createView,
-// editorAttached, editorRemoved, editorDestroyed and a setParamNormalized
-// that forwards to it - and one trap in editorDestroyed: EditorView's
-// destructor calls it, by which point the derived editor is gone, so
-// dynamic_cast<SimpleSynthEditor*> returns NULL and the entry survives in
-// the list as a dangling pointer. COMPARE UPCAST POINTERS instead.
-// ../FilterDrum-VSTi/source/FilterDrumController.cpp has the worked
-// version; ../SpyBand-VSTi/source/SpyBandControls.{h,cpp} is the
-// liftable control set (no bitmaps - a namespace rename is all it needs).
 //------------------------------------------------------------------------
 
 #pragma once
@@ -36,7 +20,11 @@
 
 #include "public.sdk/source/vst/vsteditcontroller.h"
 
+#include <vector>
+
 namespace SimpleSynth {
+
+class SimpleSynthEditor;
 
 //------------------------------------------------------------------------
 class SimpleSynthController : public Steinberg::Vst::EditControllerEx1
@@ -58,12 +46,32 @@ public:
 	Steinberg::tresult PLUGIN_API setComponentState (Steinberg::IBStream* state) SMTG_OVERRIDE;
 
 	/** The CONTROLLER's own state - panel-only settings with no
-	    parameter behind them. There are none yet, so both are no-ops
-	    that return kResultOk rather than kResultFalse: a host that saves
-	    an empty controller state and gets a failure back logs an error
-	    for nothing. */
+	    parameter behind them. There are none, so both are no-ops that
+	    return kResultOk rather than kResultFalse: a host that saves an
+	    empty controller state and gets a failure back logs an error for
+	    nothing. */
 	Steinberg::tresult PLUGIN_API setState (Steinberg::IBStream* state) SMTG_OVERRIDE;
 	Steinberg::tresult PLUGIN_API getState (Steinberg::IBStream* state) SMTG_OVERRIDE;
+
+	Steinberg::tresult PLUGIN_API setParamNormalized (Steinberg::Vst::ParamID tag,
+	                                                  Steinberg::Vst::ParamValue value) SMTG_OVERRIDE;
+
+	Steinberg::IPlugView* PLUGIN_API createView (Steinberg::FIDString name) SMTG_OVERRIDE;
+
+	/** Receives the sample rate the processor is running at. */
+	Steinberg::tresult PLUGIN_API notify (Steinberg::Vst::IMessage* message) SMTG_OVERRIDE;
+
+	/** The rate the DSP is actually running at, for the panel's cutoff
+	    ceiling. 44100 until the processor says otherwise. */
+	double getHostSampleRate () const { return mHostSampleRate; }
+
+	void editorAttached (Steinberg::Vst::EditorView* editor) SMTG_OVERRIDE;
+	void editorRemoved (Steinberg::Vst::EditorView* editor) SMTG_OVERRIDE;
+	void editorDestroyed (Steinberg::Vst::EditorView* editor) SMTG_OVERRIDE;
+
+private:
+	std::vector<SimpleSynthEditor*> mEditors;
+	double mHostSampleRate = 44100.0;
 };
 
 //------------------------------------------------------------------------

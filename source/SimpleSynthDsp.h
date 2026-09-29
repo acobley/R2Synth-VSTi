@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleSynth - the audio line
+// SimpleSynth - the audio engine
 //
 // NO SDK HEADER MAY ENTER THIS FILE OR ITS .cpp. That is deliberate, and
 // there are two reasons for it.
@@ -7,37 +7,54 @@
 //   1. It compiles and runs standalone with plain `c++ -std=c++17`, so
 //      its numbers can be tested before anything is built - which
 //      matters on this project, because the session that writes the code
-//      reaches the Mac through a Linux VM and cannot run cmake, Xcode,
-//      the SDK validator or auval at all. tests/DspTests.cpp is the only
-//      thing here that actually executes during development.
+//      reaches the Mac through a Linux VM and cannot run Xcode, the SDK
+//      validator or auval. tests/DspTests.cpp is the thing here that
+//      actually executes during development.
 //
 //   2. VST3 splits the processor from the controller, and they do not
 //      share memory. Anything the EDITOR displays that the DSP COMPUTES
 //      must therefore come from ONE SHARED FUNCTION that both call - not
 //      from two copies of the arithmetic that will drift apart. This
-//      header is where those functions live: see dbToGain() below, which
-//      the DSP uses to set its gain. There is no editor yet (the host's
-//      generic one is used); when there is, its readouts call these too.
+//      header is where those functions live: ladderTuning(),
+//      selfOscillating(), cutoffCeilingHz(), lfoShapeValue(),
+//      lfoSquareValue(), traceEnvelopes() and traceLfo() are all called
+//      by the audio path AND by the panel.
 //
-// WHAT IT DOES TODAY: nothing but render silence and apply a smoothed
-// output trim. SimpleSynth is an instrument, so there is no input signal
-// to pass through - render() fills the block from the voice mix, and the
-// voice mix is currently empty. applyTrim() is the trim stage on its
-// own, exposed so the tests can push a known block through it; that is
-// the "pass-through" the blank scaffold is tested as.
+// THE SIGNAL PATH - one monophonic voice, last-note priority:
 //
-// WHERE THE SYNTH GOES: renderVoices() is the one empty function.
-// Everything else is the frame around it. Before writing a real
-// processing loop in there, read ../PORTING-GUIDE.md section 5 - the
-// rules about not allocating on the audio thread, denormals, 64-bit
-// hosts and resisting the urge to improve the original's gain staging
-// all apply to new DSP exactly as they do to a port.
+//   VCO 1 --\                                          LFO (MS-20 MG)
+//   VCO 2 ---+-- mixer --> Moog ladder VCF --> VCA --> output level
+//   VCO 3 --/               ^  ^  ^            ^  ^
+//                           |  |  key track    |  LFO (tremolo)
+//                           |  LFO             VCA ENV (ADSR)
+//                           VCF ENV (ADSR)
+//
+//   * Three VCOs, each sawtooth or square, band-limited with polyBLEP,
+//     each with its own Tune (+/- 12 semitones, continuous) and Level.
+//     The LFO's Pitch depth moves all three together (vibrato).
+//   * The LFO is the Korg MS-20's modulation generator: ONE Shape knob
+//     sweeps the wave from a falling sawtooth through a triangle to a
+//     rising one, and the square output's duty cycle follows the same
+//     knob. An Output switch picks which of the two drives the three
+//     destinations - pitch, cutoff and VCA.
+//   * The filter is SpaceDub's Moog ladder ("Moog VCF, variation 2",
+//     musicdsp.org), its per-sample arithmetic unchanged - but TUNED:
+//     see MoogLadder and ladderTuning() for the two things that had to
+//     be added to make a delay-line filter a synth filter.
+//   * Two ADSRs, one on the cutoff (in octaves, signed) and one on the
+//     VCA. Retriggered on every new note, FROM WHEREVER THEY ARE, so a
+//     retrigger never clicks.
+//
+// Before changing a processing loop, read ../PORTING-GUIDE.md section 5 -
+// the rules about not allocating on the audio thread, denormals and
+// 64-bit hosts apply to new DSP exactly as they do to a port.
 //------------------------------------------------------------------------
 
 #pragma once
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 namespace SimpleSynth {
@@ -46,36 +63,112 @@ namespace SimpleSynth {
 /** Stereo, and only stereo. It agrees with setBusArrangements in the
     processor and with the single 0-in / 2-out entry in
     resource/au-info.plist; all three have to say the same thing or auval
-    rejects the Audio Unit. */
+    rejects the Audio Unit. The voice is mono and is written to both. */
 constexpr int kChannelCount = 2;
 
-/** How long the output trim takes to reach a new value, in seconds.
+constexpr int kNumVcos = 3;
+
+/** How long a smoothed control takes to reach a new value, in seconds.
 
     IT IS NOT A TASTE SETTING. It is what keeps a parameter move from
-    clicking, and the tests assert that no single sample steps the gain
-    by more than 1 % - which at the lowest sample rate anyone runs is the
-    binding constraint on how short this may be. Shorten it and re-run
-    the suite. */
+    clicking, and the tests assert that no single sample steps the output
+    gain by more than 1 % - which at the lowest sample rate anyone runs is
+    the binding constraint on how short this may be. */
 constexpr double kTrimSmoothingSeconds = 0.020;
 
-/** The floor below which the smoother's own state is flushed to zero.
-
-    Only the SMOOTHER, never the signal: the recursive element is the one
-    that can decay into denormals and cost a hundred times the cycles to
-    keep multiplying, and flushing the signal instead would break
-    applyTrim()'s bit-identity at unity for no benefit. */
+/** The floor below which a smoother's own state is flushed to zero -
+    the recursive element, never the signal. */
 constexpr float kDenormalFloor = 1e-25f;
+
+//------------------------------------------------------------------------
+// Gain staging
+//
+// MEASURED, not guessed: tests/DspTests.cpp renders the default patch and
+// prints its peak, and the constants below are what put it comfortably
+// under 0 dBFS. Change one and re-run the suite before believing the
+// result.
+//------------------------------------------------------------------------
+
+/** What the three VCO levels are summed through. Three full-level
+    oscillators in phase would otherwise be +9.5 dB into the filter. */
+constexpr double kMixerGain = 0.5;
+
+/** The voice's gain after the VCA, before the Output Level. */
+constexpr double kVoiceGain = 0.9;
+
+/** THE FILTER'S NOISE FLOOR, -100 dBFS of white noise into the ladder.
+
+    A digital filter started from exact zero stays at exact zero however
+    much gain its loop has, so with every VCO turned down a
+    self-oscillating ladder would be silent - which is not what turning
+    the resonance up past the lamp should do. An analogue one starts from
+    its own thermal noise; this is that. SpaceDub added a noise table to
+    its filter input for a related reason. At -100 dBFS it is inaudible
+    in everything except the one case it exists for. */
+constexpr double kFilterNoiseLevel = 1.0e-5;
+
+//------------------------------------------------------------------------
+// Ranges the panel quotes and the DSP enforces - one copy of each.
+//------------------------------------------------------------------------
+
+/** The VCF envelope's reach, in octaves either way. */
+constexpr double kMaxEnvOctaves = 6.0;
+
+/** The lowest cutoff the ladder is asked for, whatever the modulation. */
+constexpr double kMinCutoffHz = 20.0;
+
+/** THE CUTOFF CEILING, as a fraction of the sample rate.
+
+    The ladder's resonant peak reaches Nyquist at a coefficient of about
+    1.0 and the tuning curve bends hard above 0.4 fs, so 0.40 is where the
+    tuning is still honest. That is 17.6 kHz at 44.1 k and 19.2 kHz at 48 k,
+    so the top of the Cutoff knob (20 kHz) is unreachable at the common
+    rates - the panel says so rather than letting it look like a bug. */
+constexpr double kMaxCutoffFraction = 0.40;
+
+/** The resonance knob's top, as LOOP GAIN. 1.0 is the self-oscillation
+    threshold at EVERY cutoff - see ladderTuning() - so the top tenth of
+    the knob self-oscillates and the lamp on the panel says so. */
+constexpr double kMaxResonanceK = 1.1;
+
+/** The LFO's reach on the VCOs, in semitones. */
+constexpr double kMaxLfoPitchSemis = 12.0;
+
+/** The LFO's reach on the cutoff, in octaves. */
+constexpr double kMaxLfoCutoffOctaves = 4.0;
+
+/** Envelope calibration: the Decay and Release knobs mean the time to
+    fall to -60 dB of the distance remaining, which is what "release time"
+    means on every synth that states it. The envelope then runs on to
+    -100 dB before it calls itself idle. */
+constexpr double kReleaseTargetLevel = 0.001;   // -60 dB: what the knob means
+constexpr double kEnvelopeIdleLevel  = 1e-5;    // -100 dB: where it stops
+
+/** The attack aims past 1.0 and stops when it gets there, like an RC
+    charging towards a rail above the comparator's threshold. This is the
+    rail; 1.3 gives the familiar slightly-convex analogue attack. */
+constexpr double kAttackOvershoot = 1.3;
+
+/** The LFO's output is slewed this much before it reaches anything, so
+    a sawtooth's reset or a square's edge on the VCA is a 0.5 ms ramp and
+    not a click. At the fastest rate (20 Hz, 50 ms a cycle) it changes
+    nothing you can see on the display. */
+constexpr double kLfoSlewSeconds = 0.0005;
+
+/** The square output's duty cycle never quite reaches 0 or 1, which
+    would make it DC. */
+constexpr double kMinLfoDuty = 0.05;
 
 //------------------------------------------------------------------------
 // The shared functions
 //
-// Called by the DSP, by the parameter table's text formatting, and - once
-// there is an editor - by its readouts. One copy of the arithmetic, so the
-// number on screen and the number in the audio path cannot disagree.
+// Called by the DSP, by the controller's parameter text, and by the
+// editor's readouts. One copy of the arithmetic, so the number on screen
+// and the number in the audio path cannot disagree.
 //------------------------------------------------------------------------
 
 /** Decibels to a linear gain. Exactly 1.0 at 0 dB, which is what makes
-    the default patch bit-identical rather than nearly so. */
+    the output stage bit-identical at unity rather than nearly so. */
 inline double dbToGain (double db)
 {
 	return (db == 0.0) ? 1.0 : std::pow (10.0, db / 20.0);
@@ -87,14 +180,77 @@ inline double gainToDb (double gain)
 	return (gain <= 1e-9) ? -180.0 : 20.0 * std::log10 (gain);
 }
 
+/** MIDI note to Hz, A4 = 440. Fractional notes are fine - the tune and
+    vibrato are added in semitones before this is called. */
+inline double noteToHz (double note)
+{
+	return 440.0 * std::exp2 ((note - 69.0) / 12.0);
+}
+
+/** The highest cutoff the filter is driven to at this sample rate. The
+    panel prints it next to the engine rate. */
+inline double cutoffCeilingHz (double sampleRate)
+{
+	return sampleRate * kMaxCutoffFraction;
+}
+
+/** The self-oscillation predicate, in loop gain. The resonance lamp and
+    the filter both read it here. */
+inline bool selfOscillating (double resonanceK)
+{
+	return resonanceK >= 1.0;
+}
+
+/** THE MS-20 SHAPE. `shape` runs -1..+1; phase 0..1.
+
+      -1  falling sawtooth  (+1 down to -1)
+       0  triangle
+      +1  rising sawtooth   (-1 up to +1)
+
+    It is a triangle whose peak slides across the cycle: the peak sits at
+    (shape + 1) / 2 of the way through. Every value in between is a
+    skewed triangle, which is what the MS-20's single Waveform knob does -
+    one control, not a switch between three waves. */
+inline double lfoShapeValue (double phase, double shape)
+{
+	if (shape < -1.0) shape = -1.0;
+	if (shape >  1.0) shape =  1.0;
+	const double peak = 0.5 * (shape + 1.0);
+
+	if (phase < peak)
+		return -1.0 + 2.0 * phase / peak;               // rising part
+
+	const double fall = 1.0 - peak;
+	if (fall <= 0.0)
+		return 1.0;                                     // shape = +1 exactly
+	return 1.0 - 2.0 * (phase - peak) / fall;           // falling part
+}
+
+/** The duty cycle of the square output at this Shape - it FOLLOWS THE
+    SHAPE KNOB, as the MS-20's pulse output does: 50 % at the triangle,
+    narrowing towards either sawtooth. Clamped at kMinLfoDuty. */
+inline double lfoSquareDuty (double shape)
+{
+	if (shape < -1.0) shape = -1.0;
+	if (shape >  1.0) shape =  1.0;
+	const double duty = 0.5 * (shape + 1.0);
+	if (duty < kMinLfoDuty)       return kMinLfoDuty;
+	if (duty > 1.0 - kMinLfoDuty) return 1.0 - kMinLfoDuty;
+	return duty;
+}
+
+/** The square output: +1 for the first `duty` of the cycle, -1 after -
+    so its rising edge lines up with the shape output's lowest point. */
+inline double lfoSquareValue (double phase, double shape)
+{
+	return (phase < lfoSquareDuty (shape)) ? 1.0 : -1.0;
+}
+
 //------------------------------------------------------------------------
 /** A one-pole glide towards a target.
 
-    Deliberately the simplest thing that cannot click. The coefficient is
-    recomputed from the sample rate, so the glide takes the same number
-    of MILLISECONDS at 44.1 k and at 192 k rather than the same number of
-    samples - a smoother whose coefficient is a constant gets four times
-    faster when somebody switches to 192 k, and the click comes back. */
+    The coefficient is recomputed from the sample rate, so the glide takes
+    the same number of MILLISECONDS at 44.1 k and at 192 k. */
 class Smoother
 {
 public:
@@ -102,7 +258,7 @@ public:
 
 	/** Jump straight to the target, no glide. Used at reset and at every
 	    sample-rate change: a smoother left at zero would fade the whole
-	    instrument in over 20 ms every time the host restarted it. */
+	    instrument in every time the host restarted it. */
 	void snap (float target);
 
 	void setTarget (float target) { mTarget = target; }
@@ -112,7 +268,6 @@ public:
 	/** One sample of glide, returning the value to use for it. */
 	float next ();
 
-	/** The coefficient in use, for the tests. */
 	float coefficient () const { return mCoeff; }
 
 private:
@@ -122,69 +277,356 @@ private:
 };
 
 //------------------------------------------------------------------------
+/** One VCO: sawtooth or square, band-limited with polyBLEP.
+
+    POLYBLEP because a naive sawtooth at 2 kHz is mostly aliases, and the
+    polyBLEP correction costs two branches a sample. It is not perfect -
+    the residual aliasing is about -40 dB at the top of the keyboard - but
+    it is the right cost for a mono voice.
+
+    FREE-RUNNING: the phase is not reset on a note, which is what an
+    analogue VCO does and why three detuned ones beat against each other
+    rather than starting every note identically. */
+class Vco
+{
+public:
+	enum class Wave { Saw, Square };
+
+	void setWave (Wave w) { mWave = w; }
+	Wave wave () const { return mWave; }
+
+	/** Where the phase starts at reset. The three VCOs start a third of
+	    a cycle apart so that three identical ones are not one loud one on
+	    the first note after a reset. */
+	void reset (double startPhase) { mPhase = startPhase; }
+
+	/** One sample. `increment` is Hz / sample rate, already clamped by
+	    the caller to below Nyquist. */
+	double next (double increment);
+
+	double phase () const { return mPhase; }
+
+private:
+	Wave   mWave  = Wave::Saw;
+	double mPhase = 0.0;
+};
+
+//------------------------------------------------------------------------
+/** The Korg MS-20 modulation generator.
+
+    Two outputs, as on the MS-20's patch panel, and an Output switch that
+    picks which one drives the destinations:
+
+      * SHAPE  - the skewed triangle, lfoShapeValue()
+      * SQUARE - lfoSquareValue(), whose duty follows the same knob
+
+    Bipolar, -1..+1. FREE-RUNNING - not reset by notes - because the
+    MS-20's is not either. */
+class MsLfo
+{
+public:
+	void setSampleRate (double sampleRate);
+	void setRate (double hz) { mRateHz = hz; }
+	void setShape (double shape) { mShape = shape; }
+	void setSquareOutput (bool square) { mSquare = square; }
+
+	void reset ();
+
+	/** One sample of the selected output, slewed - see kLfoSlewSeconds. */
+	double next ();
+
+	double phase () const { return mPhase; }
+
+private:
+	double mSampleRate = 44100.0;
+	double mRateHz = 4.0;
+	double mShape  = 0.0;
+	bool   mSquare = false;
+	double mPhase  = 0.0;
+	double mSlewed = 0.0;
+	double mSlewCoeff = 1.0;
+};
+
+//------------------------------------------------------------------------
+/** What the ADSR is set to. Times in SECONDS; sustain 0..1. */
+struct AdsrSpec
+{
+	double attack  = 0.005;
+	double decay   = 0.300;
+	double sustain = 0.5;
+	double release = 0.300;
+};
+
+/** How long an envelope's release really runs, from its knob setting.
+    The knob is calibrated to -60 dB; the envelope runs to -100 dB, which
+    takes 5/3 of the setting. getTailSamples reports THIS, not the knob. */
+inline double releaseTailSeconds (double releaseSeconds)
+{
+	return releaseSeconds * std::log (kEnvelopeIdleLevel) / std::log (kReleaseTargetLevel);
+}
+
+/** An analogue-style ADSR: RC segments.
+
+    ATTACK charges towards kAttackOvershoot and ends when it passes 1.0;
+    DECAY and RELEASE fall exponentially, calibrated so the knob is the
+    time to -60 dB of the distance to go. SUSTAIN is tracked
+    continuously, so moving the knob during a held note moves the level.
+
+    RETRIGGER STARTS FROM WHERE IT IS. gateOn() never sets the level to
+    zero first. On a mono synth every new note retriggers both envelopes,
+    and resetting to zero would put a click on every legato phrase. */
+class Adsr
+{
+public:
+	enum class Stage { Idle, Attack, Decay, Sustain, Release };
+
+	void setSampleRate (double sampleRate);
+	void setSpec (const AdsrSpec& spec);
+	const AdsrSpec& spec () const { return mSpec; }
+
+	void gateOn ();
+	void gateOff ();
+	void reset ();
+
+	/** One sample, 0..1. */
+	float next ();
+
+	Stage stage () const { return mStage; }
+	double level () const { return mLevel; }
+	bool active () const { return mStage != Stage::Idle; }
+
+private:
+	void recompute ();
+
+	AdsrSpec mSpec;
+	double mSampleRate = 44100.0;
+	Stage  mStage = Stage::Idle;
+	double mLevel = 0.0;
+	double mAttackCoeff  = 1.0;
+	double mDecayCoeff   = 1.0;
+	double mReleaseCoeff = 1.0;
+};
+
+//------------------------------------------------------------------------
+/** THE LADDER'S TUNING, which SpaceDub never needed.
+
+    SpaceDub drives its ladder with coefficient = Hz / (fs/4), and that is
+    fine in a delay line's feedback path where nothing is played against
+    it. It is not fine on a synth's cutoff knob: measured, the resonant
+    peak lands at about 0.73 of the requested frequency low down and
+    runs SHARP above a quarter of the sample rate, so the number on the
+    knob would be wrong everywhere and wrong differently at 48 k and 96 k.
+
+    And the self-oscillation threshold moves with the coefficient (a
+    feedback of 4.01 at 180 Hz, 4.29 at 12.7 kHz), so a fixed resonance
+    setting would sing at some cutoffs and not others.
+
+    This table fixes both, from the filter's own transfer function rather
+    than from measurement: for each normalised frequency it holds the
+    coefficient that puts the resonant peak THERE (where the loop's phase
+    is -180 degrees) and the feedback at which the loop gain there is
+    exactly 1. The tests then MEASURE the result against it.
+
+    Built once, on first use, from the constructor - never on the audio
+    thread. Sample-rate independent: it is indexed by Hz / fs. */
+struct LadderTuning
+{
+	static constexpr int    kPoints = 256;
+	static constexpr double kMinNorm = 1.0e-4;               // 4.4 Hz at 44.1 k
+	static constexpr double kMaxNorm = kMaxCutoffFraction;   // the ceiling
+
+	double coefficient[kPoints];
+	double unityFeedback[kPoints];   // SpaceDub's `resonance` at loop gain 1
+
+	/** Interpolated lookup. `normFreq` is Hz / sample rate, clamped. */
+	void lookup (double normFreq, double& coeff, double& feedbackAtUnity) const;
+};
+
+/** The one table. Thread-safe static initialisation; call it once from a
+    constructor so the first call is not on the audio thread. */
+const LadderTuning& ladderTuning ();
+
+/** The loop's phase lag at `w` radians/sample for a SpaceDub coefficient,
+    and the loop gain magnitude there - exposed for the tests. */
+double ladderLoopPhase (double w, double coefficient);
+double ladderLoopGain (double w, double coefficient, double resonance);
+
+/** The feedback term's soft limiter. Linear up to 1.5 - so a quiet
+    signal sees SpaceDub's filter exactly - then bending smoothly to a
+    ceiling of 3.0. This is what gives self-oscillation an amplitude; the
+    original's only bound was a hard clamp of the state at +/-16, which
+    with the loop gain over 1 is +24 dBFS of sine. */
+inline double limitFeedback (double x)
+{
+	constexpr double kKnee = 1.5;
+	const double a = std::fabs (x);
+	if (a <= kKnee)
+		return x;
+	const double bent = kKnee + kKnee * std::tanh ((a - kKnee) / kKnee);
+	return (x < 0.0) ? -bent : bent;
+}
+
+//------------------------------------------------------------------------
+/** SpaceDub's Moog ladder - "Moog VCF, variation 2" (musicdsp.org) - with
+    the per-sample arithmetic of DelayLine::process unchanged:
+
+        f  = coeff * 1.16
+        fb = resonance * (1 - 0.15 f^2)
+        x -= out4 * fb;   x *= 0.35013 f^4
+        four one-poles: out = x + 0.3 in + (1 - f) out
+
+    TWO DIFFERENCES, both documented where they are:
+      * the coefficient and feedback come from ladderTuning(), not from
+        Hz / (fs/4) and a raw resonance - see LadderTuning;
+      * the feedback term passes through limitFeedback() - see there.
+    At zero resonance neither applies, and the output is bit-identical to
+    SpaceDub's arithmetic; a test holds it to that.
+
+    DC gain is unity at zero resonance and falls as 1 / (1 + fb) as the
+    resonance rises - the Moog's bass loss, kept because it is the sound. */
+class MoogLadder
+{
+public:
+	void reset ();
+
+	/** coeff and resonance in SpaceDub's own terms. */
+	double tick (double input, double coeff, double resonance);
+
+	double lastOutput () const { return mOut4; }
+
+private:
+	double mIn1 = 0.0, mIn2 = 0.0, mIn3 = 0.0, mIn4 = 0.0;
+	double mOut1 = 0.0, mOut2 = 0.0, mOut3 = 0.0, mOut4 = 0.0;
+};
+
+//------------------------------------------------------------------------
+/** The envelope display's data: both ADSRs through one simulated note,
+    ON A SHARED TIME AXIS, key held and then released at the same moment
+    for both - which is how they are heard.
+
+    Returns the span in seconds; `gateOffSeconds` receives when the key
+    went up. The curves are 0..1. Drives real Adsr objects, so the picture
+    is the envelope and not a drawing of one. */
+double traceEnvelopes (const AdsrSpec& vcf, const AdsrSpec& vca,
+                       float* vcfOut, float* vcaOut, int count,
+                       double* gateOffSeconds);
+
+/** The LFO display's data: `cycles` cycles of both outputs, -1..+1,
+    from the same lfoShapeValue()/lfoSquareValue() the MsLfo runs. */
+void traceLfo (double shape, float* shapeOut, float* squareOut, int count,
+               double cycles);
+
+//------------------------------------------------------------------------
 class SimpleSynthDsp
 {
 public:
 	SimpleSynthDsp ();
 
 	/** Recomputes EVERY rate-dependent coefficient and resets state.
-
-	    Every one, with no exceptions and no "it is close enough at 48 k":
-	    a coefficient computed once at 44.1 k and then used at 96 k is the
-	    bug that presents as "it sounds wrong on his machine only". Call
-	    it from setupProcessing, never from process(). */
+	    Call it from setupProcessing, never from process(). */
 	void setSampleRate (double sampleRate);
 	double sampleRate () const { return mSampleRate; }
 
-	/** The largest block the host will ask for. Sizes the scratch, so
-	    that render() never allocates on the audio thread. Also called
-	    from setupProcessing only. */
+	/** The largest block the host will ask for. Called from
+	    setupProcessing only; nothing in render() allocates. */
 	void setMaxBlockSize (int maxSamples);
 	int maxBlockSize () const { return mMaxBlockSize; }
 
-	/** Stop everything and glide from wherever the trim already is. */
+	/** Silence, envelopes idle, notes forgotten, smoothers snapped. */
 	void reset ();
 
-	/** The output trim, in dB - the parameter table's plain value, which
-	    for this parameter is also its internal value. Smoothed. */
-	void setOutputTrimDb (double db);
-	double outputTrimDb () const { return mTrimDb; }
+	//--------------------------------------------------------------------
+	// Parameters, in INTERNAL units - the parameter table's toInternal().
+	//--------------------------------------------------------------------
+	void setOutputLevelDb (double db);
+	double outputLevelDb () const { return mOutputDb; }
 
-	/** Render one block of the instrument's output into two channels.
+	void setVcoWave (int vco, Vco::Wave wave);
+	void setVcoTune (int vco, double semitones);
+	void setVcoLevel (int vco, double level);          // 0..1
 
-	    Tolerates numSamples <= 0 and null pointers, because a host is
-	    entitled to hand over a parameter-only block and the processor
-	    passes it straight through. */
+	void setLfoRate (double hz);
+	void setLfoShape (double shape);                   // -1..+1
+	void setLfoSquareOutput (bool square);
+	void setLfoPitchDepth (double semitones);
+	void setLfoCutoffDepth (double octaves);
+	void setLfoVcaDepth (double depth);                // 0..1
+
+	void setCutoffHz (double hz);
+	void setResonance (double loopGain);               // 0..kMaxResonanceK
+	void setKeyTrack (double amount);                  // 0..1
+	void setVcfEnvAmount (double octaves);             // signed
+	void setVcfEnvelope (const AdsrSpec& spec);
+	void setVcaEnvelope (const AdsrSpec& spec);
+
+	//--------------------------------------------------------------------
+	// Notes - MONOPHONIC, LAST-NOTE PRIORITY
+	//
+	// Every new note retriggers both envelopes. Releasing the sounding
+	// note falls back to the most recent one still held, at its pitch,
+	// WITHOUT retriggering; the gate only closes when no key is down.
+	//--------------------------------------------------------------------
+	void noteOn (int pitch, float velocity);
+	void noteOff (int pitch);
+	void allNotesOff ();
+
+	/** The note the voice is playing, or -1 before the first one. */
+	int currentNote () const { return mCurrentNote; }
+	bool gateOpen () const { return mHeldCount > 0; }
+	bool voiceActive () const { return mVcaEnv.active (); }
+
+	/** Render one block. Tolerates numSamples <= 0 and null pointers. */
 	void render (float* left, float* right, int numSamples);
 
-	/** The trim stage on its own, applied in place to a block that is
-	    already there.
+	/** The output stage on its own, in place. Bit-identical at 0 dB with
+	    the smoother settled - the tests hold it to that. */
+	void applyOutputLevel (float* left, float* right, int numSamples);
+	float currentOutputGain () const { return mOutput.value (); }
 
-	    Exposed for the tests: at 0 dB with the smoother settled this is
-	    bit-identical to its input, and that is the assertion the first
-	    real DSP has to keep passing. */
-	void applyTrim (float* left, float* right, int numSamples);
+	/** How long after the last key-up the voice can still be heard:
+	    the VCA release, converted by releaseTailSeconds(). */
+	double tailSeconds () const;
 
-	/** The trim's current linear gain, after smoothing. */
-	float currentTrimGain () const { return mTrim.value (); }
+	/** The cutoff the filter used on the last sample, in Hz - for the
+	    tests' measurements of the modulation, not for the panel. */
+	double lastCutoffHz () const { return mLastCutoffHz; }
 
 private:
-	/** THE ONE EMPTY FUNCTION. Sum every voice into the block, which is
-	    handed over already zeroed. Silence until there is a synth
-	    voice in here. */
-	void renderVoices (float* left, float* right, int numSamples);
+	float renderSample ();
 
 	double mSampleRate   = 44100.0;
 	int    mMaxBlockSize = 0;
-	double mTrimDb       = 0.0;
+	double mOutputDb     = 0.0;
 
-	Smoother mTrim;
+	Vco   mVco[kNumVcos];
+	MsLfo mLfo;
+	MoogLadder mFilter;
+	Adsr  mVcfEnv;
+	Adsr  mVcaEnv;
 
-	/** Sized in setMaxBlockSize and never resized anywhere else. Unused
-	    by the silent scaffold; it is here so the first voice that needs
-	    somewhere to mix has it, rather than reaching for new[] on the
-	    audio thread. */
-	std::vector<float> mScratch;
+	// Smoothed controls. Tune is smoothed too: a knob move is otherwise
+	// a pitch step, and a pitch step through a resonant filter is a
+	// click.
+	Smoother mVcoLevel[kNumVcos];
+	Smoother mVcoTune[kNumVcos];
+	Smoother mCutoffOct;        // log2 (Hz) - smoothed in octaves, not Hz
+	Smoother mResonance;
+	Smoother mLfoPitch;
+	Smoother mLfoCutoff;
+	Smoother mLfoVca;
+	Smoother mEnvAmount;
+	Smoother mOutput;
+
+	double mKeyTrack = 0.5;
+	std::uint32_t mNoiseState = 0x12345678u;
+	double mLastCutoffHz = 1000.0;
+
+	// The held-note stack, oldest first. Fixed size: sixteen held keys is
+	// more than two hands, and a seventeenth drops the OLDEST.
+	static constexpr int kMaxHeld = 16;
+	int mHeld[kMaxHeld] = {};
+	int mHeldCount   = 0;
+	int mCurrentNote = -1;
 };
 
 //------------------------------------------------------------------------

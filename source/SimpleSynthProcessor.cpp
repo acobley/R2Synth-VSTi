@@ -18,13 +18,22 @@ namespace SimpleSynth {
 //------------------------------------------------------------------------
 /** Bumped whenever the layout of the state stream changes. setState
     reads it first and refuses a stream from the future rather than
-    guessing at it. */
+    guessing at it.
+
+    Still 1: the scaffold's version-1 stream had one parameter (the
+    trim, now Output Level, still id 0), and a version-1 stream is
+    COUNTED - it says how many parameters follow - so a one-parameter
+    stream loads here as Output Level plus defaults for everything else.
+    That is exactly what "append, never insert" buys. */
 static const int32 kStateVersion = 1;
 
 //------------------------------------------------------------------------
 SimpleSynthProcessor::SimpleSynthProcessor ()
 {
 	setControllerClass (kSimpleSynthControllerUID);
+
+	for (int i = 0; i < kParamCount; ++i)
+		mNormalized[i] = kParams[i].defaultNormalized ();
 }
 
 //------------------------------------------------------------------------
@@ -39,10 +48,17 @@ tresult PLUGIN_API SimpleSynthProcessor::initialize (FUnknown* context)
 	// is why resource/au-info.plist says 0 in / 2 out.
 	addAudioOutput (STR16 ("Stereo Out"), SpeakerArr::kStereo);
 
-	// 16 channels, the MIDI convention. A host maps its MIDI port onto
-	// this; without it the plug-in is an instrument nobody can play, and
-	// the symptom is silence rather than an error.
+	// 16 channels, the MIDI convention. Without it the plug-in is an
+	// instrument nobody can play, and the symptom is silence.
 	addEventInput (STR16 ("Event In"), 16);
+
+	// EVERY PARAMETER TO THE DSP ONCE, NOW, so the engine starts on the
+	// table's defaults rather than on whatever its constructor guessed.
+	// A host that never calls setState - a fresh instance - would
+	// otherwise play the DSP's own idea of a patch.
+	for (int i = 0; i < kParamCount; ++i)
+		applyParam (kParams[i].id, mNormalized[i]);
+	mDsp.reset ();
 
 	return kResultOk;
 }
@@ -55,15 +71,11 @@ tresult PLUGIN_API SimpleSynthProcessor::terminate ()
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API SimpleSynthProcessor::setBusArrangements (SpeakerArrangement* inputs, int32 numIns,
-                                                            SpeakerArrangement* outputs, int32 numOuts)
+                                                             SpeakerArrangement* outputs, int32 numOuts)
 {
 	// Stereo out, nothing in, and nothing else accepted. This must agree
 	// with the AudioComponents entry in resource/au-info.plist, which
 	// lists exactly one layout - 0 in / 2 out - or auval rejects the AU.
-	//
-	// Refusing everything else is the point: a layout accepted here and
-	// absent from the plist, or the other way round, is the mismatch
-	// auval finds and nothing else does.
 	if (numIns != 0 || numOuts != 1)
 		return kResultFalse;
 
@@ -77,8 +89,7 @@ tresult PLUGIN_API SimpleSynthProcessor::setBusArrangements (SpeakerArrangement*
 tresult PLUGIN_API SimpleSynthProcessor::canProcessSampleSize (int32 symbolicSampleSize)
 {
 	// BOTH, because hosts offer 64-bit buffers and one that is refused
-	// silently gets a plug-in the host will not load. The DSP is float
-	// throughout; writeOutput widens into the host's buffer.
+	// silently gets a plug-in the host will not load.
 	if (symbolicSampleSize == kSample32 || symbolicSampleSize == kSample64)
 		return kResultTrue;
 	return kResultFalse;
@@ -89,10 +100,8 @@ tresult PLUGIN_API SimpleSynthProcessor::setupProcessing (ProcessSetup& setup)
 {
 	mSampleRate = setup.sampleRate;
 
-	// ALLOCATION BELONGS HERE, not in process(). Both the SpaceDub and
-	// the ForTran DXis reallocated from inside their processing loops,
-	// and this is the only place the host says how big a block to
-	// expect.
+	// ALLOCATION BELONGS HERE, not in process() - this is the only place
+	// the host says how big a block to expect.
 	mDsp.setSampleRate (mSampleRate);
 	mDsp.setMaxBlockSize (setup.maxSamplesPerBlock);
 
@@ -108,21 +117,65 @@ tresult PLUGIN_API SimpleSynthProcessor::setActive (TBool state)
 	{
 		mDsp.reset ();
 
-		// setActive runs on the UI THREAD, which makes it the place a
-		// processor -> controller message may be sent from - the sample
-		// rate, when a panel needs it. Never from process(): see
-		// SimpleSynthIDs.h.
+		// THE UI THREAD, which is the only thread a message may be sent
+		// from. Also the only moment that makes a panel opened LATER
+		// show the truth rather than its initial guess.
+		sendSampleRateToController ();
 	}
 
 	return AudioEffect::setActive (state);
 }
 
 //------------------------------------------------------------------------
+void SimpleSynthProcessor::sendSampleRateToController ()
+{
+	if (auto* message = allocateMessage ())
+	{
+		FReleaser releaser (message);
+		message->setMessageID (kSimpleSynthSampleRateMessage);
+		message->getAttributes ()->setFloat (kSimpleSynthSampleRateAttribute, mSampleRate);
+		sendMessage (message);
+	}
+}
+
+//------------------------------------------------------------------------
+uint32 PLUGIN_API SimpleSynthProcessor::getTailSamples ()
+{
+	// The VCA release CONVERTED TO THE TIME THE ENVELOPE REALLY RUNS FOR
+	// (5/3 of the knob - see releaseTailSeconds), plus half a second for
+	// the filter's own ringing. Only the VCA's release counts: the VCF
+	// envelope is behind the VCA and cannot be heard once it has closed.
+	//
+	// ROUNDED UP AND GENEROUS ON PURPOSE. Too long costs a host a few
+	// blocks of silence; too short truncates the release, which is a
+	// click.
+	const double seconds = mDsp.tailSeconds () + 0.5;
+	return static_cast<uint32> (seconds * mSampleRate + 0.5);
+}
+
+//------------------------------------------------------------------------
+void SimpleSynthProcessor::applyEnvelope (bool vcf)
+{
+	const int base = vcf ? kVcfAttack : kVcaAttack;
+	auto internal = [this] (int id) { return kParams[id].toInternal (mNormalized[id]); };
+
+	AdsrSpec spec;
+	spec.attack  = internal (base + 0);
+	spec.decay   = internal (base + 1);
+	spec.sustain = internal (base + 2);
+	spec.release = internal (base + 3);
+
+	if (vcf)
+		mDsp.setVcfEnvelope (spec);
+	else
+		mDsp.setVcaEnvelope (spec);
+}
+
+//------------------------------------------------------------------------
 void SimpleSynthProcessor::applyParam (ParamID id, double normalized)
 {
 	// kBypass FIRST, because it is 1000 and is not in the table. Every
-	// id is checked before anything indexes kParams - see the comment on
-	// kBypass in SimpleSynthParams.h.
+	// id is checked before anything indexes kParams.
 	if (id == kBypass)
 	{
 		mBypass = (normalized >= 0.5);
@@ -132,86 +185,62 @@ void SimpleSynthProcessor::applyParam (ParamID id, double normalized)
 	if (!isTableParam (id))
 		return;
 
-	const ParamDef& def = paramDef (id);
+	mNormalized[id] = normalized;
+
+	// toInternal(), not toPlain(): the DSP is handed internal units
+	// (seconds, 0..1, loop gain) and the two differ for most rows.
+	const double v = paramDef (id).toInternal (normalized);
 
 	switch (id)
 	{
-		case kOutputTrim:
-			// toInternal(), not toPlain() - identical today, and the
-			// call is what makes it stay correct when a ported
-			// parameter gives them different ranges.
-			mDsp.setOutputTrimDb (def.toInternal (normalized));
+		case kOutputLevel:   mDsp.setOutputLevelDb (v); break;
+
+		// THE THREE VCOs through ONE set of cases, by stride - see
+		// vcoParam() in SimpleSynthParams.h.
+		case kVco1Wave: case kVco2Wave: case kVco3Wave:
+			mDsp.setVcoWave ((id - kVco1Wave) / kVcoParamStride,
+			                 (v >= 0.5) ? Vco::Wave::Square : Vco::Wave::Saw);
+			break;
+		case kVco1Tune: case kVco2Tune: case kVco3Tune:
+			mDsp.setVcoTune ((id - kVco1Tune) / kVcoParamStride, v);
+			break;
+		case kVco1Level: case kVco2Level: case kVco3Level:
+			mDsp.setVcoLevel ((id - kVco1Level) / kVcoParamStride, v);
+			break;
+
+		case kLfoRate:       mDsp.setLfoRate (v); break;
+		case kLfoShape:      mDsp.setLfoShape (v); break;
+		case kLfoOutput:     mDsp.setLfoSquareOutput (v >= 0.5); break;
+		case kLfoPitch:      mDsp.setLfoPitchDepth (v); break;
+
+		case kCutoff:        mDsp.setCutoffHz (v); break;
+		case kResonance:     mDsp.setResonance (v); break;
+		case kKeyTrack:      mDsp.setKeyTrack (v); break;
+		case kVcfLfo:        mDsp.setLfoCutoffDepth (v); break;
+		case kVcfEnvAmount:  mDsp.setVcfEnvAmount (v); break;
+
+		case kVcfAttack: case kVcfDecay: case kVcfSustain: case kVcfRelease:
+			applyEnvelope (true);
+			break;
+
+		case kVcaLfo:        mDsp.setLfoVcaDepth (v); break;
+
+		case kVcaAttack: case kVcaDecay: case kVcaSustain: case kVcaRelease:
+			applyEnvelope (false);
 			break;
 
 		default:
 			// A parameter in the table that nothing reads. Appending one
-			// and forgetting this switch is the quiet failure; there is
-			// no way to catch it at compile time with a table, so it is
-			// named here instead.
+			// and forgetting this switch is the quiet failure; the
+			// compiler cannot catch it with a table, so it is named here.
 			break;
 	}
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthProcessor::applyParameterChanges (IParameterChanges* changes)
+void SimpleSynthProcessor::writeOutput (ProcessData& data, int32 offset, int32 numSamples)
 {
-	if (changes == nullptr)
-		return;
-
-	const int32 count = changes->getParameterCount ();
-	for (int32 i = 0; i < count; ++i)
-	{
-		IParamValueQueue* queue = changes->getParameterData (i);
-		if (queue == nullptr)
-			continue;
-
-		const int32 points = queue->getPointCount ();
-		if (points <= 0)
-			continue;
-
-		// THE LAST POINT IN THE BLOCK, not the first. Sample-accurate
-		// automation within a block is not read here; the DSP's own
-		// smoother is what stops that being audible, which is why the
-		// smoothed column in the parameter table matters.
-		int32      offset = 0;
-		ParamValue value  = 0.0;
-		if (queue->getPoint (points - 1, offset, value) == kResultTrue)
-			applyParam (queue->getParameterId (), value);
-	}
-}
-
-//------------------------------------------------------------------------
-void SimpleSynthProcessor::handleEvent (const Event& event)
-{
-	switch (event.type)
-	{
-		case Event::kNoteOnEvent:
-			// A NOTE THAT STARTS NOTHING, for now. When there are
-			// voices, this is where a voice is started: event.noteOn.pitch
-			// sets the pitch, .velocity is 0..1 already, and
-			// event.sampleOffset is where in the block it lands - a
-			// voice started at offset 0 regardless is the classic
-			// timing bug, audible as everything quantised to the block
-			// size.
-			break;
-
-		case Event::kNoteOffEvent:
-			// A synth's note off releases its voice - match it by
-			// pitch AND channel (or noteId), or a held note whose
-			// twin was released hangs forever. It has to be READ even
-			// now: a host that sends note off without note on (every
-			// host, on transport stop) must not leave state behind.
-			break;
-
-		default:
-			break;
-	}
-}
-
-//------------------------------------------------------------------------
-void SimpleSynthProcessor::writeOutput (ProcessData& data, int32 numSamples)
-{
-	if (data.numOutputs < 1 || data.outputs[0].numChannels < kChannelCount)
+	if (data.numOutputs < 1 || data.outputs[0].numChannels < kChannelCount || numSamples <= 0)
 		return;
 
 	const float* const left  = mScratch.data ();
@@ -222,25 +251,16 @@ void SimpleSynthProcessor::writeOutput (ProcessData& data, int32 numSamples)
 		double** out = data.outputs[0].channelBuffers64;
 		for (int32 i = 0; i < numSamples; ++i)
 		{
-			out[0][i] = static_cast<double> (left[i]);
-			out[1][i] = static_cast<double> (right[i]);
+			out[0][offset + i] = static_cast<double> (left[i]);
+			out[1][offset + i] = static_cast<double> (right[i]);
 		}
 	}
 	else
 	{
 		float** out = data.outputs[0].channelBuffers32;
-		std::copy (left,  left  + numSamples, out[0]);
-		std::copy (right, right + numSamples, out[1]);
+		std::copy (left,  left  + numSamples, out[0] + offset);
+		std::copy (right, right + numSamples, out[1] + offset);
 	}
-
-	// SILENCE FLAGS. A host is entitled to skip a bus we declare silent,
-	// and an instrument that renders silence and does not say so keeps
-	// every downstream plug-in awake. Cleared - not set - the moment
-	// there are voices; a bus flagged silent that is not is far worse
-	// than one that is not flagged.
-	data.outputs[0].silenceFlags = 0;
-	for (int32 c = 0; c < data.outputs[0].numChannels; ++c)
-		data.outputs[0].silenceFlags |= static_cast<uint64> (1) << c;
 }
 
 //------------------------------------------------------------------------
@@ -248,54 +268,134 @@ tresult PLUGIN_API SimpleSynthProcessor::process (ProcessData& data)
 {
 	// PARAMETERS FIRST, ALWAYS - before the early return below, or a
 	// parameter-only block would be thrown away along with the block.
-	applyParameterChanges (data.inputParameterChanges);
+	//
+	// THE LAST POINT IN THE BLOCK, not sample-accurate: the DSP's own
+	// smoothers are what keep a mid-block move from being audible.
+	if (IParameterChanges* changes = data.inputParameterChanges)
+	{
+		const int32 count = changes->getParameterCount ();
+		for (int32 i = 0; i < count; ++i)
+		{
+			IParamValueQueue* queue = changes->getParameterData (i);
+			if (queue == nullptr)
+				continue;
+			const int32 points = queue->getPointCount ();
+			int32 offset = 0;
+			ParamValue value = 0.0;
+			if (points > 0 && queue->getPoint (points - 1, offset, value) == kResultTrue)
+				applyParam (queue->getParameterId (), value);
+		}
+	}
+
+	const int32 numSamples = data.numSamples;
+
+	//--------------------------------------------------------------------
+	// The notes, collected with their offsets and SORTED. Hosts deliver
+	// them in order, but nothing in the specification promises it, and
+	// an event out of order would make the segment loop below render
+	// backwards.
+	//--------------------------------------------------------------------
+	struct NoteEvent { int32 offset; int16 pitch; bool on; };
+	NoteEvent events[kMaxEventsPerBlock];
+	int eventCount = 0;
 
 	if (data.inputEvents != nullptr)
 	{
 		const int32 count = data.inputEvents->getEventCount ();
-		for (int32 i = 0; i < count; ++i)
+		for (int32 i = 0; i < count && eventCount < kMaxEventsPerBlock; ++i)
 		{
-			Event event = {};
-			if (data.inputEvents->getEvent (i, event) == kResultOk)
-				handleEvent (event);
+			Event e = {};
+			if (data.inputEvents->getEvent (i, e) != kResultOk)
+				continue;
+
+			NoteEvent n {};
+			n.offset = std::max<int32> (0, std::min<int32> (e.sampleOffset,
+			                                                 std::max<int32> (0, numSamples - 1)));
+			if (e.type == Event::kNoteOnEvent)
+			{
+				n.pitch = e.noteOn.pitch;
+				// A NOTE-ON AT VELOCITY ZERO IS A NOTE-OFF - the MIDI
+				// running-status convention, which some hosts pass
+				// through to VST3 unchanged.
+				n.on = (e.noteOn.velocity > 0.f);
+			}
+			else if (e.type == Event::kNoteOffEvent)
+			{
+				n.pitch = e.noteOff.pitch;
+				n.on = false;
+			}
+			else
+			{
+				continue;
+			}
+			events[eventCount++] = n;
 		}
 	}
 
+	std::stable_sort (events, events + eventCount,
+	                  [] (const NoteEvent& a, const NoteEvent& b) { return a.offset < b.offset; });
+
 	// A PARAMETER-ONLY BLOCK: numSamples == 0, or no output bus at all.
-	// Both are legal and both arrive in practice - hosts send them to
-	// deliver automation between audible blocks. Returning kResultOk is
-	// the correct answer; the work above has already been done.
-	if (data.numSamples <= 0 || data.numOutputs < 1)
+	// Its notes still count - a key released in an empty block must
+	// still release - so they are applied before returning.
+	if (numSamples <= 0 || data.numOutputs < 1)
+	{
+		for (int i = 0; i < eventCount; ++i)
+			events[i].on ? mDsp.noteOn (events[i].pitch, 1.f) : mDsp.noteOff (events[i].pitch);
 		return kResultOk;
+	}
 
-	const int32 numSamples = data.numSamples;
-
-	// NEVER TRUST THE BLOCK SIZE. setupProcessing promised
-	// maxSamplesPerBlock, but a host that hands over more would walk off
-	// the end of a scratch sized on that promise, so the scratch is
-	// checked rather than assumed. Growing it here WOULD BE AN
-	// ALLOCATION ON THE AUDIO THREAD, so the block is refused instead -
-	// loudly silent beats intermittently crashing.
+	// NEVER TRUST THE BLOCK SIZE. Growing the scratch here would be an
+	// allocation on the audio thread, so an oversize block is refused.
 	if (mScratch.size () < static_cast<size_t> (numSamples) * kChannelCount)
 		return kResultFalse;
 
-	float* const left  = mScratch.data ();
-	float* const right = mScratch.data () + numSamples;
-
-	if (mBypass)
+	//--------------------------------------------------------------------
+	// THE SEGMENT LOOP. Each segment is [position, next event), so a
+	// note takes effect on its own sample.
+	//--------------------------------------------------------------------
+	int32 position = 0;
+	int next = 0;
+	while (position < numSamples)
 	{
-		// AN INSTRUMENT'S BYPASS IS SILENCE, not a dry path: there is no
-		// input to pass through. The host expects a bypassed plug-in to
-		// be inaudible, and that is what this is.
-		std::fill (left,  left  + numSamples, 0.f);
-		std::fill (right, right + numSamples, 0.f);
-	}
-	else
-	{
-		mDsp.render (left, right, numSamples);
+		while (next < eventCount && events[next].offset <= position)
+		{
+			const NoteEvent& e = events[next++];
+			e.on ? mDsp.noteOn (e.pitch, 1.f) : mDsp.noteOff (e.pitch);
+		}
+
+		const int32 end = (next < eventCount) ? events[next].offset : numSamples;
+		const int32 length = end - position;
+
+		// The segment renders into the START of the scratch, laid out
+		// as length samples of left then length of right, and is copied
+		// out at its offset - so the scratch only ever needs one block.
+		float* const left  = mScratch.data ();
+		float* const right = mScratch.data () + length;
+
+		if (mBypass)
+		{
+			// AN INSTRUMENT'S BYPASS IS SILENCE, not a dry path.
+			std::fill (left,  left  + length, 0.f);
+			std::fill (right, right + length, 0.f);
+		}
+		else
+		{
+			mDsp.render (left, right, length);
+		}
+
+		writeOutput (data, position, length);
+		position = end;
 	}
 
-	writeOutput (data, numSamples);
+	// SILENCE FLAGS only when it really is silent: bypassed, or the VCA
+	// envelope idle with no key down. A bus flagged silent that is not
+	// is far worse than one that is not flagged, so anything else
+	// clears them.
+	data.outputs[0].silenceFlags = 0;
+	if (mBypass || !mDsp.voiceActive ())
+		for (int32 c = 0; c < data.outputs[0].numChannels; ++c)
+			data.outputs[0].silenceFlags |= static_cast<uint64> (1) << c;
 
 	return kResultOk;
 }
@@ -315,19 +415,10 @@ tresult PLUGIN_API SimpleSynthProcessor::getState (IBStream* state)
 	// "append, never insert".
 	streamer.writeInt32 (kNumParams);
 
-	for (int i = 0; i < kNumParams; ++i)
-	{
-		// NORMALISED, not plain. The plain range is allowed to change
-		// between versions - a wider trim, say - and a state stream full
-		// of plain values would silently rescale when it did.
-		const ParamDef& def = kParams[i];
-		double normalized = def.defaultNormalized ();
-
-		if (def.id == kOutputTrim)
-			normalized = def.toNormalized (mDsp.outputTrimDb ());
-
-		streamer.writeDouble (normalized);
-	}
+	// NORMALISED, not plain. The plain range is allowed to change between
+	// versions, and a stream full of plain values would silently rescale.
+	for (int i = 0; i < kParamCount; ++i)
+		streamer.writeDouble (mNormalized[i]);
 
 	streamer.writeInt32 (mBypass ? 1 : 0);
 
@@ -353,22 +444,16 @@ tresult PLUGIN_API SimpleSynthProcessor::setState (IBStream* state)
 		return kResultFalse;
 
 	//--------------------------------------------------------------------
-	// EVERYTHING THE STREAM DOES NOT MENTION GOES BACK TO ITS DEFAULT,
-	// and this is the trap that reset is here to close.
+	// EVERYTHING THE STREAM DOES NOT MENTION GOES BACK TO ITS DEFAULT.
 	//
 	// A host reuses one plug-in instance as the user loads project after
 	// project. If setState only applied what the stream contained, a
 	// short stream - written by an older build, or truncated - would
 	// leave every unmentioned parameter holding the PREVIOUS project's
-	// value. The user opens an old song and hears the settings from the
-	// new one, with nothing anywhere saying why.
-	//
-	// So: defaults first, stream second. The controller's
-	// setComponentState does exactly the same thing in the same order,
-	// reading the identical layout - two halves that disagree about the
-	// stream is the same bug wearing a different hat.
+	// value. The controller's setComponentState does exactly the same
+	// thing in the same order, reading the identical layout.
 	//--------------------------------------------------------------------
-	for (int i = 0; i < kNumParams; ++i)
+	for (int i = 0; i < kParamCount; ++i)
 		applyParam (kParams[i].id, kParams[i].defaultNormalized ());
 	mBypass = false;
 
@@ -377,19 +462,18 @@ tresult PLUGIN_API SimpleSynthProcessor::setState (IBStream* state)
 		double v = 0.0;
 		if (!streamer.readDouble (v))
 			return kResultFalse;
-		if (i < kNumParams)
+		if (i < kParamCount)
 			applyParam (static_cast<ParamID> (i), v);
 	}
 
-	// OPTIONAL BY DESIGN: a version-1 stream always has it, but reading
-	// it conditionally is what lets a later version append fields
-	// without every older reader failing.
+	// OPTIONAL BY DESIGN, so a later version can append fields without
+	// every older reader failing.
 	int32 bypass = 0;
 	if (streamer.readInt32 (bypass))
 		mBypass = (bypass != 0);
 
-	// The trim must not GLIDE to a loaded project's value from the last
-	// one's - that is an audible swoop on every project load.
+	// The smoothers must not GLIDE to a loaded project's values from the
+	// last one's - that is an audible swoop on every project load.
 	mDsp.reset ();
 
 	return kResultOk;

@@ -30,24 +30,32 @@ static const Steinberg::FUID kSimpleSynthControllerUID (0x935E5313, 0x9EF72A9E, 
 // and is then silently discarded by the host's connection proxy - it
 // does nothing and tells you nothing, so a value the DSP produces per
 // block can never come out this way. Anything the DSP computes per block
-// that the controller (or, later, a panel) needs goes out through data.outputParameterChanges
+// that the panel needs goes out through data.outputParameterChanges
 // instead, as a hidden read-only parameter; see the note beside kBypass
 // in SimpleSynthParams.h.
 //
-// Messages ARE legitimate from setActive, setState and notify. Add them
-// here, each with a comment saying which of those it is sent from.
+// Messages ARE legitimate from setActive, setState and notify, which is
+// where the one below is sent from. Add new ones here, each with a
+// comment saying which of those it is sent from.
 //
 // The other limitation to know before adding one: if a host never
 // connects the two components, a message is never delivered and nothing
 // says so. That is why parameters, which cannot be lost this way, carry
-// everything that can be expressed as a number.
-//
-// THERE ARE NONE YET, deliberately. With no editor there is nothing on
-// the controller side to receive one; the first candidate is the sample
-// rate the DSP runs at (processor -> controller, from setActive), which
-// a panel needs as soon as it draws anything that is a function of f/fs.
-// ../FilterDrum-VSTi/source/FilterDrumIDs.h has the worked version.
+// everything that can be expressed as a number - and why the panel's
+// readouts fall back to 44.1 k rather than failing when this one never
+// arrives.
 //------------------------------------------------------------------------
+
+/** Processor -> controller, from setActive: the sample rate the DSP is
+    actually running at.
+
+    The panel needs it because the cutoff CEILING is a fraction of it
+    (cutoffCeilingHz in SimpleSynthDsp.h): the top of the Cutoff knob is
+    20 kHz, and at 44.1 k the filter stops at 17.6 k. A readout that
+    assumed one rate while the DSP ran at another would be quoting a
+    ceiling nobody is hearing. */
+static const char* const kSimpleSynthSampleRateMessage   = "SimpleSynthSampleRate";
+static const char* const kSimpleSynthSampleRateAttribute = "SampleRate";
 
 //------------------------------------------------------------------------
 } // namespace SimpleSynth
