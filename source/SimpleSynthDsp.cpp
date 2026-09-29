@@ -1,17 +1,17 @@
 //------------------------------------------------------------------------
-// SimpleDrum - the audio line, implementation
+// SimpleSynth - the audio line, implementation
 //
 // SDK-FREE. If a #include of anything under pluginterfaces/ or
 // public.sdk/ ever appears in this file, the standalone test build stops
 // compiling and the only executable verification on this project goes
-// with it. See the banner in SimpleDrumDsp.h.
+// with it. See the banner in SimpleSynthDsp.h.
 //------------------------------------------------------------------------
 
-#include "SimpleDrumDsp.h"
+#include "SimpleSynthDsp.h"
 
 #include <algorithm>
 
-namespace SimpleDrum {
+namespace SimpleSynth {
 
 //------------------------------------------------------------------------
 void Smoother::setSampleRate (double sampleRate, double seconds)
@@ -61,7 +61,7 @@ float Smoother::next ()
 }
 
 //------------------------------------------------------------------------
-SimpleDrumDsp::SimpleDrumDsp ()
+SimpleSynthDsp::SimpleSynthDsp ()
 {
 	// The constructor must leave the object usable, because a host may
 	// call process() before setupProcessing in the rare restart. 44.1 k
@@ -70,7 +70,7 @@ SimpleDrumDsp::SimpleDrumDsp ()
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumDsp::setSampleRate (double sampleRate)
+void SimpleSynthDsp::setSampleRate (double sampleRate)
 {
 	if (sampleRate < 1000.0)
 		sampleRate = 44100.0;
@@ -86,7 +86,7 @@ void SimpleDrumDsp::setSampleRate (double sampleRate)
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumDsp::setMaxBlockSize (int maxSamples)
+void SimpleSynthDsp::setMaxBlockSize (int maxSamples)
 {
 	mMaxBlockSize = (maxSamples > 0) ? maxSamples : 0;
 
@@ -96,7 +96,7 @@ void SimpleDrumDsp::setMaxBlockSize (int maxSamples)
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumDsp::reset ()
+void SimpleSynthDsp::reset ()
 {
 	// SNAP, not glide. A reset that left the trim smoother at zero would
 	// fade the instrument in over 20 ms every time the host stopped and
@@ -107,26 +107,26 @@ void SimpleDrumDsp::reset ()
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumDsp::setOutputTrimDb (double db)
+void SimpleSynthDsp::setOutputTrimDb (double db)
 {
 	mTrimDb = db;
 	mTrim.setTarget (static_cast<float> (dbToGain (db)));
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumDsp::renderVoices (float* /*left*/, float* /*right*/, int /*numSamples*/)
+void SimpleSynthDsp::renderVoices (float* /*left*/, float* /*right*/, int /*numSamples*/)
 {
 	// EMPTY ON PURPOSE. The block arrives zeroed; silence is what
 	// summing no voices into it gives, so there is nothing to write.
 	//
-	// This is the function the drum machine goes in. It is called with
+	// This is the function the synth voices go in. It is called with
 	// the block already cleared and with numSamples > 0 and both
 	// pointers non-null - render() has checked - so a voice loop here
 	// needs no guards of its own.
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumDsp::render (float* left, float* right, int numSamples)
+void SimpleSynthDsp::render (float* left, float* right, int numSamples)
 {
 	// A PARAMETER-ONLY BLOCK is legal and arrives in practice: hosts send
 	// numSamples == 0 to deliver automation between audible blocks. The
@@ -143,7 +143,7 @@ void SimpleDrumDsp::render (float* left, float* right, int numSamples)
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumDsp::applyTrim (float* left, float* right, int numSamples)
+void SimpleSynthDsp::applyTrim (float* left, float* right, int numSamples)
 {
 	if (numSamples <= 0 || left == nullptr || right == nullptr)
 		return;
@@ -160,4 +160,4 @@ void SimpleDrumDsp::applyTrim (float* left, float* right, int numSamples)
 }
 
 //------------------------------------------------------------------------
-} // namespace SimpleDrum
+} // namespace SimpleSynth

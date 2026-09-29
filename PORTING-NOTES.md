@@ -1,4 +1,9 @@
-# SimpleDrum — project notes
+# SimpleSynth — project notes
+
+> **Renamed 29 Sep 2026, before any build existed:** SimpleDrum → SimpleSynth.
+> Subtype `SiDr` → `SiSy`, `PlugType::kInstrumentDrum` → `kInstrumentSynth`,
+> bundle ids to `audio.simplesynth.*`. The class UIDs were kept: they had
+> never been in a shipped build, and they are still unique in `~/DXi-DEv`.
 
 A **new, empty** VST3 + AUv2 instrument, scaffolded from
 `../vst3-port-template` on 29 Sep 2026. Nothing has been ported, and there is
@@ -9,9 +14,9 @@ the record that outlives the session that wrote it.
 
 | Decision | Chosen | Why |
 |---|---|---|
-| Effect or instrument | **Instrument** — `PlugType::kInstrumentDrum`, AU type `aumu`, event input (16 ch) | It is a drum machine |
+| Effect or instrument | **Instrument** — `PlugType::kInstrumentSynth`, AU type `aumu`, event input (16 ch) | It is a synthesiser |
 | Bus layout | **0 in / 2 out** (stereo out, no audio input) | Matches FilterDrum / SampleDrum. Said identically in `initialize`, `setBusArrangements` and the single `SupportedNumChannels` entry in `resource/au-info.plist` (template's 2/2 and 1/1 entries removed) |
-| Name and codes | `SimpleDrum` / `SiDr` / `AECo` | `SmDr` is SampleDrum's; `SiDr` checked against FDrm, FTrn, Prj6, SmDr, SDub, SpyB, VcFl — no clash |
+| Name and codes | `SimpleSynth` / `SiSy` / `AECo` | Renamed from SimpleDrum before any build (see top). `SiSy` checked against FDrm, FTrn, Prj6, SmDr, SDub, SpyB, VcFl — no clash |
 | Editor | **Later** | PORTING-GUIDE step 6: a silent plug-in validating with processor, controller and entry only. The host's generic editor is used meanwhile |
 
 ## Permanent identity — never change once a build ships
@@ -20,10 +25,10 @@ the record that outlives the session that wrote it.
 |---|---|
 | Processor UID | `0x6D69A51B, 0xD84BE44A, 0x4927F783, 0x18477FAD` |
 | Controller UID | `0x935E5313, 0x9EF72A9E, 0xA1A91CCB, 0x968140F1` |
-| AU type / subtype / manufacturer | `aumu` / `SiDr` / `AECo` |
-| VST3 bundle id | `audio.simpledrum.vst3` |
-| AU bundle id | `audio.simpledrum.audiounit` |
-| Vendor | `AE Cobley` (no full stops — REAPER cuts AU names at the first one); AU name `AE Cobley: SimpleDrum` |
+| AU type / subtype / manufacturer | `aumu` / `SiSy` / `AECo` |
+| VST3 bundle id | `audio.simplesynth.vst3` |
+| AU bundle id | `audio.simplesynth.audiounit` |
+| Vendor | `AE Cobley` (no full stops — REAPER cuts AU names at the first one); AU name `AE Cobley: SimpleSynth` |
 
 UIDs were generated fresh from `os.urandom` and checked against every other
 `*IDs.h` in `~/DXi-DEv`. Hosts store them in project files: a changed UID
@@ -37,7 +42,7 @@ removed. House style kept: banner comments that say *why*, `//---` rules.
 
 ## Why the DSP is SDK-free
 
-`source/SimpleDrumDsp.{h,cpp}` include nothing from the SDK, for two reasons:
+`source/SimpleSynthDsp.{h,cpp}` include nothing from the SDK, for two reasons:
 
 1. They compile with plain `c++ -std=c++17`, so `tests/DspTests.cpp` can run
    without a build — the only executable verification available to a session
@@ -46,7 +51,7 @@ removed. House style kept: banner comments that say *why*, `//---` rules.
    panel displays that the DSP computes must come from **one shared
    function both call** (`dbToGain` / `gainToDb` today). Put new ones there.
 
-`renderVoices()` is the one empty function — the drum machine goes in there.
+`renderVoices()` is the one empty function — the synth voices go in there.
 Read `PORTING-GUIDE.md` section 5 before writing that loop.
 
 ## Measured default output level
@@ -81,19 +86,19 @@ that clips masks other faults.
 
 | Omitted | The trap when you add it |
 |---|---|
-| `getProcessContextRequirements` | Since VST3 3.7 the ProcessContext is opt-in with **no flags by default**: tempo reads 120 in every host, and the validator prints `- None` instead of complaining. The moment anything reads tempo/transport, add the override — the exact code is in the banner of `SimpleDrumProcessor.h` |
-| Processor ↔ controller messages | `sendMessage` from `process()` returns success and is **silently discarded** by the host's connection proxy. Send only from `setActive` / `setState` / `notify`; per-block values go out as read-only output parameters (ids 1001+). See `SimpleDrumIDs.h` |
-| Editor | Five overrides in the controller; in `editorDestroyed`, `dynamic_cast` returns null inside `~EditorView()`, so **compare upcast pointers**. See the banner of `SimpleDrumController.h` |
+| `getProcessContextRequirements` | Since VST3 3.7 the ProcessContext is opt-in with **no flags by default**: tempo reads 120 in every host, and the validator prints `- None` instead of complaining. The moment anything reads tempo/transport, add the override — the exact code is in the banner of `SimpleSynthProcessor.h` |
+| Processor ↔ controller messages | `sendMessage` from `process()` returns success and is **silently discarded** by the host's connection proxy. Send only from `setActive` / `setState` / `notify`; per-block values go out as read-only output parameters (ids 1001+). See `SimpleSynthIDs.h` |
+| Editor | Five overrides in the controller; in `editorDestroyed`, `dynamic_cast` returns null inside `~EditorView()`, so **compare upcast pointers**. See the banner of `SimpleSynthController.h` |
 | Note handling | `handleEvent` unpacks note on/off and does nothing. Use `event.sampleOffset` — starting every voice at offset 0 quantises hits to the block size |
 | `getTailSamples` | Without it a host may stop calling `process()` the moment notes stop, truncating every decay. Add it with the first voice |
 
 ## Verification run (29 Sep 2026, from the Linux VM)
 
 ```sh
-cd ~/DXi-DEv/SimpleDrum-VSTi
+cd ~/DXi-DEv/SimpleSynth-VSTi
 
 # DSP suite
-c++ -std=c++17 -O2 -Wall -Wextra -Isource tests/DspTests.cpp source/SimpleDrumDsp.cpp -o /tmp/dsptests && /tmp/dsptests
+c++ -std=c++17 -O2 -Wall -Wextra -Isource tests/DspTests.cpp source/SimpleSynthDsp.cpp -o /tmp/dsptests && /tmp/dsptests
 #   -> 63 checks, 0 failures (incl. the half-gain negative control)
 
 # Every .cpp against the SDK, to object files
@@ -102,8 +107,8 @@ for f in source/*.cpp; do
   g++ -c -std=c++17 -DLINUX=1 -DRELEASE=1 -I$SDK -I$SDK/vstgui4 -Isource \
       -o /tmp/$(basename $f .cpp).o $f || echo "FAILED $f"
 done
-nm -C /tmp/*.o | grep " U " | grep "SimpleDrum::"
-#   -> 5/5 compiled; all 9 referenced SimpleDrum symbols defined in another object
+nm -C /tmp/*.o | grep " U " | grep "SimpleSynth::"
+#   -> 5/5 compiled; all 9 referenced SimpleSynth symbols defined in another object
 ```
 
 `-Wall` shows six harmless `-Wsign-compare` warnings (`int` vs the `Param`
@@ -122,9 +127,9 @@ include path, not by the build.
 ## Next steps on the Mac
 
 ```sh
-cd ~/DXi-DEv/SimpleDrum-VSTi && ./setup-xcode.sh
+cd ~/DXi-DEv/SimpleSynth-VSTi && ./setup-xcode.sh
 # build, then:
-auval -v aumu SiDr AECo
+auval -v aumu SiSy AECo
 ```
 
 and run the SDK validator (it runs as a post-build step; watch its output).

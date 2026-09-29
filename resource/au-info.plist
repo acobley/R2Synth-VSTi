@@ -52,7 +52,7 @@
 			<string>AUWrapperFactory</string>
 			<!-- CHANGE ME -->
 			<key>description</key>
-			<string>SimpleDrum - drum instrument</string>
+			<string>SimpleSynth - synthesiser instrument</string>
 			<!-- CHANGE ME -->
 			<key>manufacturer</key>
 			<string>AECo</string>
@@ -62,12 +62,12 @@
 			     "A. E. Cobley: X" became "A" and every such plug-in shared one
 			     preset list. The AE Cobley plug-ins use "AE Cobley: X". -->
 			<key>name</key>
-			<string>AE Cobley: SimpleDrum</string>
+			<string>AE Cobley: SimpleSynth</string>
 			<!-- CHANGE ME -->
 			<key>subtype</key>
-			<string>SiDr</string>
+			<string>SiSy</string>
 			<!-- aumu: an instrument - notes in, audio out. Agrees with
-			     PlugType::kInstrumentDrum in SimpleDrumEntry.cpp. -->
+			     PlugType::kInstrumentSynth in SimpleSynthEntry.cpp. -->
 			<key>type</key>
 			<string>aumu</string>
 			<!-- 0x00010000 == 1.0.0 -->
@@ -85,7 +85,7 @@
 	     offer the new layouts. auval is strict about this. -->
 	<key>AudioUnit SupportedNumChannels</key>
 	<array>
-		<!-- SimpleDrum: an instrument. NO audio input, one stereo output -
+		<!-- SimpleSynth: an instrument. NO audio input, one stereo output -
 		     exactly what setBusArrangements accepts and nothing else. The
 		     template's 2/2 and 1/1 entries were removed; either left in is a
 		     mismatch auval finds. -->

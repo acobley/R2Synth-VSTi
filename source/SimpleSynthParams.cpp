@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleDrum - parameter table
+// SimpleSynth - parameter table
 //
 // Column order matches the DXi ports in this folder, which in turn
 // matched CMediaParams::m_aParamInfo:
@@ -14,9 +14,9 @@
 // units column below reads "dB" and not a bare comma.
 //------------------------------------------------------------------------
 
-#include "SimpleDrumParams.h"
+#include "SimpleSynthParams.h"
 
-namespace SimpleDrum {
+namespace SimpleSynth {
 
 //------------------------------------------------------------------------
 const ParamDef kParams[kNumParams] = {
@@ -25,4 +25,4 @@ const ParamDef kParams[kNumParams] = {
 };
 
 //------------------------------------------------------------------------
-} // namespace SimpleDrum
+} // namespace SimpleSynth

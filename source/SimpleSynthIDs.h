@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleDrum - class UIDs and message identifiers
+// SimpleSynth - class UIDs and message identifiers
 //
 // These UIDs were generated fresh for this plug-in from os.urandom.
 // NEVER CHANGE THEM once a build has been shipped: hosts store them in
@@ -14,13 +14,13 @@
 #include "pluginterfaces/base/funknown.h"
 #include "pluginterfaces/vst/vsttypes.h"
 
-namespace SimpleDrum {
+namespace SimpleSynth {
 
-static const Steinberg::FUID kSimpleDrumProcessorUID  (0x6D69A51B, 0xD84BE44A, 0x4927F783, 0x18477FAD);
-static const Steinberg::FUID kSimpleDrumControllerUID (0x935E5313, 0x9EF72A9E, 0xA1A91CCB, 0x968140F1);
+static const Steinberg::FUID kSimpleSynthProcessorUID  (0x6D69A51B, 0xD84BE44A, 0x4927F783, 0x18477FAD);
+static const Steinberg::FUID kSimpleSynthControllerUID (0x935E5313, 0x9EF72A9E, 0xA1A91CCB, 0x968140F1);
 
-// The plug-in category is declared once, in SimpleDrumEntry.cpp, using the
-// SDK's own PlugType::kInstrumentDrum - not repeated as a string here.
+// The plug-in category is declared once, in SimpleSynthEntry.cpp, using the
+// SDK's own PlugType::kInstrumentSynth - not repeated as a string here.
 
 //------------------------------------------------------------------------
 // Processor <-> controller messages
@@ -32,7 +32,7 @@ static const Steinberg::FUID kSimpleDrumControllerUID (0x935E5313, 0x9EF72A9E, 0
 // block can never come out this way. Anything the DSP computes per block
 // that the controller (or, later, a panel) needs goes out through data.outputParameterChanges
 // instead, as a hidden read-only parameter; see the note beside kBypass
-// in SimpleDrumParams.h.
+// in SimpleSynthParams.h.
 //
 // Messages ARE legitimate from setActive, setState and notify. Add them
 // here, each with a comment saying which of those it is sent from.
@@ -50,4 +50,4 @@ static const Steinberg::FUID kSimpleDrumControllerUID (0x935E5313, 0x9EF72A9E, 0
 //------------------------------------------------------------------------
 
 //------------------------------------------------------------------------
-} // namespace SimpleDrum
+} // namespace SimpleSynth

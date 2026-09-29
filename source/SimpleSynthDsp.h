@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleDrum - the audio line
+// SimpleSynth - the audio line
 //
 // NO SDK HEADER MAY ENTER THIS FILE OR ITS .cpp. That is deliberate, and
 // there are two reasons for it.
@@ -20,13 +20,13 @@
 //      generic one is used); when there is, its readouts call these too.
 //
 // WHAT IT DOES TODAY: nothing but render silence and apply a smoothed
-// output trim. SimpleDrum is an instrument, so there is no input signal
+// output trim. SimpleSynth is an instrument, so there is no input signal
 // to pass through - render() fills the block from the voice mix, and the
 // voice mix is currently empty. applyTrim() is the trim stage on its
 // own, exposed so the tests can push a known block through it; that is
 // the "pass-through" the blank scaffold is tested as.
 //
-// WHERE THE DRUM MACHINE GOES: renderVoices() is the one empty function.
+// WHERE THE SYNTH GOES: renderVoices() is the one empty function.
 // Everything else is the frame around it. Before writing a real
 // processing loop in there, read ../PORTING-GUIDE.md section 5 - the
 // rules about not allocating on the audio thread, denormals, 64-bit
@@ -40,7 +40,7 @@
 #include <cstddef>
 #include <vector>
 
-namespace SimpleDrum {
+namespace SimpleSynth {
 
 //------------------------------------------------------------------------
 /** Stereo, and only stereo. It agrees with setBusArrangements in the
@@ -122,10 +122,10 @@ private:
 };
 
 //------------------------------------------------------------------------
-class SimpleDrumDsp
+class SimpleSynthDsp
 {
 public:
-	SimpleDrumDsp ();
+	SimpleSynthDsp ();
 
 	/** Recomputes EVERY rate-dependent coefficient and resets state.
 
@@ -170,8 +170,8 @@ public:
 
 private:
 	/** THE ONE EMPTY FUNCTION. Sum every voice into the block, which is
-	    handed over already zeroed. Silence until there is a drum
-	    machine in here. */
+	    handed over already zeroed. Silence until there is a synth
+	    voice in here. */
 	void renderVoices (float* left, float* right, int numSamples);
 
 	double mSampleRate   = 44100.0;
@@ -188,4 +188,4 @@ private:
 };
 
 //------------------------------------------------------------------------
-} // namespace SimpleDrum
+} // namespace SimpleSynth

@@ -1,9 +1,9 @@
 //------------------------------------------------------------------------
-// SimpleDrum - DSP tests
+// SimpleSynth - DSP tests
 //
-// SDK-FREE, compiled directly against SimpleDrumDsp.cpp:
+// SDK-FREE, compiled directly against SimpleSynthDsp.cpp:
 //
-//   c++ -std=c++17 -O2 -I../source DspTests.cpp ../source/SimpleDrumDsp.cpp
+//   c++ -std=c++17 -O2 -I../source DspTests.cpp ../source/SimpleSynthDsp.cpp
 //       -o /tmp/dsptests  &&  /tmp/dsptests
 //
 // THIS IS THE ONLY EXECUTABLE VERIFICATION ON THIS PROJECT during
@@ -20,7 +20,7 @@
 // a day.
 //------------------------------------------------------------------------
 
-#include "SimpleDrumDsp.h"
+#include "SimpleSynthDsp.h"
 
 #include <algorithm>
 #include <cmath>
@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 
-using namespace SimpleDrum;
+using namespace SimpleSynth;
 
 //------------------------------------------------------------------------
 namespace {
@@ -169,7 +169,7 @@ static void testUnityIsBitIdentical ()
 
 	for (double rate : kRates)
 	{
-		SimpleDrumDsp dsp;
+		SimpleSynthDsp dsp;
 		dsp.setSampleRate (rate);
 		dsp.setMaxBlockSize (kBlock);
 		dsp.setOutputTrimDb (0.0);
@@ -197,7 +197,7 @@ static void testUnityIsBitIdentical ()
 	// difference.
 	//--------------------------------------------------------------------
 	{
-		SimpleDrumDsp dsp;
+		SimpleSynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		dsp.setMaxBlockSize (kBlock);
 		dsp.setOutputTrimDb (gainToDb (0.5));
@@ -226,7 +226,7 @@ static void testTrimTakesEffect ()
 
 	for (double db : { -24.0, -12.0, -6.0, 0.0, 6.0, 12.0 })
 	{
-		SimpleDrumDsp dsp;
+		SimpleSynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		dsp.setMaxBlockSize (kBlock);
 		dsp.setOutputTrimDb (db);
@@ -255,7 +255,7 @@ static void testDegenerateBlocks ()
 {
 	std::printf ("zero frames and null buffers\n");
 
-	SimpleDrumDsp dsp;
+	SimpleSynthDsp dsp;
 	dsp.setSampleRate (48000.0);
 	dsp.setMaxBlockSize (512);
 	dsp.setOutputTrimDb (0.0);
@@ -296,7 +296,7 @@ static void measureDefaultLevel ()
 
 	const int kBlock = 4096;
 
-	SimpleDrumDsp dsp;
+	SimpleSynthDsp dsp;
 	dsp.setSampleRate (48000.0);
 	dsp.setMaxBlockSize (kBlock);
 	dsp.setOutputTrimDb (0.0);        // the parameter table's default
@@ -346,7 +346,7 @@ static void measureDefaultLevel ()
 //------------------------------------------------------------------------
 int main ()
 {
-	std::printf ("SimpleDrum DSP tests\n");
+	std::printf ("SimpleSynth DSP tests\n");
 	std::printf ("--------------------\n");
 
 	testConversions ();

@@ -39,12 +39,12 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET 10.13 CACHE STRING "macOS deployment target")
 # shipped a build: change one afterwards and every session using the plug-in
 # loses it.
 #-----------------------------------------------------------------------------
-set(PLUGIN_NAME         "SimpleDrum")
+set(PLUGIN_NAME         "SimpleSynth")
 set(PLUGIN_VERSION      "1.0.0.1")   # keep in step with source/version.h
-set(PLUGIN_DESCRIPTION  "SimpleDrum - drum instrument")
+set(PLUGIN_DESCRIPTION  "SimpleSynth - synthesiser instrument")
 set(PLUGIN_COMPANY      "AE Cobley")   # no full stops; the same as the AU name's maker - see au-info.plist
-set(PLUGIN_BUNDLE_ID    "audio.simpledrum.vst3")
-set(PLUGIN_AU_BUNDLE_ID "audio.simpledrum.audiounit")
+set(PLUGIN_BUNDLE_ID    "audio.simplesynth.vst3")
+set(PLUGIN_AU_BUNDLE_ID "audio.simplesynth.audiounit")
 
 project(${PLUGIN_NAME}
     VERSION ${PLUGIN_VERSION}

@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleDrum - parameter definitions
+// SimpleSynth - parameter definitions
 //
 // THREE RANGES PER PARAMETER, even though this plug-in is brand new and
 // has one parameter. The shape is inherited from the DXi ports in this
@@ -23,7 +23,7 @@
 // for it rather than something to invent then.
 //
 // Note what is NOT a range mapping: dB to linear gain. That is the DSP's
-// arithmetic and lives in SimpleDrumDsp.h, where the editor can call the
+// arithmetic and lives in SimpleSynthDsp.h, where the editor can call the
 // same copy of it.
 //------------------------------------------------------------------------
 
@@ -31,7 +31,7 @@
 
 #include "pluginterfaces/vst/vsttypes.h"
 
-namespace SimpleDrum {
+namespace SimpleSynth {
 
 //------------------------------------------------------------------------
 enum Param : Steinberg::Vst::ParamID
@@ -45,7 +45,7 @@ enum Param : Steinberg::Vst::ParamID
 	    the host's generic editor agree about what it says. A scaffold
 	    with no parameters validates without ever exercising any of that.
 
-	    When the real drum machine arrives, this can stay: every
+	    When the real synth arrives, this can stay: every
 	    instrument wants one. */
 	kOutputTrim = 0,
 
@@ -70,7 +70,7 @@ enum Param : Steinberg::Vst::ParamID
 	    the mechanism for a value the DSP computes per block that the
 	    panel needs. That is what they are for and not messages: a
 	    sendMessage from process() is silently discarded by the host's
-	    connection proxy (see SimpleDrumIDs.h), whereas
+	    connection proxy (see SimpleSynthIDs.h), whereas
 	    data.outputParameterChanges is delivered on the UI thread and
 	    cannot be lost. Nothing publishes one yet. */
 	kBypass = 1000
@@ -163,4 +163,4 @@ inline const ParamDef& paramDef (Steinberg::Vst::ParamID id)
 }
 
 //------------------------------------------------------------------------
-} // namespace SimpleDrum
+} // namespace SimpleSynth

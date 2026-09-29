@@ -1,12 +1,12 @@
 //------------------------------------------------------------------------
-// SimpleDrum - audio processor
+// SimpleSynth - audio processor
 //
-// SimpleDrum is an INSTRUMENT: an event input and one stereo audio
+// SimpleSynth is an INSTRUMENT: an event input and one stereo audio
 // output, no audio input. That decision reaches FOUR places and they
 // must all agree, or the plug-in loads in the wrong list, or auval
 // rejects the Audio Unit:
 //
-//   * PlugType::kInstrumentDrum in SimpleDrumEntry.cpp
+//   * PlugType::kInstrumentSynth in SimpleSynthEntry.cpp
 //   * the buses added in initialize() below
 //   * what setBusArrangements accepts
 //   * the single 0-in / 2-out entry in resource/au-info.plist
@@ -27,8 +27,8 @@
 //   data.processContext arrives with nothing valid in it: everything
 //   that reads the tempo silently gets 120 in every host, the bar lines
 //   land nowhere, and the validator prints "- None" rather than
-//   complaining. A drum machine that launches on the bar would simply
-//   never launch and nothing would say why.
+//   complaining. An arpeggiator or LFO synced to the bar would simply
+//   never sync and nothing would say why.
 //
 //   Nothing here reads the tempo yet, so the override is absent
 //   deliberately. THE MOMENT ANYTHING DOES - a sync division, a bar
@@ -51,25 +51,25 @@
 
 #pragma once
 
-#include "SimpleDrumDsp.h"
-#include "SimpleDrumParams.h"
+#include "SimpleSynthDsp.h"
+#include "SimpleSynthParams.h"
 
 #include "public.sdk/source/vst/vstaudioeffect.h"
 #include "pluginterfaces/vst/ivstevents.h"
 
 #include <vector>
 
-namespace SimpleDrum {
+namespace SimpleSynth {
 
 //------------------------------------------------------------------------
-class SimpleDrumProcessor : public Steinberg::Vst::AudioEffect
+class SimpleSynthProcessor : public Steinberg::Vst::AudioEffect
 {
 public:
-	SimpleDrumProcessor ();
+	SimpleSynthProcessor ();
 
 	static Steinberg::FUnknown* createInstance (void*)
 	{
-		return (Steinberg::Vst::IAudioProcessor*)new SimpleDrumProcessor;
+		return (Steinberg::Vst::IAudioProcessor*)new SimpleSynthProcessor;
 	}
 
 	Steinberg::tresult PLUGIN_API initialize (Steinberg::FUnknown* context) SMTG_OVERRIDE;
@@ -109,7 +109,7 @@ private:
 	    64-bit if that is what it asked for. */
 	void writeOutput (Steinberg::Vst::ProcessData& data, Steinberg::int32 numSamples);
 
-	SimpleDrumDsp mDsp;
+	SimpleSynthDsp mDsp;
 
 	double mSampleRate = 44100.0;
 	bool   mBypass     = false;
@@ -126,4 +126,4 @@ private:
 };
 
 //------------------------------------------------------------------------
-} // namespace SimpleDrum
+} // namespace SimpleSynth

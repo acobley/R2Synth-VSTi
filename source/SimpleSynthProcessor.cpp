@@ -1,9 +1,9 @@
 //------------------------------------------------------------------------
-// SimpleDrum - audio processor implementation
+// SimpleSynth - audio processor implementation
 //------------------------------------------------------------------------
 
-#include "SimpleDrumProcessor.h"
-#include "SimpleDrumIDs.h"
+#include "SimpleSynthProcessor.h"
+#include "SimpleSynthIDs.h"
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
@@ -13,7 +13,7 @@
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
-namespace SimpleDrum {
+namespace SimpleSynth {
 
 //------------------------------------------------------------------------
 /** Bumped whenever the layout of the state stream changes. setState
@@ -22,13 +22,13 @@ namespace SimpleDrum {
 static const int32 kStateVersion = 1;
 
 //------------------------------------------------------------------------
-SimpleDrumProcessor::SimpleDrumProcessor ()
+SimpleSynthProcessor::SimpleSynthProcessor ()
 {
-	setControllerClass (kSimpleDrumControllerUID);
+	setControllerClass (kSimpleSynthControllerUID);
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumProcessor::initialize (FUnknown* context)
+tresult PLUGIN_API SimpleSynthProcessor::initialize (FUnknown* context)
 {
 	const tresult result = AudioEffect::initialize (context);
 	if (result != kResultOk)
@@ -48,13 +48,13 @@ tresult PLUGIN_API SimpleDrumProcessor::initialize (FUnknown* context)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumProcessor::terminate ()
+tresult PLUGIN_API SimpleSynthProcessor::terminate ()
 {
 	return AudioEffect::terminate ();
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumProcessor::setBusArrangements (SpeakerArrangement* inputs, int32 numIns,
+tresult PLUGIN_API SimpleSynthProcessor::setBusArrangements (SpeakerArrangement* inputs, int32 numIns,
                                                             SpeakerArrangement* outputs, int32 numOuts)
 {
 	// Stereo out, nothing in, and nothing else accepted. This must agree
@@ -74,7 +74,7 @@ tresult PLUGIN_API SimpleDrumProcessor::setBusArrangements (SpeakerArrangement* 
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumProcessor::canProcessSampleSize (int32 symbolicSampleSize)
+tresult PLUGIN_API SimpleSynthProcessor::canProcessSampleSize (int32 symbolicSampleSize)
 {
 	// BOTH, because hosts offer 64-bit buffers and one that is refused
 	// silently gets a plug-in the host will not load. The DSP is float
@@ -85,7 +85,7 @@ tresult PLUGIN_API SimpleDrumProcessor::canProcessSampleSize (int32 symbolicSamp
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumProcessor::setupProcessing (ProcessSetup& setup)
+tresult PLUGIN_API SimpleSynthProcessor::setupProcessing (ProcessSetup& setup)
 {
 	mSampleRate = setup.sampleRate;
 
@@ -102,7 +102,7 @@ tresult PLUGIN_API SimpleDrumProcessor::setupProcessing (ProcessSetup& setup)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumProcessor::setActive (TBool state)
+tresult PLUGIN_API SimpleSynthProcessor::setActive (TBool state)
 {
 	if (state)
 	{
@@ -111,18 +111,18 @@ tresult PLUGIN_API SimpleDrumProcessor::setActive (TBool state)
 		// setActive runs on the UI THREAD, which makes it the place a
 		// processor -> controller message may be sent from - the sample
 		// rate, when a panel needs it. Never from process(): see
-		// SimpleDrumIDs.h.
+		// SimpleSynthIDs.h.
 	}
 
 	return AudioEffect::setActive (state);
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumProcessor::applyParam (ParamID id, double normalized)
+void SimpleSynthProcessor::applyParam (ParamID id, double normalized)
 {
 	// kBypass FIRST, because it is 1000 and is not in the table. Every
 	// id is checked before anything indexes kParams - see the comment on
-	// kBypass in SimpleDrumParams.h.
+	// kBypass in SimpleSynthParams.h.
 	if (id == kBypass)
 	{
 		mBypass = (normalized >= 0.5);
@@ -153,7 +153,7 @@ void SimpleDrumProcessor::applyParam (ParamID id, double normalized)
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumProcessor::applyParameterChanges (IParameterChanges* changes)
+void SimpleSynthProcessor::applyParameterChanges (IParameterChanges* changes)
 {
 	if (changes == nullptr)
 		return;
@@ -181,14 +181,14 @@ void SimpleDrumProcessor::applyParameterChanges (IParameterChanges* changes)
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumProcessor::handleEvent (const Event& event)
+void SimpleSynthProcessor::handleEvent (const Event& event)
 {
 	switch (event.type)
 	{
 		case Event::kNoteOnEvent:
 			// A NOTE THAT STARTS NOTHING, for now. When there are
-			// voices, this is where a pad is struck: event.noteOn.pitch
-			// picks the pad, .velocity is 0..1 already, and
+			// voices, this is where a voice is started: event.noteOn.pitch
+			// sets the pitch, .velocity is 0..1 already, and
 			// event.sampleOffset is where in the block it lands - a
 			// voice started at offset 0 regardless is the classic
 			// timing bug, audible as everything quantised to the block
@@ -196,10 +196,11 @@ void SimpleDrumProcessor::handleEvent (const Event& event)
 			break;
 
 		case Event::kNoteOffEvent:
-			// Drums are mostly one-shots, so a note off may well do
-			// nothing even in the finished plug-in - but it has to be
-			// READ, or a host that sends note off without note on
-			// (every host, on transport stop) leaves state behind.
+			// A synth's note off releases its voice - match it by
+			// pitch AND channel (or noteId), or a held note whose
+			// twin was released hangs forever. It has to be READ even
+			// now: a host that sends note off without note on (every
+			// host, on transport stop) must not leave state behind.
 			break;
 
 		default:
@@ -208,7 +209,7 @@ void SimpleDrumProcessor::handleEvent (const Event& event)
 }
 
 //------------------------------------------------------------------------
-void SimpleDrumProcessor::writeOutput (ProcessData& data, int32 numSamples)
+void SimpleSynthProcessor::writeOutput (ProcessData& data, int32 numSamples)
 {
 	if (data.numOutputs < 1 || data.outputs[0].numChannels < kChannelCount)
 		return;
@@ -243,7 +244,7 @@ void SimpleDrumProcessor::writeOutput (ProcessData& data, int32 numSamples)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumProcessor::process (ProcessData& data)
+tresult PLUGIN_API SimpleSynthProcessor::process (ProcessData& data)
 {
 	// PARAMETERS FIRST, ALWAYS - before the early return below, or a
 	// parameter-only block would be thrown away along with the block.
@@ -300,7 +301,7 @@ tresult PLUGIN_API SimpleDrumProcessor::process (ProcessData& data)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumProcessor::getState (IBStream* state)
+tresult PLUGIN_API SimpleSynthProcessor::getState (IBStream* state)
 {
 	if (state == nullptr)
 		return kResultFalse;
@@ -334,7 +335,7 @@ tresult PLUGIN_API SimpleDrumProcessor::getState (IBStream* state)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumProcessor::setState (IBStream* state)
+tresult PLUGIN_API SimpleSynthProcessor::setState (IBStream* state)
 {
 	if (state == nullptr)
 		return kResultFalse;
@@ -395,4 +396,4 @@ tresult PLUGIN_API SimpleDrumProcessor::setState (IBStream* state)
 }
 
 //------------------------------------------------------------------------
-} // namespace SimpleDrum
+} // namespace SimpleSynth

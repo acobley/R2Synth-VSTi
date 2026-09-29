@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleDrum - version strings
+// SimpleSynth - version strings
 //
 // Keep MAJOR/SUB/RELEASE/BUILD in step with PLUGIN_VERSION in
 // CMakeLists.txt and with CFBundleVersion in resource/au-info.plist.
@@ -24,11 +24,11 @@
 #define FULL_VERSION_STR MAJOR_VERSION_STR "." SUB_VERSION_STR "." RELEASE_NUMBER_STR "." BUILD_NUMBER_STR
 #define VERSION_STR      MAJOR_VERSION_STR "." SUB_VERSION_STR "." RELEASE_NUMBER_STR
 
-#define stringOriginalFilename "SimpleDrum.vst3"
+#define stringOriginalFilename "SimpleSynth.vst3"
 #if SMTG_PLATFORM_64
-#define stringFileDescription "SimpleDrum VST3 (64Bit)"
+#define stringFileDescription "SimpleSynth VST3 (64Bit)"
 #else
-#define stringFileDescription "SimpleDrum VST3"
+#define stringFileDescription "SimpleSynth VST3"
 #endif
 // The VST3 vendor. NO FULL STOPS, and the same as the manufacturer part of
 // the AU name in resource/au-info.plist and PLUGIN_COMPANY in

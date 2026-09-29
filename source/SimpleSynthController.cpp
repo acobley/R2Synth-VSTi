@@ -1,9 +1,9 @@
 //------------------------------------------------------------------------
-// SimpleDrum - edit controller implementation
+// SimpleSynth - edit controller implementation
 //------------------------------------------------------------------------
 
-#include "SimpleDrumController.h"
-#include "SimpleDrumIDs.h"
+#include "SimpleSynthController.h"
+#include "SimpleSynthIDs.h"
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/base/ustring.h"
@@ -13,17 +13,17 @@
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
-namespace SimpleDrum {
+namespace SimpleSynth {
 
 //------------------------------------------------------------------------
 namespace {
 
 /** A RangeParameter that formats its own text, so the host's generic
     editor shows the same number a panel will. */
-class SimpleDrumParameter : public RangeParameter
+class SimpleSynthParameter : public RangeParameter
 {
 public:
-	SimpleDrumParameter (const ParamDef& def)
+	SimpleSynthParameter (const ParamDef& def)
 	// TITLE AND UNITS MUST NOT BE NULL. RangeParameter passes them
 	// straight to UString::assign, which dereferences both without a
 	// null check. The symptom is not a crash in the plug-in: it is the
@@ -67,37 +67,37 @@ private:
 } // anonymous namespace
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumController::initialize (FUnknown* context)
+tresult PLUGIN_API SimpleSynthController::initialize (FUnknown* context)
 {
 	const tresult result = EditControllerEx1::initialize (context);
 	if (result != kResultOk)
 		return result;
 
 	for (int i = 0; i < kNumParams; ++i)
-		parameters.addParameter (new SimpleDrumParameter (kParams[i]));
+		parameters.addParameter (new SimpleSynthParameter (kParams[i]));
 
 	// Standard VST3 bypass, id 1000 and not part of the table. Any
 	// "enabled" switch a later design brings with it stays separate from
-	// this one, with its own default - see SimpleDrumParams.h.
+	// this one, with its own default - see SimpleSynthParams.h.
 	parameters.addParameter (STR16 ("Bypass"), STR16 (""), 1, 0,
 	                         ParameterInfo::kCanAutomate | ParameterInfo::kIsBypass, kBypass);
 
 	// Read-only output parameters - the mechanism for a value the DSP
 	// computes per block - are added here too, from id 1001 up. None
 	// yet. STR16 ("") rather than nullptr for their units when there
-	// are, for the reason in the comment on SimpleDrumParameter.
+	// are, for the reason in the comment on SimpleSynthParameter.
 
 	return kResultOk;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumController::terminate ()
+tresult PLUGIN_API SimpleSynthController::terminate ()
 {
 	return EditControllerEx1::terminate ();
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumController::setComponentState (IBStream* state)
+tresult PLUGIN_API SimpleSynthController::setComponentState (IBStream* state)
 {
 	if (!state)
 		return kResultFalse;
@@ -138,16 +138,16 @@ tresult PLUGIN_API SimpleDrumController::setComponentState (IBStream* state)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumController::setState (IBStream* /*state*/)
+tresult PLUGIN_API SimpleSynthController::setState (IBStream* /*state*/)
 {
 	return kResultOk;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleDrumController::getState (IBStream* /*state*/)
+tresult PLUGIN_API SimpleSynthController::getState (IBStream* /*state*/)
 {
 	return kResultOk;
 }
 
 //------------------------------------------------------------------------
-} // namespace SimpleDrum
+} // namespace SimpleSynth

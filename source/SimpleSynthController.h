@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleDrum - edit controller
+// SimpleSynth - edit controller
 //
 // The half of the plug-in that talks to the host about parameters. It
 // does NOT share memory with the processor - they may not even be in the
@@ -7,11 +7,11 @@
 // project:
 //
 //   * anything a panel displays that the DSP computes comes from one
-//     shared function both call (SimpleDrumDsp.h), not from two copies
+//     shared function both call (SimpleSynthDsp.h), not from two copies
 //     of the arithmetic;
 //   * a value the DSP produces per block reaches here through
 //     data.outputParameterChanges, never through sendMessage from
-//     process() (SimpleDrumIDs.h).
+//     process() (SimpleSynthIDs.h).
 //
 // NO EDITOR YET, deliberately: PORTING-GUIDE.md step 6 is a silent
 // plug-in validating with processor, controller and entry and nothing
@@ -23,7 +23,7 @@
 // editorAttached, editorRemoved, editorDestroyed and a setParamNormalized
 // that forwards to it - and one trap in editorDestroyed: EditorView's
 // destructor calls it, by which point the derived editor is gone, so
-// dynamic_cast<SimpleDrumEditor*> returns NULL and the entry survives in
+// dynamic_cast<SimpleSynthEditor*> returns NULL and the entry survives in
 // the list as a dangling pointer. COMPARE UPCAST POINTERS instead.
 // ../FilterDrum-VSTi/source/FilterDrumController.cpp has the worked
 // version; ../SpyBand-VSTi/source/SpyBandControls.{h,cpp} is the
@@ -32,22 +32,22 @@
 
 #pragma once
 
-#include "SimpleDrumParams.h"
+#include "SimpleSynthParams.h"
 
 #include "public.sdk/source/vst/vsteditcontroller.h"
 
-namespace SimpleDrum {
+namespace SimpleSynth {
 
 //------------------------------------------------------------------------
-class SimpleDrumController : public Steinberg::Vst::EditControllerEx1
+class SimpleSynthController : public Steinberg::Vst::EditControllerEx1
 {
 public:
-	SimpleDrumController () = default;
-	~SimpleDrumController () SMTG_OVERRIDE = default;
+	SimpleSynthController () = default;
+	~SimpleSynthController () SMTG_OVERRIDE = default;
 
 	static Steinberg::FUnknown* createInstance (void*)
 	{
-		return (Steinberg::Vst::IEditController*)new SimpleDrumController;
+		return (Steinberg::Vst::IEditController*)new SimpleSynthController;
 	}
 
 	Steinberg::tresult PLUGIN_API initialize (Steinberg::FUnknown* context) SMTG_OVERRIDE;
@@ -67,4 +67,4 @@ public:
 };
 
 //------------------------------------------------------------------------
-} // namespace SimpleDrum
+} // namespace SimpleSynth
