@@ -54,7 +54,7 @@ VCO 3 --/               ^  ^  ^            ^  ^
 | Section | Controls |
 |---|---|
 | VCO 1, 2, 3 | Wave (Saw / Square), Tune (±12 st), Level (0–100 %) — one implementation, addressed by stride (`vcoParam()`) |
-| LFO | Rate (0.1–20 Hz, log), Shape (−100 falling saw … 0 triangle … +100 rising saw), Output (Shape / Square), Pitch depth (0–12 st) |
+| LFO | Rate (0.1–20 Hz, log), Shape (−100 falling saw … 0 triangle … +100 rising saw), Output (Shape / Square / Sine), Pitch depth (0–12 st) |
 | VCF | Cutoff (20 Hz–20 kHz, log), Resonance (0–100 % → loop gain 0–1.1), Key Track (0–100 %), LFO depth (0–4 oct) |
 | VCF ENV | Attack, Decay, Sustain, Release, Env Amount (±6 oct) |
 | VCA / OUTPUT | LFO depth (tremolo, 0–100 %), Output Level (−48…+6 dB) |
@@ -73,7 +73,32 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
   other. The square output's duty **follows the same knob** (50 % at the
   triangle, clamped at 5 %/95 % so it never goes DC), as the MS-20's pulse
   output does. The Output switch picks which one drives all three
-  destinations. Free-running, bipolar, and slewed by 0.5 ms so a saw reset
+  destinations.
+- **The LFO's Sine output** (added 29 Sep 2026) is made the way the EMS
+  VCS3's oscillators make their sine: the **symmetrical triangle core**
+  through a differential-pair shaper, `tanh (kSineDrive · (tri + balance))`,
+  rescaled to swing exactly −1…+1 so the depth knobs mean the same on every
+  output (`lfoSineValue()`).
+  - `kSineDrive = 1.40` was **measured**, not chosen: a 0.01-step sweep for
+    the least THD. It gives **1.36 %** (the triangle is 12.1 %). The suite
+    checks that 1.30 and 1.50 are both worse.
+  - **Shape moves the shaper's balance**, as the VCS3's Shape control moves
+    its sine off centre: ±100 % puts the triangle's trough (or peak) on the
+    steep middle of the curve and the other extreme into saturation, so one
+    half-cycle becomes a broad dome and the other a sharp V — a rectified
+    sine, domed on top at +100 % and underneath at −100 %. The same knob
+    therefore means *asymmetry* on all three outputs.
+  - **Not modelled from a schematic.** I could not find the VCS3's sine
+    shaper circuit, so this is the differential-pair principle plus the
+    Shape-control behaviour, not a component-level copy of its transfer
+    curve.
+  - **The Output switch went from two positions to three before any
+    release.** Square moved from normalised 1.0 to 0.5, so a test project
+    saved on Square opens on Sine. From the first release the positions
+    (`LfoOutput`: Shape 0, Square 1, Sine 2) are as permanent as the ids.
+  - The display draws the **patched** output in green (`> SINE`) and, in
+    red, the shape output underneath it, or the square when Shape itself is
+    patched (`lfoDisplayData()`, shared with the panel picture). Free-running, bipolar, and slewed by 0.5 ms so a saw reset
   or a square edge on the VCA is not a click. VCA depth is tremolo
   *downwards* from the envelope — it can never lift the level above it.
 - **The filter is SpaceDub's Moog ladder** ("Moog VCF, variation 2",
@@ -216,10 +241,10 @@ v3.8.1_build_84 — the tag the template pins:
 
 | What | Result |
 |---|---|
-| `tools/run-tests.sh` — DSP suite | **184 checks, 0 failures** (x86-64 GCC 13, and arm64 GCC 11 in the Mac's VM) |
-| `tools/run-tests.sh` — layout and panel text | **804 checks, 0 failures** |
+| `tools/run-tests.sh` — DSP suite | **201 checks, 0 failures** (arm64 GCC 11 in the Mac's VM; 184 before the sine, also on x86-64 GCC 13) |
+| `tools/run-tests.sh` — layout and panel text | **812 checks, 0 failures** |
 | Every `source/*.cpp` compiled against the SDK and VSTGUI headers, `-Wall -Wextra` | 8/8, no warnings in our code; `nm -C`: all 57 referenced `SimpleSynth::` symbols defined |
-| `tools/linux-validate/` — the plug-in built on Linux (editor stubbed), **SDK validator** | **47 tests passed, 0 failed** |
+| `tools/linux-validate/` — the plug-in built on Linux (editor stubbed), **SDK validator** | **47 tests passed, 0 failed** (re-run after the sine: still 47 / 0) |
 | `tests/ProcessorTests.cpp` against the real processor | **25 checks, 0 failures** |
 
 Run again in the Mac's own Linux VM (aarch64, GCC 11), which found one

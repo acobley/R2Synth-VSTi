@@ -11,8 +11,12 @@ A monophonic analogue-style synthesiser. VST3 and Audio Unit, for macOS.
   polyBLEP.
 * **An MS-20-style LFO.** One **Shape** knob sweeps the wave from a falling
   sawtooth, through a triangle, to a rising sawtooth. The **square** output's
-  duty cycle follows the same knob, as the MS-20's does. The **Output**
-  switch picks which of the two waves is used. The LFO's depth is set
+  duty cycle follows the same knob, as the MS-20's does. A third output,
+  **Sine**, rounds the triangle with a differential-pair (tanh) shaper, the
+  way the EMS VCS3's oscillators make theirs. As with the VCS3's Shape
+  control, the same knob moves the shaper off balance, towards a
+  rectified-sine shape at either end. The **Output** switch picks which of
+  the three waves is used. The LFO's depth is set
   separately for **pitch** (vibrato), **cutoff** and the **VCA** (tremolo).
 * **SpaceDub's Moog ladder filter**, using the same per-sample arithmetic,
   with two additions:

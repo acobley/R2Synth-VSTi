@@ -22,6 +22,7 @@
 #include "SimpleSynthDsp.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 
 using namespace SimpleSynth;
@@ -104,18 +105,20 @@ int main ()
 	std::printf ("  ],\n");
 
 	// The two displays, drawn by the plug-in's own trace functions.
+	// The LFO display for whichever output the environment asks for
+	// (SS_LFO_OUTPUT=0/1/2, SS_LFO_SHAPE=-1..1), defaults otherwise - so
+	// the picture can show any output without a second copy of the maths.
 	float a[kDisplayPoints], b[kDisplayPoints];
-	traceLfo (internalDefault (kLfoShape), a, b, kDisplayPoints, 2.0);
-	for (int i = 0; i < kDisplayPoints; ++i)
-	{
-		a[i] = 0.5f + 0.42f * a[i];
-		b[i] = 0.5f + 0.42f * b[i];
-	}
-	const bool square = internalDefault (kLfoOutput) >= 0.5;
+	const char* envOut = std::getenv ("SS_LFO_OUTPUT");
+	const char* envShape = std::getenv ("SS_LFO_SHAPE");
+	const double lfoOut = envOut ? std::atof (envOut) : internalDefault (kLfoOutput);
+	const double lfoShape = envShape ? std::atof (envShape) : internalDefault (kLfoShape);
+	std::string pl, cl;
+	lfoDisplayData (lfoOut, lfoShape, a, b, kDisplayPoints, 2.0, pl, cl);
 	std::printf ("  \"lfoView\": {\"rect\": [%d,%d,%d,%d], \"caption\": \"LFO  (2 cycles)\", \"annotation\": \"%.2f s\", "
 	             "\"legend\": [%s, %s], \"gate\": -1,\n",
 	             kDisplayX, kLfoViewTop, kDisplayX + kDisplayWidth, kLfoViewBottom, 2.0 / internalDefault (kLfoRate),
-	             square ? "\"shape\"" : "\"> SHAPE\"", square ? "\"SQUARE <\"" : "\"square\"");
+	             quoted (pl).c_str (), quoted (cl).c_str ());
 	printCurve ("a", a, kDisplayPoints, false);
 	printCurve ("b", b, kDisplayPoints, true);
 	std::printf ("  },\n");

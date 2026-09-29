@@ -31,10 +31,6 @@ const CColor kPanelBack (44, 48, 44, 255);
     the picture rather than at its edges. */
 constexpr double kLfoDisplayCycles = 2.0;
 
-/** The LFO display draws -1..+1 into this much of its height, centred,
-    so a square at full swing does not sit on the plate's frame. */
-constexpr double kLfoDisplaySwing = 0.42;
-
 } // anonymous namespace
 
 //------------------------------------------------------------------------
@@ -348,34 +344,27 @@ void SimpleSynthEditor::refreshLfoDisplay ()
 	if (!mLfoView)
 		return;
 
-	// DRAWN BY traceLfo(), which calls the same lfoShapeValue() and
-	// lfoSquareValue() the running LFO does - so the picture is the
-	// wave, not a drawing of one.
-	float shapeCurve[Layout::kDisplayPoints];
-	float squareCurve[Layout::kDisplayPoints];
-	traceLfo (internalOf (kLfoShape), shapeCurve, squareCurve, Layout::kDisplayPoints,
-	          kLfoDisplayCycles);
-
-	// -1..+1 into the middle of the plot; the view's scale is 0..1.
-	for (int i = 0; i < Layout::kDisplayPoints; ++i)
-	{
-		shapeCurve[i]  = static_cast<float> (0.5 + kLfoDisplaySwing * shapeCurve[i]);
-		squareCurve[i] = static_cast<float> (0.5 + kLfoDisplaySwing * squareCurve[i]);
-	}
+	// lfoDisplayData() - shared with the panel picture's tool - traces
+	// the PATCHED output in green and a companion in red, through the
+	// same lfoOutputValue() the running LFO uses.
+	float patched[Layout::kDisplayPoints];
+	float companion[Layout::kDisplayPoints];
+	std::string patchedLegend, companionLegend;
+	lfoDisplayData (internalOf (kLfoOutput), internalOf (kLfoShape), patched, companion,
+	                Layout::kDisplayPoints, kLfoDisplayCycles, patchedLegend, companionLegend);
 
 	const double rate = internalOf (kLfoRate);
-	const bool square = internalOf (kLfoOutput) >= 0.5;
 
 	char annotation[32] = {};
 	std::snprintf (annotation, sizeof (annotation), "%.2f s", kLfoDisplayCycles / rate);
 
-	// THE PATCHED OUTPUT IS IN CAPITALS with an arrow, the other in
+	// THE PATCHED OUTPUT IS IN CAPITALS with an arrow, the companion in
 	// lower case: both are drawn, because the Shape knob moves both, but
 	// only one of them is reaching anything.
 	mLfoView->setCaption ("LFO  (2 cycles)");
 	mLfoView->setAnnotation (annotation);
-	mLfoView->setLegend (square ? "shape" : "> SHAPE", square ? "SQUARE <" : "square");
-	mLfoView->setCurves (shapeCurve, squareCurve, Layout::kDisplayPoints);
+	mLfoView->setLegend (patchedLegend, companionLegend);
+	mLfoView->setCurves (patched, companion, Layout::kDisplayPoints);
 }
 
 //------------------------------------------------------------------------

@@ -17,7 +17,8 @@
 //      from two copies of the arithmetic that will drift apart. This
 //      header is where those functions live: ladderTuning(),
 //      selfOscillating(), cutoffCeilingHz(), lfoShapeValue(),
-//      lfoSquareValue(), traceEnvelopes() and traceLfo() are all called
+//      lfoSquareValue(), lfoSineValue(), traceEnvelopes() and traceLfo()
+//      are all called
 //      by the audio path AND by the panel.
 //
 // THE SIGNAL PATH - one monophonic voice, last-note priority:
@@ -35,7 +36,11 @@
 //   * The LFO is the Korg MS-20's modulation generator: ONE Shape knob
 //     sweeps the wave from a falling sawtooth through a triangle to a
 //     rising one, and the square output's duty cycle follows the same
-//     knob. An Output switch picks which of the two drives the three
+//     knob. A third output, SINE, is the triangle rounded by a
+//     differential-pair (tanh) shaper, the way the EMS VCS3's oscillators
+//     make their sine - and, as on the VCS3, the Shape knob moves the
+//     shaper's balance, so the sine leans towards a rectified shape at
+//     either end. An Output switch picks which of the three drives the
 //     destinations - pitch, cutoff and VCA.
 //   * The filter is SpaceDub's Moog ladder ("Moog VCF, variation 2",
 //     musicdsp.org), its per-sample arithmetic unchanged - but TUNED:
@@ -159,6 +164,25 @@ constexpr double kLfoSlewSeconds = 0.0005;
     would make it DC. */
 constexpr double kMinLfoDuty = 0.05;
 
+/** THE SINE SHAPER'S DRIVE: how hard the triangle is pushed into the
+    tanh curve.
+
+    MEASURED, not chosen. A differential pair's transfer curve is tanh,
+    and rounding a triangle with it is a sine only at one drive: too
+    little and the corners stay pointed, too much and the top flattens
+    towards a square. Swept in 0.01 steps, 1.40 gives the least total
+    harmonic distortion - 1.4 %, against 12 % for the triangle it starts
+    from - and tests/DspTests.cpp measures it on every run. */
+constexpr double kSineDrive = 1.40;
+
+/** How far the Shape knob unbalances the shaper at either end, in
+    triangle amplitudes. At 1.0 the triangle's trough sits exactly on the
+    shaper's centre, where it is steepest, and its peak deep in
+    saturation - so one half-cycle is a sharp V and the other a broad
+    dome: the rectified-sine look the VCS3's Shape control gives its
+    sine. */
+constexpr double kMaxSineBalance = 1.0;
+
 //------------------------------------------------------------------------
 // The shared functions
 //
@@ -246,6 +270,50 @@ inline double lfoSquareValue (double phase, double shape)
 	return (phase < lfoSquareDuty (shape)) ? 1.0 : -1.0;
 }
 
+/** THE SINE OUTPUT, the EMS VCS3 way: a SYMMETRICAL triangle (the core,
+    not the skewed shape output) into a differential-pair shaper -
+    tanh (kSineDrive * (triangle + balance)) - rescaled so it always
+    swings exactly -1..+1.
+
+    At Shape 0 the balance is 0 and this is the best sine a tanh can
+    make of a triangle (1.4 % THD). The Shape knob moves the balance, as
+    the VCS3's Shape control moves its sine shaper off centre: the half
+    of the cycle pushed into saturation broadens into a dome, the other
+    half sharpens into a V, and at either end the wave looks like a
+    rectified sine - positive-domed one way, negative-domed the other.
+    Same knob, same gesture - asymmetry - on all three outputs. */
+inline double lfoSineValue (double phase, double shape)
+{
+	if (shape < -1.0) shape = -1.0;
+	if (shape >  1.0) shape =  1.0;
+	const double balance = shape * kMaxSineBalance;
+
+	const double tri = lfoShapeValue (phase, 0.0);
+	const double lo  = std::tanh (kSineDrive * (-1.0 + balance));
+	const double hi  = std::tanh (kSineDrive * ( 1.0 + balance));
+	const double y   = std::tanh (kSineDrive * (tri + balance));
+
+	// The rescale is what keeps the depth knobs meaning the same thing
+	// on every output: whatever the balance, the wave spans -1..+1.
+	return (2.0 * y - (hi + lo)) / (hi - lo);
+}
+
+/** Which of the three LFO outputs drives the destinations. The values
+    are the Output switch's positions and are stored in projects, so they
+    are APPEND-ONLY, like parameter ids. */
+enum class LfoOutput { Shape = 0, Square = 1, Sine = 2 };
+
+inline double lfoOutputValue (LfoOutput output, double phase, double shape)
+{
+	switch (output)
+	{
+		case LfoOutput::Square: return lfoSquareValue (phase, shape);
+		case LfoOutput::Sine:   return lfoSineValue (phase, shape);
+		case LfoOutput::Shape:
+		default:                return lfoShapeValue (phase, shape);
+	}
+}
+
 //------------------------------------------------------------------------
 /** A one-pole glide towards a target.
 
@@ -314,11 +382,13 @@ private:
 //------------------------------------------------------------------------
 /** The Korg MS-20 modulation generator.
 
-    Two outputs, as on the MS-20's patch panel, and an Output switch that
-    picks which one drives the destinations:
+    The MS-20's two outputs, a VCS3-style third, and an Output switch
+    that picks which one drives the destinations:
 
       * SHAPE  - the skewed triangle, lfoShapeValue()
       * SQUARE - lfoSquareValue(), whose duty follows the same knob
+      * SINE   - lfoSineValue(), the triangle core through a tanh shaper
+                 whose balance follows the same knob
 
     Bipolar, -1..+1. FREE-RUNNING - not reset by notes - because the
     MS-20's is not either. */
@@ -328,7 +398,7 @@ public:
 	void setSampleRate (double sampleRate);
 	void setRate (double hz) { mRateHz = hz; }
 	void setShape (double shape) { mShape = shape; }
-	void setSquareOutput (bool square) { mSquare = square; }
+	void setOutput (LfoOutput output) { mOutput = output; }
 
 	void reset ();
 
@@ -341,7 +411,7 @@ private:
 	double mSampleRate = 44100.0;
 	double mRateHz = 4.0;
 	double mShape  = 0.0;
-	bool   mSquare = false;
+	LfoOutput mOutput = LfoOutput::Shape;
 	double mPhase  = 0.0;
 	double mSlewed = 0.0;
 	double mSlewCoeff = 1.0;
@@ -511,10 +581,9 @@ double traceEnvelopes (const AdsrSpec& vcf, const AdsrSpec& vca,
                        float* vcfOut, float* vcaOut, int count,
                        double* gateOffSeconds);
 
-/** The LFO display's data: `cycles` cycles of both outputs, -1..+1,
-    from the same lfoShapeValue()/lfoSquareValue() the MsLfo runs. */
-void traceLfo (double shape, float* shapeOut, float* squareOut, int count,
-               double cycles);
+/** The LFO display's data: `cycles` cycles of one output, -1..+1, from
+    the same lfoOutputValue() the MsLfo runs. */
+void traceLfo (LfoOutput output, double shape, float* out, int count, double cycles);
 
 //------------------------------------------------------------------------
 class SimpleSynthDsp
@@ -547,7 +616,7 @@ public:
 
 	void setLfoRate (double hz);
 	void setLfoShape (double shape);                   // -1..+1
-	void setLfoSquareOutput (bool square);
+	void setLfoOutput (LfoOutput output);
 	void setLfoPitchDepth (double semitones);
 	void setLfoCutoffDepth (double octaves);
 	void setLfoVcaDepth (double depth);                // 0..1

@@ -114,7 +114,7 @@ void applyDefaultPatch (SimpleSynthDsp& d)
 	d.setVcoWave (2, Vco::Wave::Saw);    d.setVcoTune (2, 0.0);   d.setVcoLevel (2, 0.0);
 	d.setLfoRate (4.0);
 	d.setLfoShape (0.0);
-	d.setLfoSquareOutput (false);
+	d.setLfoOutput (LfoOutput::Shape);
 	d.setLfoPitchDepth (0.0);
 	d.setCutoffHz (1200.0);
 	d.setResonance (0.20 * kMaxResonanceK);
@@ -332,6 +332,159 @@ static void testVcos ()
 }
 
 //------------------------------------------------------------------------
+// 5a. The LFO's sine output - the VCS3-style shaper
+//------------------------------------------------------------------------
+namespace {
+
+/** Total harmonic distortion of one cycle, by DFT: harmonics 2..40
+    against the fundamental. */
+double thdOfCycle (const std::vector<double>& y)
+{
+	const size_t n = y.size ();
+	auto magnitude = [&] (int k) {
+		double re = 0.0, im = 0.0;
+		for (size_t i = 0; i < n; ++i)
+		{
+			const double a = 2.0 * 3.14159265358979323846 * k * static_cast<double> (i) / n;
+			re += y[i] * std::cos (a);
+			im -= y[i] * std::sin (a);
+		}
+		return std::sqrt (re * re + im * im);
+	};
+	double harmonics = 0.0;
+	for (int k = 2; k <= 40; ++k)
+		harmonics += magnitude (k) * magnitude (k);
+	return std::sqrt (harmonics) / magnitude (1);
+}
+
+std::vector<double> oneCycle (LfoOutput which, double shape, int n = 4096)
+{
+	std::vector<double> y (n);
+	for (int i = 0; i < n; ++i)
+		y[i] = lfoOutputValue (which, static_cast<double> (i) / n, shape);
+	return y;
+}
+
+} // anonymous namespace
+
+static void testLfoSine ()
+{
+	std::printf ("LFO sine (VCS3-style shaper)\n");
+
+	// THE DRIVE IS THE MEASURED OPTIMUM, and it makes a real sine: the
+	// triangle it starts from is 12 % THD.
+	const double triThd  = thdOfCycle (oneCycle (LfoOutput::Shape, 0.0));
+	const double sineThd = thdOfCycle (oneCycle (LfoOutput::Sine, 0.0));
+	std::printf ("  THD: triangle %.2f %%, sine %.2f %%\n", triThd * 100.0, sineThd * 100.0);
+	check (triThd > 0.11, "the triangle it starts from really is a triangle");
+	check (sineThd < 0.015, "the shaped sine is under 1.5 % THD");
+
+	// And kSineDrive IS the optimum: a little either way is worse.
+	auto thdAtDrive = [] (double k) {
+		std::vector<double> y (4096);
+		for (int i = 0; i < 4096; ++i)
+			y[i] = std::tanh (k * lfoShapeValue (i / 4096.0, 0.0));
+		return thdOfCycle (y);
+	};
+	check (thdAtDrive (kSineDrive - 0.1) > sineThd && thdAtDrive (kSineDrive + 0.1) > sineThd,
+	       "kSineDrive is the least-distortion drive (1.3 and 1.5 are both worse)");
+
+	// Centred, full-scale, odd-symmetric at Shape 0.
+	{
+		const auto y = oneCycle (LfoOutput::Sine, 0.0);
+		double lo = 1.0, hi = -1.0, mean = 0.0, asym = 0.0;
+		for (size_t i = 0; i < y.size (); ++i)
+		{
+			lo = std::min (lo, y[i]); hi = std::max (hi, y[i]); mean += y[i];
+			asym = std::max (asym, std::fabs (y[i] + y[(i + y.size () / 2) % y.size ()]));
+		}
+		checkClose (lo, -1.0, 1e-9, "the sine reaches -1");
+		checkClose (hi, 1.0, 1e-3, "and +1");
+		checkClose (mean / y.size (), 0.0, 1e-9, "no DC at Shape 0");
+		check (asym < 1e-9, "the second half-cycle is the first, inverted");
+	}
+
+	// THE BALANCE, VCS3-style: at either end of the Shape knob one
+	// half-cycle broadens into a dome and the other sharpens into a V.
+	// Measured as time spent near each extreme.
+	for (double shape : { -1.0, 1.0 })
+	{
+		const auto y = oneCycle (LfoOutput::Sine, shape);
+		double lo = 1.0, hi = -1.0;
+		int nearTop = 0, nearBottom = 0;
+		for (double v : y)
+		{
+			lo = std::min (lo, v); hi = std::max (hi, v);
+			if (v > 0.8) ++nearTop;
+			if (v < -0.8) ++nearBottom;
+		}
+		const bool domeOnTop = nearTop > 3 * nearBottom;
+		const bool domeBelow = nearBottom > 3 * nearTop;
+		check ((shape > 0.0) ? domeOnTop : domeBelow,
+		       "Shape " + num (shape, "%+.0f") + " domes the " + std::string (shape > 0.0 ? "top" : "bottom") +
+		       " half (" + std::to_string (nearTop) + " vs " + std::to_string (nearBottom) + " samples past 0.8)");
+		check (lo >= -1.0 - 1e-9 && hi <= 1.0 + 1e-9 && hi - lo > 1.999,
+		       "and still swings exactly -1..+1 at Shape " + num (shape, "%+.0f"));
+	}
+
+	// The balance moves smoothly: no position of the knob jumps the wave.
+	{
+		double worst = 0.0;
+		for (int s = -100; s < 100; ++s)
+			for (int i = 0; i < 64; ++i)
+			{
+				const double p = i / 64.0;
+				worst = std::max (worst, std::fabs (lfoSineValue (p, (s + 1) / 100.0) - lfoSineValue (p, s / 100.0)));
+			}
+		check (worst < 0.05, "a 1 % move of the Shape knob moves the sine by under 0.05 (" + num (worst, "%.3f") + ")");
+	}
+
+	// The running LFO on the Sine output: in tune, bounded, continuous.
+	{
+		MsLfo lfo;
+		lfo.setSampleRate (48000.0);
+		lfo.setRate (3.0);
+		lfo.setShape (0.0);
+		lfo.setOutput (LfoOutput::Sine);
+		lfo.reset ();
+		std::vector<double> x (96000);
+		double worstStep = 0.0, prev = lfo.next ();
+		for (auto& s : x)
+		{
+			s = lfo.next ();
+			worstStep = std::max (worstStep, std::fabs (s - prev));
+			prev = s;
+		}
+		checkClose (measureFrequency (x, 48000.0), 3.0, 3e-3, "Sine output runs at the LFO rate");
+		check (worstStep < 0.001, "and has no steps (largest " + num (worstStep, "%.5f") + " at 3 Hz)");
+	}
+
+	// And through the engine: the Sine output on the cutoff reaches its
+	// full depth either way.
+	{
+		SimpleSynthDsp dsp;
+		dsp.setSampleRate (48000.0);
+		applyDefaultPatch (dsp);
+		dsp.setVcfEnvAmount (0.0);
+		dsp.setKeyTrack (0.0);
+		dsp.setLfoOutput (LfoOutput::Sine);
+		dsp.setLfoCutoffDepth (1.0);
+		dsp.setLfoRate (5.0);
+		dsp.reset ();
+		dsp.noteOn (60, 1.f);
+		double lo = 1e9, hi = 0.0;
+		float l = 0.f, r = 0.f;
+		for (int i = 0; i < 48000; ++i)
+		{
+			dsp.render (&l, &r, 1);
+			lo = std::min (lo, dsp.lastCutoffHz ());
+			hi = std::max (hi, dsp.lastCutoffHz ());
+		}
+		checkClose (hi / lo, 4.0, 0.05, "the Sine output swings the cutoff its full octave either way");
+	}
+}
+
+//------------------------------------------------------------------------
 // 5. The MS-20 LFO
 //------------------------------------------------------------------------
 static void testLfo ()
@@ -405,7 +558,7 @@ static void testLfo ()
 		lfo.setSampleRate (48000.0);
 		lfo.setRate (5.0);
 		lfo.setShape (0.5);
-		lfo.setSquareOutput (true);
+		lfo.setOutput (LfoOutput::Square);
 		lfo.reset ();
 		int high = 0, total = 48000;
 		double lo = 1.0, hi = -1.0, worstStep = 0.0, prev = lfo.next ();
@@ -423,6 +576,8 @@ static void testLfo ()
 		// tenth per sample at 48 k. Unslewed it would be 2.0 in one.
 		check (worstStep < 0.1, "the square's edges are slewed (largest step " + num (worstStep, "%.3f") + ")");
 	}
+
+	testLfoSine ();
 }
 
 //------------------------------------------------------------------------
@@ -822,7 +977,7 @@ static void testModulation ()
 		dsp.setResonance (0.0);
 		dsp.setVcfEnvAmount (0.0);
 		dsp.setLfoPitchDepth (1.0);
-		dsp.setLfoSquareOutput (true);        // two pitches, easy to measure
+		dsp.setLfoOutput (LfoOutput::Square); // two pitches, easy to measure
 		dsp.setLfoRate (0.5);
 		dsp.reset ();
 		dsp.noteOn (69, 1.f);
@@ -854,8 +1009,12 @@ static void testTraces ()
 	checkClose (vcf[held], 0.3, 0.02, "the VCF trace sits on its sustain before key-up");
 	check (vca[199] < 0.01 && vcf[199] < 0.01, "both reach the floor by the end of the axis");
 
-	float shape[200], square[200];
-	traceLfo (0.0, shape, square, 200, 2.0);
+	float shape[200], square[200], sine[200];
+	traceLfo (LfoOutput::Shape, 0.0, shape, 200, 2.0);
+	traceLfo (LfoOutput::Square, 0.0, square, 200, 2.0);
+	traceLfo (LfoOutput::Sine, 0.0, sine, 200, 2.0);
+	checkClose (sine[0], -1.0, 1e-6, "the sine trace starts at the bottom, like the triangle it is made from");
+	checkClose (sine[50], 1.0, 0.03, "and peaks where the triangle does");
 	checkClose (shape[0], -1.0, 1e-6, "the LFO trace starts at the bottom of the triangle");
 	checkClose (shape[50], 1.0, 0.03, "and peaks half a cycle in");
 	check (square[10] == 1.f && square[60] == -1.f, "the square is high then low");

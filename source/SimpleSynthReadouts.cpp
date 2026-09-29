@@ -5,6 +5,7 @@
 #include "SimpleSynthReadouts.h"
 #include "SimpleSynthDsp.h"
 
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -153,19 +154,62 @@ std::string readoutText (ParamID tag, double normalized)
 std::string lfoLineText (const std::function<double (ParamID)>& internalOf)
 {
 	// WHAT THE LFO IS DOING, in one line: its period, which output is
-	// patched, and the square's duty - which follows the Shape knob, as
-	// the MS-20's does, and is the one thing about it nobody guesses.
+	// patched, and what the Shape knob is doing to THAT output - the
+	// square's duty, or the sine shaper's balance - which is the one
+	// thing about it nobody guesses.
 	const double rate  = internalOf (kLfoRate);
 	const double shape = internalOf (kLfoShape);
-	const bool square  = internalOf (kLfoOutput) >= 0.5;
+	const auto output  = static_cast<LfoOutput> (static_cast<int> (internalOf (kLfoOutput)));
+
+	char detail[48] = {};
+	switch (output)
+	{
+		case LfoOutput::Square:
+			std::snprintf (detail, sizeof (detail), "Square out, duty %.0f%%", lfoSquareDuty (shape) * 100.0);
+			break;
+		case LfoOutput::Sine:
+			std::snprintf (detail, sizeof (detail), "Sine out, balance %+.0f%%", shape * kMaxSineBalance * 100.0);
+			break;
+		case LfoOutput::Shape:
+		default:
+			std::snprintf (detail, sizeof (detail), "Shape out");
+			break;
+	}
 
 	char text[160] = {};
 	std::snprintf (text, sizeof (text),
-	               "LFO %.0f ms/cycle, %s out, square duty %.0f%%  ->  pitch %.2f st, cutoff %.2f oct, VCA %.0f%%",
-	               1000.0 / rate, square ? "Square" : "Shape",
-	               lfoSquareDuty (shape) * 100.0,
+	               "LFO %.0f ms/cycle, %s  ->  pitch %.2f st, cutoff %.2f oct, VCA %.0f%%",
+	               1000.0 / rate, detail,
 	               internalOf (kLfoPitch), internalOf (kVcfLfo), internalOf (kVcaLfo) * 100.0);
 	return std::string (text);
+}
+
+//------------------------------------------------------------------------
+void lfoDisplayData (double outputPosition, double shape, float* patched, float* companion,
+                     int count, double cycles, std::string& patchedLegend,
+                     std::string& companionLegend)
+{
+	// -1..+1 into the middle 84 % of the plot, so a square at full swing
+	// does not sit on the plate's frame; the view's scale is 0..1.
+	constexpr double kSwing = 0.42;
+
+	const auto output = static_cast<LfoOutput> (static_cast<int> (outputPosition + 0.5));
+	const LfoOutput other = (output == LfoOutput::Shape) ? LfoOutput::Square : LfoOutput::Shape;
+
+	// DRAWN BY traceLfo(), which calls the same lfoOutputValue() the
+	// running LFO does - so the picture is the wave, not a drawing of it.
+	traceLfo (output, shape, patched, count, cycles);
+	traceLfo (other, shape, companion, count, cycles);
+	for (int i = 0; i < count; ++i)
+	{
+		patched[i]   = static_cast<float> (0.5 + kSwing * patched[i]);
+		companion[i] = static_cast<float> (0.5 + kSwing * companion[i]);
+	}
+
+	auto upper = [] (std::string s) { for (auto& c : s) c = static_cast<char> (std::toupper (c)); return s; };
+	auto lower = [] (std::string s) { for (auto& c : s) c = static_cast<char> (std::tolower (c)); return s; };
+	patchedLegend   = "> " + upper (enumName (kLfoOutput, static_cast<int> (output)));
+	companionLegend = lower (enumName (kLfoOutput, static_cast<int> (other)));
 }
 
 //------------------------------------------------------------------------

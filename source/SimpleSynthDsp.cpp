@@ -153,13 +153,12 @@ void MsLfo::setSampleRate (double sampleRate)
 void MsLfo::reset ()
 {
 	mPhase  = 0.0;
-	mSlewed = mSquare ? lfoSquareValue (0.0, mShape) : lfoShapeValue (0.0, mShape);
+	mSlewed = lfoOutputValue (mOutput, 0.0, mShape);
 }
 
 double MsLfo::next ()
 {
-	const double raw = mSquare ? lfoSquareValue (mPhase, mShape)
-	                           : lfoShapeValue (mPhase, mShape);
+	const double raw = lfoOutputValue (mOutput, mPhase, mShape);
 
 	mSlewed += (raw - mSlewed) * mSlewCoeff;
 
@@ -458,9 +457,9 @@ double traceEnvelopes (const AdsrSpec& vcf, const AdsrSpec& vca,
 	return span;
 }
 
-void traceLfo (double shape, float* shapeOut, float* squareOut, int count, double cycles)
+void traceLfo (LfoOutput output, double shape, float* out, int count, double cycles)
 {
-	if (count < 2)
+	if (count < 2 || out == nullptr)
 		return;
 
 	for (int i = 0; i < count; ++i)
@@ -472,10 +471,7 @@ void traceLfo (double shape, float* shapeOut, float* squareOut, int count, doubl
 		if (i == count - 1)
 			phase = 1.0 - 1e-9;
 
-		if (shapeOut)
-			shapeOut[i] = static_cast<float> (lfoShapeValue (phase, shape));
-		if (squareOut)
-			squareOut[i] = static_cast<float> (lfoSquareValue (phase, shape));
+		out[i] = static_cast<float> (lfoOutputValue (output, phase, shape));
 	}
 }
 
@@ -589,7 +585,7 @@ void SimpleSynthDsp::setVcoLevel (int vco, double level)
 
 void SimpleSynthDsp::setLfoRate (double hz)          { mLfo.setRate (std::max (0.0, hz)); }
 void SimpleSynthDsp::setLfoShape (double shape)      { mLfo.setShape (std::clamp (shape, -1.0, 1.0)); }
-void SimpleSynthDsp::setLfoSquareOutput (bool sq)    { mLfo.setSquareOutput (sq); }
+void SimpleSynthDsp::setLfoOutput (LfoOutput o)     { mLfo.setOutput (o); }
 
 void SimpleSynthDsp::setLfoPitchDepth (double semitones)
 {

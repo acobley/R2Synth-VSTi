@@ -45,8 +45,12 @@ const ParamDef kParams[kNumParams] = {
 	{kLfoRate,      "LFO Rate",          "Hz",   ParamType::Log,    0.1,     20.,     4.,     0.1,     20.,     0,    false},
 	// -100 falling sawtooth, 0 triangle, +100 rising sawtooth.
 	{kLfoShape,     "LFO Shape",         "%",    ParamType::Float,  -100.,   100.,    0.,     -1.,     1.,      0,    false},
-	// 0 = the shape output, 1 = the square output.
-	{kLfoOutput,    "LFO Output",        "",     ParamType::Enum,   0.,      1.,      0.,     0.,      1.,      1,    false},
+	// 0 = shape, 1 = square, 2 = sine - LfoOutput's values. The Sine
+	// position was added on 29 Sep 2026, before any release: it moved
+	// Square from normalised 1.0 to 0.5, so a test project saved with
+	// Square selected opens on Sine. From the first release on, the
+	// positions are as permanent as the ids.
+	{kLfoOutput,    "LFO Output",        "",     ParamType::Enum,   0.,      2.,      0.,     0.,      2.,      2,    false},
 	{kLfoPitch,     "LFO Pitch",         "st",   ParamType::Float,  0.,      kMaxLfoPitchSemis, 0., 0., kMaxLfoPitchSemis, 0, true },
 
 	{kCutoff,       "VCF Cutoff",        "Hz",   ParamType::Log,    20.,     20000.,  1200.,  20.,     20000.,  0,    true },
@@ -81,7 +85,7 @@ const char* enumName (Steinberg::Vst::ParamID id, int position)
 		case kLfoOutput:
 			// "Shape", not "Triangle": the output is whatever the Shape
 			// knob makes it, and at either end that is a sawtooth.
-			return (position == 0) ? "Shape" : (position == 1) ? "Square" : "";
+			return (position == 0) ? "Shape" : (position == 1) ? "Square" : (position == 2) ? "Sine" : "";
 
 		default:
 			return "";

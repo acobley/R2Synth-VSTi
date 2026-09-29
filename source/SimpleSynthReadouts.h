@@ -38,6 +38,16 @@ std::string selectorText (Steinberg::Vst::ParamID tag, int position);
     current value in internal units. */
 std::string lfoLineText (const std::function<double (Steinberg::Vst::ParamID)>& internalOf);
 
+/** THE LFO DISPLAY'S DATA, shared by the editor and the panel picture:
+    `cycles` cycles of the PATCHED output (drawn green) and of a
+    companion (drawn red) - the square when the Shape output is patched,
+    otherwise the shape output, because that is what the Shape knob is
+    doing to the triangle underneath. Both 0..1 for the view, and the two
+    legend words, the patched one in capitals. */
+void lfoDisplayData (double outputPosition, double shape, float* patched, float* companion,
+                     int count, double cycles, std::string& patchedLegend,
+                     std::string& companionLegend);
+
 /** The engine line: rate, cutoff ceiling, release tail. */
 std::string engineLineText (double sampleRate, double vcaReleaseSeconds);
 
