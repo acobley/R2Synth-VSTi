@@ -1,0 +1,15 @@
+build/
+build-make/
+external/
+.DS_Store
+
+# Standalone test binaries (built by hand outside cmake)
+dsptests
+
+# Signing material. None of this should ever be in a repository.
+*.cer
+*.certSigningRequest
+*.p12
+*.pfx
+*.p8
+AuthKey_*
