@@ -53,9 +53,10 @@ fi
 MONO="$ROOT/third_party/monocypher"
 if "$CC" -std=c99 -O2 -c -o "$WORK/monocypher.o" "$MONO/monocypher.c" 2>"$WORK/build.err" &&
    "$CC" -std=c99 -O2 -c -o "$WORK/monocypher-ed25519.o" "$MONO/monocypher-ed25519.c" 2>>"$WORK/build.err"; then
-    run "Licence" licencetests "-Wall -Wextra -I$MONO" \
+    run "Licence" licencetests "-Wall -Wextra -I$MONO -I$ROOT/tools/licence" \
         "$ROOT/tests/LicenceTests.cpp" "$ROOT/source/LicenceKey.cpp" \
-        "$ROOT/source/LicenceSha256.cpp" "$ROOT/source/LicenceIssue.cpp" \
+        "$ROOT/source/LicenceSha256.cpp" "$ROOT/source/LicenceState.cpp" \
+        "$ROOT/source/LicenceStore.cpp" "$ROOT/tools/licence/LicenceIssue.cpp" \
         "$WORK/monocypher.o" "$WORK/monocypher-ed25519.o"
 else
     printf '\n=== Licence ===\n  BUILD FAILED (Monocypher)\n'; head -20 "$WORK/build.err" | sed 's/^/  /'; fail=1

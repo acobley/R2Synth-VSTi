@@ -3,6 +3,7 @@
 //------------------------------------------------------------------------
 
 #include "SimpleSynthEditor.h"
+#include "LicenceViews.h"
 #include "SimpleSynthController.h"
 #include "SimpleSynthDsp.h"
 #include "SimpleSynthReadouts.h"
@@ -140,7 +141,67 @@ bool PLUGIN_API SimpleSynthEditor::open (void* parent, const PlatformType& platf
 
 	refreshAllReadouts ();
 
+	// ---- the licence ---------------------------------------------------
+	//
+	// OPENING THE EDITOR is the only thing that starts the evaluation
+	// clock or shows the reminder: a host scanning plug-ins, or auval,
+	// never opens an editor, so never sees either. Nothing here touches
+	// the audio path; an unlicensed SimpleSynth sounds exactly the same.
+	{
+		const auto decision = mLicence.editorOpened (R2Licence::LicenceStore::today ());
+		mLicenceBadge = new LicenceBadge (CRect (Layout::kBadgeX, Layout::kBadgeY,
+		                                         Layout::kBadgeX + Layout::kBadgeWidth,
+		                                         Layout::kBadgeY + Layout::kBadgeHeight));
+		mLicenceBadge->setDecision (decision);
+		mLicenceBadge->setHandler ([this] { openLicenceDialog (); });
+		frame->addView (mLicenceBadge);
+
+		// At most once per session, however many instances are opened.
+		if (decision.reminderDue && claimSessionReminder ())
+			openLicenceDialog ();
+	}
+
 	return true;
+}
+
+//------------------------------------------------------------------------
+void SimpleSynthEditor::openLicenceDialog ()
+{
+	if (!frame || mHaveLicenceSession)
+		return;
+
+	const auto decision = mLicence.current (R2Licence::LicenceStore::today ());
+	auto* dialog = new LicenceDialog (CRect (0, 0, kEditorWidth, kEditorHeight), mLicence,
+	                                  [this] { requestCloseLicenceDialog (); });
+	dialog->showPage (decision.licensed ? LicenceDialog::Page::Licensed : LicenceDialog::Page::Reminder);
+
+	// The frame takes the dialog: endModalViewSession removes and frees it.
+	if (auto session = frame->beginModalViewSession (dialog))
+	{
+		mLicenceSession = *session;
+		mHaveLicenceSession = true;
+	}
+	else
+		dialog->forget ();
+}
+
+void SimpleSynthEditor::requestCloseLicenceDialog ()
+{
+	// Called from a button INSIDE the dialog: removing the dialog now
+	// would free the button while its mouse-up is still running. So the
+	// frame does it once the event is over.
+	if (!frame || !frame->doAfterEventProcessing ([this] { closeLicenceDialog (); }))
+		closeLicenceDialog ();
+}
+
+void SimpleSynthEditor::closeLicenceDialog ()
+{
+	if (frame && mHaveLicenceSession)
+		frame->endModalViewSession (mLicenceSession);
+	mHaveLicenceSession = false;
+
+	if (mLicenceBadge)
+		mLicenceBadge->setDecision (mLicence.current (R2Licence::LicenceStore::today ()));
 }
 
 //------------------------------------------------------------------------
@@ -150,6 +211,11 @@ void PLUGIN_API SimpleSynthEditor::close ()
 	// before forgetting the frame, and never dereferencing it after, is
 	// what keeps that safe - see SimpleSynthController::editorDestroyed
 	// for the other half.
+	if (frame && mHaveLicenceSession)
+		frame->endModalViewSession (mLicenceSession);
+	mHaveLicenceSession = false;
+	mLicenceBadge = nullptr;
+
 	mControls.clear ();
 	mLfoView = nullptr;
 	mEnvView = nullptr;

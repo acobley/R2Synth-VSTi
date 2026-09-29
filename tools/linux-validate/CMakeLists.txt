@@ -42,7 +42,7 @@ file(REMOVE_RECURSE "${_copy}")
 file(GLOB _all "${_src}/*.h" "${_src}/*.cpp")
 foreach(_f ${_all})
     get_filename_component(_n "${_f}" NAME)
-    if(NOT _n MATCHES "^SimpleSynth(Editor|Controls|Layout|Readouts)\\.")
+    if(NOT _n MATCHES "^(SimpleSynth(Editor|Controls|Layout|Readouts)|LicenceViews)\\.")
         configure_file("${_f}" "${_copy}/${_n}" COPYONLY)
     endif()
 endforeach()
@@ -54,6 +54,11 @@ smtg_target_configure_version_file(SimpleSynth)
 target_compile_features(SimpleSynth PUBLIC cxx_std_17)
 target_include_directories(SimpleSynth PRIVATE "${_copy}")
 target_link_libraries(SimpleSynth PRIVATE sdk)
+
+# The licence files are copied with the rest; they need Monocypher.
+set(_mono "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/monocypher")
+target_sources(SimpleSynth PRIVATE "${_mono}/monocypher.c" "${_mono}/monocypher-ed25519.c")
+target_include_directories(SimpleSynth PRIVATE "${_mono}")
 
 # The processor tests: the processor's own sources, no controller, no
 # module - the processor is driven directly.

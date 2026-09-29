@@ -346,8 +346,7 @@ the source-manifest guard stops it.
 
 ## Licensing (step 1: key format, dev keypair, Mac tools)
 
-Implements "Licence key format" from the Nag-ware Licensing Design doc. Not
-yet wired into the plugin (no licence file, no dialog, not in CMake).
+Implements "Licence key format" from the Nag-ware Licensing Design doc.
 
 - Crypto: Monocypher 4.0.2 in `third_party/monocypher/`, using the OPTIONAL
   `monocypher-ed25519.c` = standard RFC 8032 Ed25519 (SHA-512), so Java /
@@ -358,7 +357,8 @@ yet wired into the plugin (no licence file, no dialog, not in CMake).
   `LicenceSha256.cpp` since Monocypher has no SHA-256), `verifyKey()`.
   Order: format, version, signature, name, blocklist, product (revoked
   before out-of-scope, so a revoked key is never offered an upgrade).
-- `source/LicenceIssue.{h,cpp}` - signing; tools and tests only, never the plugin.
+- `tools/licence/LicenceIssue.{h,cpp}` - signing; tools and tests only. Kept OUT of
+  `source/` because CMake globs `source/*.cpp` into the plug-in.
 - `source/LicenceConfig.h` - per-build knobs: `kEvaluationDays` (7),
   `kAcceptedProducts`, `kRevokedLicenceIds`. None is in the key or the
   licence file, so a rebuild never invalidates a licence or restarts a trial.
@@ -373,4 +373,42 @@ yet wired into the plugin (no licence file, no dialog, not in CMake).
   SHA-256 vectors, every single-bit tamper, wrong name/product, blocklist,
   and a GOLDEN KEY made by `tools/licence/reference_key.py` (independent
   Python, standing in for the Java server) that the C++ must match exactly.
+
+### Step 2: the plug-in checks for a licence
+
+- `source/LicenceState.{h,cpp}` (pure, tested): the licence file as JSON
+  (`firstRun` date, `name`, `key`), the nag decision, the badge text and the
+  activation messages, and pulling a name + key out of a pasted email.
+- `source/LicenceStore.{h,cpp}` (file I/O, tested): the shared file
+  `~/Library/Application Support/R2Project/licence.json` (Windows %APPDATA%,
+  Linux XDG), re-read on every call, written via temp file + rename. A missing
+  or corrupt file is a fresh evaluation; an unwritable one never errors (an
+  activation then lasts until the editor closes).
+- `source/LicenceViews.{h,cpp}` (VSTGUI): `LicenceBadge`, one tiny line in the
+  bottom margin under the display strip (Layout::kBadge*; the panel did not
+  grow), and `LicenceDialog`, drawn inside the panel as a VSTGUI MODAL VIEW
+  SESSION (not a native window): Reminder / Enter / Licensed pages; "Paste from
+  email" reads the clipboard. CMD+V IS HANDLED BY THE DIALOG
+  (LicenceDialog::onKeyboardEvent), not the text field: a macOS text field
+  pastes via the host's Edit menu, and Reaper's Edit > Paste is Reaper's own,
+  so Cmd+V pasted nothing there (Andy, 29 Sep). VSTGUI offers Cmd keys to the
+  frame first (performKeyEquivalent); consuming the event keeps it from the
+  host. A key on the clipboard fills both fields from any page; other text
+  goes into the focused field. Cmd+C/X/A are still left to the host.
+- Editor: `open()` calls `editorOpened()` (writes firstRun the first time any
+  editor opens - never at load, so scans and auval see nothing), adds the
+  badge, and shows the reminder if due and `claimSessionReminder()` (once per
+  process). Dialog buttons close it via `CFrame::doAfterEventProcessing` -
+  removing the dialog inside its own button's mouse-up would free the button
+  mid-event. `close()` ends any open session first.
+- Rules: licensed -> no nag; day 0..kEvaluationDays -> badge counts down;
+  after that the reminder on editor open, "Continue evaluating" for ever.
+  Buy licence is hidden until LicenceConfig.h gets a buy URL (none yet).
+- Testing the clock: `build-licence/r2-licence-trial show | days-ago 8 |
+  reset | unlicense`, then restart the host (the reminder is once per session).
+- CMake: Monocypher's two C files added to the plug-in with target_sources;
+  linux-validate excludes LicenceViews and adds Monocypher. Linux build +
+  validator + ProcessorTests pass with the licence code in (29 Sep).
+- NOT YET verified on the Mac: Xcode build, the dialog in a real host (VST3
+  and AU, incl. Logic's sandbox writing the file), docs/panel.png (no badge).
 

@@ -159,6 +159,15 @@ constexpr int kTitleWidth      = kEngineLineX - kColumnGap - kContentX;
 /** The flow line runs the full width. */
 constexpr int kFlowWidth       = kEditorWidth - kMargin - kContentX;
 
+/** THE LICENCE BADGE (LicenceViews.h): one tiny line in the bottom
+    margin, right-aligned under the display strip - "Evaluation - 5 days
+    left - licence..." or "Licensed to ...". Click it for the licence
+    dialog. The panel did not grow for it. */
+constexpr int kBadgeX      = kDisplayX;
+constexpr int kBadgeWidth  = kDisplayWidth;
+constexpr int kBadgeY      = kEnvViewBottom + 2;
+constexpr int kBadgeHeight = 12;
+
 //------------------------------------------------------------------------
 // The tables
 //------------------------------------------------------------------------
@@ -285,6 +294,8 @@ static_assert (kGroupPadTop >= 11,
                "a slider's reading must start below the title (11 pixels of lettering)");
 static_assert (kGroupTitleBand > 0 && kGroupTitleBand < kGroupPadTop,
                "the frame line must run through the title, above the sliders");
+static_assert (kBadgeY + kBadgeHeight <= kEditorHeight,
+               "the licence badge must fit in the bottom margin");
 static_assert (kEditorWidth == 1270 && kEditorHeight == 302,
                "the panel changed size - update the banner, docs/panel.png and this assert together");
 

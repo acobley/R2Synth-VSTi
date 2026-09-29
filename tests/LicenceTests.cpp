@@ -6,9 +6,10 @@
 //
 //   cc  -std=c99 -O2 -c ../third_party/monocypher/monocypher.c
 //   cc  -std=c99 -O2 -c ../third_party/monocypher/monocypher-ed25519.c
-//   c++ -std=c++17 -O2 -I../source -I../third_party/monocypher LicenceTests.cpp
-//       ../source/LicenceKey.cpp ../source/LicenceSha256.cpp
-//       ../source/LicenceIssue.cpp monocypher.o monocypher-ed25519.o
+//   c++ -std=c++17 -O2 -I../source -I../tools/licence -I../third_party/monocypher
+//       LicenceTests.cpp ../source/LicenceKey.cpp ../source/LicenceSha256.cpp
+//       ../source/LicenceState.cpp ../source/LicenceStore.cpp
+//       ../tools/licence/LicenceIssue.cpp monocypher.o monocypher-ed25519.o
 //
 // Signing here uses RFC 8032's published TEST seed, never the dev or
 // production key, so the suite needs no secrets. The "golden key" was
@@ -21,12 +22,19 @@
 #include "LicenceIssue.h"
 #include "LicenceKey.h"
 #include "LicenceSha256.h"
+#include "LicenceState.h"
+#include "LicenceStore.h"
 
 #include "monocypher-ed25519.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 #include <string>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
 
 #if __has_include("LicencePublicKey.h")
@@ -282,6 +290,271 @@ void testThisBuild ()
 #endif
 }
 
+//------------------------------------------------------------------------
+// The licence file and the nag decision (LicenceState.h, LicenceStore.h)
+//------------------------------------------------------------------------
+BuildConfig testConfig (int evaluationDays = 7, const uint16_t* accepted = kV1, size_t nAccepted = 1,
+                        const uint32_t* revoked = nullptr, size_t nRevoked = 0)
+{
+	static std::vector<uint8_t> pub = hex (kTestPub);
+	BuildConfig c;
+	c.publicKey = pub.data ();
+	c.acceptedProducts = accepted;
+	c.acceptedCount = nAccepted;
+	c.revokedIds = revoked;
+	c.revokedCount = nRevoked;
+	c.evaluationDays = evaluationDays;
+	return c;
+}
+
+void testJson ()
+{
+	std::printf ("Licence file (JSON)\n");
+	LicenceFile f;
+	f.firstRunDay = 271;
+	f.name = "Zo\xc3\xab \"Q\" O'Brien \\ tab\there";
+	f.key = kGoldenKey;
+	LicenceFile back;
+	check (fromJson (toJson (f), back), "written file reads back");
+	check (back.firstRunDay == 271 && back.name == f.name && back.key == f.key,
+	       "quotes, backslashes, tabs and UTF-8 survive the round trip");
+	check (toJson (f).find ("\"firstRun\": \"2026-09-29\"") != std::string::npos, "firstRun stored as a date");
+
+	LicenceFile empty;
+	check (fromJson (toJson (empty), back) && back.firstRunDay == -1 && back.key.empty (), "an empty file round-trips");
+
+	check (fromJson ("{\"format\": 2, \"future\": true, \"firstRun\": \"2026-01-05\", \"name\": \"Zo\\u00eb\"}", back) &&
+	           back.firstRunDay == 4 && back.name == "Zo\xc3\xab",
+	       "unknown fields ignored, \\u escapes decoded");
+	check (fromJson ("{\"name\": \"\\ud83c\\udfb9\"}", back) && back.name == "\xf0\x9f\x8e\xb9", "surrogate pair decoded");
+
+	for (const char* bad : {"", "{", "[]", "{\"a\":}", "{\"a\": 1} x", "{\"a\" 1}", "{\"a\": \"\\q\"}", "{\"a\": \"b",
+	                        "\x00\x01", "{\"firstRun\": {\"x\": 1}}"})
+	{
+		LicenceFile g;
+		g.firstRunDay = 5;
+		check (!fromJson (bad, g) && g.firstRunDay == -1 && g.key.empty (),
+		       std::string ("corrupt file rejected and emptied: ") + bad);
+	}
+	check (fromJson ("{\"firstRun\": \"2026-02-30\"}", back) && back.firstRunDay == -1,
+	       "an impossible date is ignored (fresh evaluation), not an error");
+
+	int day = -1;
+	check (parseDate ("2026-09-29", day) && day == 271, "parseDate");
+	check (!parseDate ("2026-9-29", day) && !parseDate ("2026-13-01", day) && !parseDate ("2026-02-29", day) &&
+	           !parseDate ("20260929", day),
+	       "parseDate rejects malformed and impossible dates");
+	check (parseDate ("2028-02-29", day) && formatDate (day) == "2028-02-29", "leap day round-trips");
+}
+
+void testDecision ()
+{
+	std::printf ("Nag decision\n");
+	const int today = 400;
+	auto seed = hex (kTestSeed);
+	const std::string key = issueKey (kGoldenName, kProductBundleV1, 42, 271, seed.data ());
+
+	LicenceFile f;
+	Decision d = decide (f, today, testConfig ());
+	check (!d.licensed && !d.reminderDue && d.daysUsed == 0 && d.daysLeft == 7, "no firstRun yet: day 0, 7 left");
+
+	f.firstRunDay = today - 7;
+	d = decide (f, today, testConfig ());
+	check (!d.reminderDue && d.daysLeft == 0 && d.daysUsed == 7, "day 7: no reminder yet, last day");
+
+	f.firstRunDay = today - 8;
+	d = decide (f, today, testConfig ());
+	check (d.reminderDue && d.daysUsed == 8, "day 8: reminder");
+
+	f.firstRunDay = today + 3;
+	d = decide (f, today, testConfig ());
+	check (!d.reminderDue && d.daysUsed == 0, "clock set back before firstRun: day 0");
+
+	f.firstRunDay = today - 100;
+	f.name = kGoldenName;
+	f.key = key;
+	d = decide (f, today, testConfig ());
+	check (d.licensed && !d.reminderDue && d.licensedName == kGoldenName && d.payload.licenceId == 42,
+	       "valid licence: no reminder even on day 100");
+
+	LicenceFile t = f;
+	t.key[20] = (t.key[20] == 'A') ? 'B' : 'A';
+	d = decide (t, today, testConfig ());
+	check (!d.licensed && d.reminderDue, "tampered stored key: unlicensed, reminder");
+
+	t = f;
+	t.name = "Someone Else";
+	d = decide (t, today, testConfig ());
+	check (!d.licensed && d.reminderDue, "stored key for another name: unlicensed");
+
+	const uint16_t v2only[] = {0x0002};
+	d = decide (f, today, testConfig (7, v2only, 1));
+	check (!d.licensed && d.outOfScope && d.reminderDue && d.licensedName == kGoldenName,
+	       "v1 key in a v2-only build: out of scope, upgrade reminder");
+
+	const uint32_t revoked[] = {42};
+	d = decide (f, today, testConfig (7, kV1, 1, revoked, 1));
+	check (!d.licensed && !d.outOfScope && d.reminderDue, "revoked stored key: unlicensed");
+
+	LicenceFile e;
+	e.firstRunDay = today - 8;
+	check (!decide (e, today, testConfig (14)).reminderDue && decide (e, today, testConfig (14)).daysLeft == 6,
+	       "kEvaluationDays = 14: day 8 is still evaluation");
+	e.firstRunDay = today - 15;
+	check (decide (e, today, testConfig (14)).reminderDue, "kEvaluationDays = 14: day 15 reminds");
+}
+
+void testWords ()
+{
+	std::printf ("Badge and messages\n");
+	Decision d;
+	for (int left = 0; left <= 30; ++left)
+	{
+		d.daysLeft = left;
+		check (badgeText (d).size () <= kBadgeMaxChars, "badge fits: " + badgeText (d));
+	}
+	check (badgeText (d).find ("30 days left") != std::string::npos, "badge counts days");
+	d.daysLeft = 1;
+	check (badgeText (d).find ("1 day left") != std::string::npos, "badge: singular");
+	d.reminderDue = true;
+	check (badgeText (d).size () <= kBadgeMaxChars && badgeText (d).find ("enter licence") != std::string::npos,
+	       "badge after the evaluation: " + badgeText (d));
+
+	d = Decision ();
+	d.licensed = true;
+	d.licensedName = "Andy Cobley";
+	check (badgeText (d) == "Licensed to Andy Cobley", "badge when licensed");
+	d.licensedName = "Professor Zo\xc3\xab Wilhelmina Featherstonehaugh-Smythe";
+	const std::string b = badgeText (d);
+	check (b.size () <= kBadgeMaxChars && b.compare (b.size () - 3, 3, "...") == 0, "a long name is shortened: " + b);
+	d.licensedName = std::string (26, 'x') + "\xc3\xab\xc3\xab";
+	const std::string u = badgeText (d);
+	check (u.size () <= kBadgeMaxChars && u.find ("\xc3...") == std::string::npos, "never cut inside a UTF-8 character");
+
+	for (auto s : {Status::Valid, Status::Malformed, Status::UnknownVersion, Status::BadSignature, Status::WrongName,
+	               Status::Revoked, Status::WrongProduct})
+		check (!activationMessage (s).empty () && activationMessage (s).size () <= 90,
+		       std::string ("a message for ") + statusName (s));
+}
+
+void testPaste ()
+{
+	std::printf ("Paste\n");
+	std::string key = kGoldenKey;
+	// As a mail client might deliver it: wrapped, indented, lower case.
+	std::string wrapped;
+	for (size_t i = 0; i < key.size (); ++i)
+	{
+		wrapped += char (key[i] >= 'A' && key[i] <= 'Z' ? key[i] - 'A' + 'a' : key[i]);
+		if (i % 60 == 59)
+			wrapped += "\r\n    ";
+	}
+	const std::string email = "Hello,\n\nThank you for buying.\n\n  Name:  Andy Cobley \n  Key: " + wrapped +
+	                          "\n\nTo enter it, open any R2Project plug-in.\n";
+	std::string name, k;
+	check (extractFromPaste (email, name, k) && name == "Andy Cobley" && k == kGoldenKey,
+	       "name and wrapped key pulled out of a whole email");
+
+	name.clear ();
+	check (extractFromPaste (std::string ("  ") + kGoldenKey + "  ", name, k) && name.empty () && k == kGoldenKey,
+	       "just the key");
+	check (!extractFromPaste ("BNDL1-12345 is not a key", name, k), "a fragment is not a key");
+	check (!extractFromPaste ("", name, k), "empty clipboard");
+
+	check (pasteIntoField ("", "Andy Cobley\n") == "Andy Cobley", "Cmd+V a name: trailing line break dropped");
+	check (pasteIntoField ("Andy ", "\r\n  Cobley \r\n") == "Andy Cobley", "pasted onto what's typed, on one line");
+	check (pasteIntoField ("x", "") == "x", "empty clipboard changes nothing");
+	check (pasteIntoField ("", "Zo\xc3\xab\tO'Brien") == "Zo\xc3\xab O'Brien", "tab to space, UTF-8 kept");
+
+	std::string noPrefix;
+	for (char c : key.substr (6))
+		if (c != '-')
+			noPrefix += c;
+	check (!extractFromPaste (noPrefix, name, k), "without BNDL1 the paste isn't recognised (type it instead)");
+}
+
+void testStore ()
+{
+	std::printf ("Licence file on disk (LicenceStore)\n");
+	char tmpl[] = "/tmp/r2licence-test-XXXXXX";
+	const char* dir = mkdtemp (tmpl);
+	check (dir != nullptr, "temporary folder");
+	if (!dir)
+		return;
+	const std::string path = std::string (dir) + "/Application Support/R2Project/licence.json";
+	auto readFile = [&] {
+		std::ifstream in (path);
+		std::stringstream ss;
+		ss << in.rdbuf ();
+		return ss.str ();
+	};
+
+	auto seed = hex (kTestSeed);
+	const std::string key = issueKey (kGoldenName, kProductBundleV1, 42, 271, seed.data ());
+
+	{
+		LicenceStore store (path, testConfig ());
+		Decision d = store.editorOpened (300);
+		check (!d.licensed && d.daysLeft == 7, "first editor open: fresh evaluation");
+		check (readFile ().find ("\"firstRun\": \"2026-10-28\"") != std::string::npos,
+		       "firstRun written, folders created");
+		d = store.editorOpened (305);
+		check (d.daysUsed == 5 && readFile ().find ("2026-10-28") != std::string::npos,
+		       "a later open keeps the first firstRun");
+
+		bool saved = true;
+		check (store.activate ("Andy Cobley", "junk", saved) == Status::Malformed && !saved, "bad key not stored");
+		check (readFile ().find ("\"key\"") == std::string::npos, "nothing written for a bad key");
+
+		std::string sloppy = "  " + key + "\n";
+		for (char& c : sloppy)
+			if (c >= 'A' && c <= 'Z')
+				c = char (c - 'A' + 'a');
+		check (store.activate ("  Andy Cobley ", sloppy, saved) == Status::Valid && saved, "valid key activates");
+		const std::string text = readFile ();
+		check (text.find ("\"name\": \"Andy Cobley\"") != std::string::npos &&
+		           text.find (std::string ("\"key\": \"") + kGoldenKey + "\"") != std::string::npos &&
+		           text.find ("2026-10-28") != std::string::npos,
+		       "stored trimmed, canonical, firstRun kept");
+	}
+	{
+		LicenceStore other (path, testConfig ());  // another plug-in, another session
+		Decision d = other.editorOpened (500);
+		check (d.licensed && d.licensedName == "Andy Cobley" && !d.reminderDue, "another store sees the licence");
+	}
+	{
+		std::ofstream (path, std::ios::trunc) << "{ this is not json";
+		LicenceStore store (path, testConfig ());
+		Decision d = store.editorOpened (600);
+		check (!d.licensed && d.daysUsed == 0 && !d.reminderDue, "corrupt file: fresh evaluation");
+		check (readFile ().find ("2027-08-24") != std::string::npos, "and a new firstRun is written");
+	}
+	{
+		// A path that can't be written: its "folder" is a file.
+		const std::string blocked = std::string (dir) + "/blocker";
+		std::ofstream (blocked) << "x";
+		LicenceStore store (blocked + "/licence.json", testConfig ());
+		Decision d = store.editorOpened (600);
+		check (!d.licensed && !d.reminderDue, "unwritable: still a fresh evaluation, no crash");
+		bool saved = true;
+		check (store.activate (kGoldenName, key, saved) == Status::Valid && !saved, "unwritable: activation not saved");
+		check (store.current (700).licensed, "unwritable: licensed until the editor closes");
+		check (!LicenceStore (blocked + "/licence.json", testConfig ()).current (700).licensed,
+		       "unwritable: a new session is unlicensed again");
+	}
+	{
+		LicenceStore none (std::string (dir) + "/nowhere/licence.json", testConfig ());
+		check (!none.current (10).reminderDue, "no file and nothing written: day 0");
+	}
+	check (!LicenceStore::defaultPath ().empty () &&
+	           LicenceStore::defaultPath ().find ("R2Project") != std::string::npos,
+	       "default path: " + LicenceStore::defaultPath ());
+	check (LicenceStore::today () > 0, "today is after 2026-01-01");
+
+	std::string cleanup = std::string ("rm -rf '") + dir + "'";
+	check (std::system (cleanup.c_str ()) == 0, "clean up");
+}
+
 } // namespace
 
 int main ()
@@ -290,6 +563,11 @@ int main ()
 	testEd25519 ();
 	testFormat ();
 	testKeys ();
+	testJson ();
+	testDecision ();
+	testWords ();
+	testPaste ();
+	testStore ();
 	testThisBuild ();
 	std::printf ("%d checks, %d failures\n", gChecks, gFailures);
 	return gFailures == 0 ? 0 : 1;

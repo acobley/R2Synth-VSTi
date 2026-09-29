@@ -220,6 +220,12 @@ int main ()
 		check (static_cast<int> (flow.size ()) * kMainCharWidth <= kFlowWidth,
 		       "the flow line fits the panel (" + std::to_string (flow.size ()) + " chars)");
 		check (kEngineLineX + kEngineLineWidth <= kEditorWidth - kMargin, "the engine line ends inside the margin");
+		// The licence badge: 40 characters (R2Licence::kBadgeMaxChars,
+		// tested in LicenceTests) at the tiny font, below everything.
+		check (40 * kTinyCharWidth <= kBadgeWidth, "the licence badge's longest line fits");
+		check (kBadgeY >= kEnvViewBottom && kBadgeY + kBadgeHeight <= kEditorHeight &&
+		           kBadgeX + kBadgeWidth <= kEditorWidth - kMargin,
+		       "the licence badge sits in the bottom margin, clear of the envelope display");
 		check (kTitleY + kLabelHeight <= kFlowY && kFlowY + kLabelHeight <= kLfoViewTop,
 		       "the title row and the flow line are above every box");
 

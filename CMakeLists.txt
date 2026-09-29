@@ -301,6 +301,16 @@ add_custom_command(TARGET ${PLUGIN_NAME} PRE_BUILD
 target_compile_features(${PLUGIN_NAME} PUBLIC cxx_std_17)
 target_include_directories(${PLUGIN_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/source")
 
+# The licence check (source/Licence*.cpp) verifies keys with Monocypher's
+# standard Ed25519 - two C files, see third_party/monocypher/README.md.
+# Listed here, not globbed, because they are C and live outside source/.
+# The SIGNING code (tools/licence/LicenceIssue.cpp) is deliberately NOT
+# in the plug-in: it holds only the public key.
+target_sources(${PLUGIN_NAME} PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/monocypher/monocypher.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/monocypher/monocypher-ed25519.c")
+target_include_directories(${PLUGIN_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/monocypher")
+
 target_link_libraries(${PLUGIN_NAME}
     PRIVATE
         sdk

@@ -33,6 +33,7 @@
 
 #pragma once
 
+#include "LicenceStore.h"
 #include "SimpleSynthControls.h"
 #include "SimpleSynthLayout.h"
 #include "SimpleSynthParams.h"
@@ -45,6 +46,7 @@
 namespace SimpleSynth {
 
 class SimpleSynthController;
+class LicenceBadge;
 
 //------------------------------------------------------------------------
 class SimpleSynthEditor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener
@@ -124,6 +126,19 @@ private:
 
 	/** The Shape the LFO display draws: the live one when there is one. */
 	double displayShape () const;
+
+	// ---- the licence (LicenceViews.h, LicenceStore.h) ------------------
+	/** Opens the licence dialog as a modal view session: the reminder
+	    page, or "Licensed to ..." once licensed. */
+	void openLicenceDialog ();
+	/** From the dialog's buttons: ends the session AFTER the click. */
+	void requestCloseLicenceDialog ();
+	void closeLicenceDialog ();
+
+	R2Licence::LicenceStore mLicence;
+	LicenceBadge* mLicenceBadge = nullptr;  // owned by the frame
+	bool mHaveLicenceSession = false;
+	VSTGUI::ModalViewSessionID mLicenceSession = 0;
 
 	/** Set while the controller is pushing a value INTO a control, so
 	    valueChanged does not send it straight back out as an edit - a
