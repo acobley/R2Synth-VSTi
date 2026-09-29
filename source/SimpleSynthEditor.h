@@ -16,7 +16,9 @@
 //      self-oscillation lamp lights from selfOscillating(); the LFO
 //      display is drawn by traceLfo(), which calls the same
 //      lfoShapeValue() the LFO runs; the envelope display drives real
-//      Adsr objects through traceEnvelopes().
+//      Adsr objects through traceEnvelopes(); the Shape range LFO 2
+//      sweeps is printed from lfo2ShapeRange(), which calls the
+//      sweptLfoShape() the DSP runs.
 //
 //   2. The layout is DATA, in SimpleSynthLayout.h, not positions typed
 //      into the middle of open().
@@ -68,8 +70,11 @@ public:
 	    SimpleSynthReadouts.h, with this panel's current value. */
 	std::string readoutFor (Steinberg::Vst::ParamID tag) const;
 
-	/** The lines beside the LFO group, likewise. */
+	/** The lines beside the two LFO groups, and the engine line on the
+	    title row, likewise. */
 	std::string lfoLine () const;
+	std::string lfoDepthsLine () const;
+	std::string lfo2Line () const;
 	std::string engineLine () const;
 
 	static const int kEditorWidth  = Layout::kEditorWidth;
@@ -105,8 +110,10 @@ private:
 	    mControls; close() forgets them at the same time. */
 	SpyEnvelopeView*    mLfoView    = nullptr;
 	SpyEnvelopeView*    mEnvView    = nullptr;
-	VSTGUI::CTextLabel* mLfoLabel   = nullptr;
-	VSTGUI::CTextLabel* mRateLabel  = nullptr;
+	VSTGUI::CTextLabel* mLfoLabel       = nullptr;
+	VSTGUI::CTextLabel* mLfoDepthsLabel = nullptr;
+	VSTGUI::CTextLabel* mLfo2Label      = nullptr;
+	VSTGUI::CTextLabel* mRateLabel      = nullptr;
 
 	/** Set while the controller is pushing a value INTO a control, so
 	    valueChanged does not send it straight back out as an edit - a

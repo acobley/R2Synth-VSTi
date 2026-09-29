@@ -49,12 +49,13 @@ VCO 3 --/               ^  ^  ^            ^  ^
                         VCF ENV (ADSR)
 ```
 
-28 parameters plus bypass, all automatable:
+30 parameters plus bypass, all automatable:
 
 | Section | Controls |
 |---|---|
 | VCO 1, 2, 3 | Wave (Saw / Square), Tune (±12 st), Level (0–100 %) — one implementation, addressed by stride (`vcoParam()`) |
-| LFO | Rate (0.1–20 Hz, log), Shape (−100 falling saw … 0 triangle … +100 rising saw), Output (Shape / Square / Sine), Pitch depth (0–12 st) |
+| LFO (1) | Rate (0.1–20 Hz, log), Shape (−100 falling saw … 0 triangle … +100 rising saw), Output (Shape / Square / Sine), Pitch depth (0–12 st) |
+| LFO 2 → SHAPE | Rate (0.02–20 Hz, log, default 0.5), Level (0–100 %, default 0) — ids `kLfo2Rate`, `kLfo2Level`, appended after `kVcaRelease` |
 | VCF | Cutoff (20 Hz–20 kHz, log), Resonance (0–100 % → loop gain 0–1.1), Key Track (0–100 %), LFO depth (0–4 oct) |
 | VCF ENV | Attack, Decay, Sustain, Release, Env Amount (±6 oct) |
 | VCA / OUTPUT | LFO depth (tremolo, 0–100 %), Output Level (−48…+6 dB) |
@@ -96,6 +97,24 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
     release.** Square moved from normalised 1.0 to 0.5, so a test project
     saved on Square opens on Sine. From the first release the positions
     (`LfoOutput`: Shape 0, Square 1, Sine 2) are as permanent as the ids.
+- **LFO 2** (added 29 Sep 2026) is a plain sine (`SineLfo`, `std::sin` of
+  the phase, free-running) whose only destination is **LFO 1's Shape
+  knob**: `sweptLfoShape (knob, level, lfo2) = clamp (knob + level ·
+  kMaxLfo2ShapeSweep · lfo2, −1, +1)`, computed every sample before LFO 1
+  runs. So the triangle breathes between the two sawtooths, the square's
+  duty sweeps (PWM of the LFO), and the sine rocks between its two
+  rectified halves.
+  - `kMaxLfo2ShapeSweep = 1.0`: full Level from the centre sweeps saw to
+    saw. From an off-centre knob the far end is **clamped**, so the wave
+    parks at a sawtooth for part of LFO 2's cycle (from +60 %, 37 % of it
+    — measured by the suite). The panel's third readout line prints the
+    range actually covered, from the same function.
+  - **At Level 0 it is bit-identical to the synth before LFO 2** (knob + 0
+    is the knob); the suite renders the same patch with two LFO 2 rates
+    and compares every sample. The default patch is unchanged (−6.87 dBFS).
+  - The Level is smoothed (20 ms); the Rate is not, like LFO 1's.
+  - "Wave shape" was read as LFO 1's Shape because it is the only
+    continuous wave-shape control; the VCOs' Wave is a Saw/Square switch.
   - The display draws the **patched** output in green (`> SINE`) and, in
     red, the shape output underneath it, or the square when Shape itself is
     patched (`lfoDisplayData()`, shared with the panel picture). Free-running, bipolar, and slewed by 0.5 ms so a saw reset
@@ -146,8 +165,8 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
 
 ![The panel](docs/panel.png)
 
-Four rows in signal order — VCOs, LFO, VCF + VCF ENV, VCA/OUTPUT + VCA ENV —
-with an LFO display (both outputs, the patched one marked) and an envelope
+Four rows in signal order — VCOs, LFO 1 + LFO 2, VCF + VCF ENV,
+VCA/OUTPUT + VCA ENV — with an LFO display (both outputs, the patched one marked) and an envelope
 display (both ADSRs on one time axis, key-up marked with dots) in a strip on
 the right. 1176 × 302.
 
@@ -157,6 +176,13 @@ the right. 1176 × 302.
   — see its banner. `diff` it against FilterDrum's to see
   exactly that.
 - **The layout is data** in `SimpleSynthLayout.h`, with no VSTGUI in it.
+- **LFO 2 went in without growing the panel.** Its box ("LFO 2 -> SHAPE")
+  took columns 4–5 of row 1, which had been readout text. The readouts
+  are now three short lines at `columnX (6, 2)` — LFO 1's period and
+  output, its depths, LFO 2's period and Shape range; the engine line
+  moved to the title row (`kEngineLineX`) and the retrigger note into the
+  flow line. The title and flow text live in `SimpleSynthReadouts.cpp`
+  (`panelTitleText()`, `panelFlowText()`) so the picture prints them too.
 - **Every string that depends on a value** is made in
   `SimpleSynthReadouts.cpp`, also VSTGUI-free.
 - Both, plus the DSP's trace functions, feed **`tools/dump-layout.cpp`**,
@@ -241,11 +267,11 @@ v3.8.1_build_84 — the tag the template pins:
 
 | What | Result |
 |---|---|
-| `tools/run-tests.sh` — DSP suite | **201 checks, 0 failures** (arm64 GCC 11 in the Mac's VM; 184 before the sine, also on x86-64 GCC 13) |
-| `tools/run-tests.sh` — layout and panel text | **812 checks, 0 failures** |
+| `tools/run-tests.sh` — DSP suite | **249 checks, 0 failures** with LFO 2, on arm64 GCC 11 (the Mac's VM) and x86-64 GCC 13 (201 before LFO 2, 184 before the sine) |
+| `tools/run-tests.sh` — layout and panel text | **914 checks, 0 failures** with LFO 2 (812 before) |
 | Every `source/*.cpp` compiled against the SDK and VSTGUI headers, `-Wall -Wextra` | 8/8, no warnings in our code; `nm -C`: all 57 referenced `SimpleSynth::` symbols defined |
-| `tools/linux-validate/` — the plug-in built on Linux (editor stubbed), **SDK validator** | **47 tests passed, 0 failed** (re-run after the sine: still 47 / 0) |
-| `tests/ProcessorTests.cpp` against the real processor | **25 checks, 0 failures** |
+| `tools/linux-validate/` — the plug-in built on Linux (editor stubbed), **SDK validator** | **47 tests passed, 0 failed** (re-run after the sine and after LFO 2: still 47 / 0) |
+| `tests/ProcessorTests.cpp` against the real processor | **25 checks, 0 failures** (also after LFO 2) |
 
 Run again in the Mac's own Linux VM (aarch64, GCC 11), which found one
 thing: the "quiet signal at resonance 2.5 is SpaceDub's filter to the bit"

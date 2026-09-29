@@ -88,7 +88,7 @@ public:
 			else
 				std::snprintf (text, sizeof (text), "%.0f", plain);
 		}
-		else if (mDef.id == kLfoRate)
+		else if (mDef.id == kLfoRate || mDef.id == kLfo2Rate)
 		{
 			std::snprintf (text, sizeof (text), (plain < 10.0) ? "%.2f" : "%.1f", plain);
 		}

@@ -212,6 +212,8 @@ void SimpleSynthProcessor::applyParam (ParamID id, double normalized)
 		case kLfoShape:      mDsp.setLfoShape (v); break;
 		case kLfoOutput:     mDsp.setLfoOutput (static_cast<LfoOutput> (static_cast<int> (v))); break;
 		case kLfoPitch:      mDsp.setLfoPitchDepth (v); break;
+		case kLfo2Rate:      mDsp.setLfo2Rate (v); break;
+		case kLfo2Level:     mDsp.setLfo2Level (v); break;
 
 		case kCutoff:        mDsp.setCutoffHz (v); break;
 		case kResonance:     mDsp.setResonance (v); break;

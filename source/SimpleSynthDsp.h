@@ -17,12 +17,13 @@
 //      from two copies of the arithmetic that will drift apart. This
 //      header is where those functions live: ladderTuning(),
 //      selfOscillating(), cutoffCeilingHz(), lfoShapeValue(),
-//      lfoSquareValue(), lfoSineValue(), traceEnvelopes() and traceLfo()
-//      are all called
+//      lfoSquareValue(), lfoSineValue(), sweptLfoShape(),
+//      lfo2ShapeRange(), traceEnvelopes() and traceLfo() are all called
 //      by the audio path AND by the panel.
 //
 // THE SIGNAL PATH - one monophonic voice, last-note priority:
 //
+//                                              LFO 2 (sine) --> Shape
 //   VCO 1 --\                                          LFO (MS-20 MG)
 //   VCO 2 ---+-- mixer --> Moog ladder VCF --> VCA --> output level
 //   VCO 3 --/               ^  ^  ^            ^  ^
@@ -42,6 +43,12 @@
 //     shaper's balance, so the sine leans towards a rectified shape at
 //     either end. An Output switch picks which of the three drives the
 //     destinations - pitch, cutoff and VCA.
+//   * LFO 2 is a plain sine with a Rate and a Level, and its one
+//     destination is LFO 1's SHAPE: it turns the Shape knob for you,
+//     so the wave leans one way and then the other - a triangle
+//     breathing between the two sawtooths, a square whose duty sweeps
+//     (PWM of the LFO), or a sine rocking between its two rectified
+//     halves. See sweptLfoShape().
 //   * The filter is SpaceDub's Moog ladder ("Moog VCF, variation 2",
 //     musicdsp.org), its per-sample arithmetic unchanged - but TUNED:
 //     see MoogLadder and ladderTuning() for the two things that had to
@@ -298,6 +305,35 @@ inline double lfoSineValue (double phase, double shape)
 	return (2.0 * y - (hi + lo)) / (hi - lo);
 }
 
+/** LFO 2's reach on LFO 1's Shape, in Shape units (the Shape knob runs
+    -1..+1): at a Level of 100 % the sine adds +/- this much to the
+    knob. 1.0 means that from the centre (a triangle) full Level sweeps
+    from one sawtooth to the other; from any other setting the far end
+    is clamped, so the wave dwells at that sawtooth for part of LFO 2's
+    cycle, as a knob turned against its end stop would. */
+constexpr double kMaxLfo2ShapeSweep = 1.0;
+
+/** THE SHAPE LFO 1 ACTUALLY RUNS AT: the knob plus LFO 2, clamped to
+    the knob's own range. `level` 0..1, `lfo2` -1..+1. At level 0 it is
+    the knob EXACTLY - adding zero - so a patch that does not use LFO 2
+    is bit-identical to one made before it existed; the tests hold it
+    to that. */
+inline double sweptLfoShape (double knob, double level, double lfo2)
+{
+	double s = knob + level * kMaxLfo2ShapeSweep * lfo2;
+	if (s < -1.0) s = -1.0;
+	if (s >  1.0) s =  1.0;
+	return s;
+}
+
+/** The range of Shape that LFO 2 sweeps across - for the panel's LFO 2
+    line, from the same sweptLfoShape() the DSP runs. */
+inline void lfo2ShapeRange (double knob, double level, double& lo, double& hi)
+{
+	lo = sweptLfoShape (knob, level, -1.0);
+	hi = sweptLfoShape (knob, level,  1.0);
+}
+
 /** Which of the three LFO outputs drives the destinations. The values
     are the Output switch's positions and are stored in projects, so they
     are APPEND-ONLY, like parameter ids. */
@@ -415,6 +451,35 @@ private:
 	double mPhase  = 0.0;
 	double mSlewed = 0.0;
 	double mSlewCoeff = 1.0;
+};
+
+//------------------------------------------------------------------------
+/** LFO 2: a sine, and nothing else.
+
+    A sine because its job is to TURN A KNOB, and a hand turning a knob
+    back and forth slows down at each end - which is what a sine does
+    and a triangle does not. std::sin on the phase, so it is a true
+    sine, not a shaped one; its output needs no slew because it has no
+    corners.
+
+    FREE-RUNNING, like LFO 1. Starts at phase 0 - the knob's own
+    setting, rising - on reset. */
+class SineLfo
+{
+public:
+	void setSampleRate (double sampleRate);
+	void setRate (double hz) { mRateHz = hz; }
+	void reset () { mPhase = 0.0; }
+
+	/** One sample, -1..+1. */
+	double next ();
+
+	double phase () const { return mPhase; }
+
+private:
+	double mSampleRate = 44100.0;
+	double mRateHz = 0.5;
+	double mPhase  = 0.0;
 };
 
 //------------------------------------------------------------------------
@@ -621,6 +686,9 @@ public:
 	void setLfoCutoffDepth (double octaves);
 	void setLfoVcaDepth (double depth);                // 0..1
 
+	void setLfo2Rate (double hz);
+	void setLfo2Level (double level);                  // 0..1
+
 	void setCutoffHz (double hz);
 	void setResonance (double loopGain);               // 0..kMaxResonanceK
 	void setKeyTrack (double amount);                  // 0..1
@@ -660,6 +728,10 @@ public:
 	    tests' measurements of the modulation, not for the panel. */
 	double lastCutoffHz () const { return mLastCutoffHz; }
 
+	/** The Shape LFO 1 ran at on the last sample - the knob swept by
+	    LFO 2 - for the tests. */
+	double lastLfoShape () const { return mLastLfoShape; }
+
 private:
 	float renderSample ();
 
@@ -669,6 +741,7 @@ private:
 
 	Vco   mVco[kNumVcos];
 	MsLfo mLfo;
+	SineLfo mLfo2;
 	MoogLadder mFilter;
 	Adsr  mVcfEnv;
 	Adsr  mVcaEnv;
@@ -683,10 +756,13 @@ private:
 	Smoother mLfoPitch;
 	Smoother mLfoCutoff;
 	Smoother mLfoVca;
+	Smoother mLfo2Level;
 	Smoother mEnvAmount;
 	Smoother mOutput;
 
 	double mKeyTrack = 0.5;
+	double mLfoShapeKnob = 0.0;     // the Shape knob; LFO 2 sweeps around it
+	double mLastLfoShape = 0.0;
 	std::uint32_t mNoiseState = 0x12345678u;
 	double mLastCutoffHz = 1000.0;
 

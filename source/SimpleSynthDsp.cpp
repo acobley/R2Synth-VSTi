@@ -170,6 +170,25 @@ double MsLfo::next ()
 }
 
 //------------------------------------------------------------------------
+// SineLfo
+//------------------------------------------------------------------------
+void SineLfo::setSampleRate (double sampleRate)
+{
+	mSampleRate = (sampleRate >= 1000.0) ? sampleRate : 44100.0;
+}
+
+double SineLfo::next ()
+{
+	const double v = std::sin (2.0 * kPi * mPhase);
+
+	mPhase += mRateHz / mSampleRate;
+	if (mPhase >= 1.0)
+		mPhase -= std::floor (mPhase);
+
+	return v;
+}
+
+//------------------------------------------------------------------------
 // Adsr
 //------------------------------------------------------------------------
 void Adsr::setSampleRate (double sampleRate)
@@ -513,10 +532,12 @@ void SimpleSynthDsp::setSampleRate (double sampleRate)
 	mLfoPitch.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mLfoCutoff.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mLfoVca.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
+	mLfo2Level.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mEnvAmount.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mOutput.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 
 	mLfo.setSampleRate (mSampleRate);
+	mLfo2.setSampleRate (mSampleRate);
 	mVcfEnv.setSampleRate (mSampleRate);
 	mVcaEnv.setSampleRate (mSampleRate);
 
@@ -546,9 +567,15 @@ void SimpleSynthDsp::reset ()
 	mLfoPitch.snap (mLfoPitch.target ());
 	mLfoCutoff.snap (mLfoCutoff.target ());
 	mLfoVca.snap (mLfoVca.target ());
+	mLfo2Level.snap (mLfo2Level.target ());
 	mEnvAmount.snap (mEnvAmount.target ());
 	mOutput.snap (static_cast<float> (dbToGain (mOutputDb)));
 
+	// LFO 2 first: at phase 0 its sine is 0, so LFO 1 restarts at the
+	// knob's own Shape.
+	mLfo2.reset ();
+	mLfo.setShape (mLfoShapeKnob);
+	mLastLfoShape = mLfoShapeKnob;
 	mLfo.reset ();
 	mFilter.reset ();
 	mVcfEnv.reset ();
@@ -584,7 +611,14 @@ void SimpleSynthDsp::setVcoLevel (int vco, double level)
 }
 
 void SimpleSynthDsp::setLfoRate (double hz)          { mLfo.setRate (std::max (0.0, hz)); }
-void SimpleSynthDsp::setLfoShape (double shape)      { mLfo.setShape (std::clamp (shape, -1.0, 1.0)); }
+void SimpleSynthDsp::setLfoShape (double shape)
+{
+	// The KNOB. What LFO 1 runs at is this swept by LFO 2, per sample, in
+	// renderSample(); setting it on the LFO too keeps it right for a
+	// reset() that comes before the next sample.
+	mLfoShapeKnob = std::clamp (shape, -1.0, 1.0);
+	mLfo.setShape (mLfoShapeKnob);
+}
 void SimpleSynthDsp::setLfoOutput (LfoOutput o)     { mLfo.setOutput (o); }
 
 void SimpleSynthDsp::setLfoPitchDepth (double semitones)
@@ -595,6 +629,13 @@ void SimpleSynthDsp::setLfoPitchDepth (double semitones)
 void SimpleSynthDsp::setLfoCutoffDepth (double octaves)
 {
 	mLfoCutoff.setTarget (static_cast<float> (std::clamp (octaves, 0.0, kMaxLfoCutoffOctaves)));
+}
+
+void SimpleSynthDsp::setLfo2Rate (double hz)         { mLfo2.setRate (std::max (0.0, hz)); }
+
+void SimpleSynthDsp::setLfo2Level (double level)
+{
+	mLfo2Level.setTarget (static_cast<float> (std::clamp (level, 0.0, 1.0)));
 }
 
 void SimpleSynthDsp::setLfoVcaDepth (double depth)
@@ -701,6 +742,13 @@ double SimpleSynthDsp::tailSeconds () const
 //------------------------------------------------------------------------
 float SimpleSynthDsp::renderSample ()
 {
+	// LFO 2 turns LFO 1's Shape knob, then LFO 1 runs at the result.
+	// The Level is smoothed, so a move of it glides the sweep in rather
+	// than jumping the shape.
+	const double lfo2 = mLfo2.next ();
+	mLastLfoShape = sweptLfoShape (mLfoShapeKnob, mLfo2Level.next (), lfo2);
+	mLfo.setShape (mLastLfoShape);
+
 	const double lfo = mLfo.next ();
 	const double vcfEnv = mVcfEnv.next ();
 	const double vcaEnv = mVcaEnv.next ();

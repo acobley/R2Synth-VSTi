@@ -18,6 +18,11 @@ A monophonic analogue-style synthesiser. VST3 and Audio Unit, for macOS.
   rectified-sine shape at either end. The **Output** switch picks which of
   the three waves is used. The LFO's depth is set
   separately for **pitch** (vibrato), **cutoff** and the **VCA** (tremolo).
+* **A second LFO that turns the Shape knob.** LFO 2 is a plain sine with a
+  **Rate** (0.02–20 Hz) and a **Level**. It sweeps LFO 1's Shape back and
+  forth, so the LFO wave keeps changing: the triangle leans between the
+  two sawtooths, the square's width sweeps, and the sine rocks between its
+  two lopsided halves. At Level 0 it has no effect at all.
 * **SpaceDub's Moog ladder filter**, using the same per-sample arithmetic,
   with two additions:
   * It is **tuned**: the resonant peak lands on the Cutoff frequency to

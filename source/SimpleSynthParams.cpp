@@ -70,6 +70,13 @@ const ParamDef kParams[kNumParams] = {
 	{kVcaDecay,     "VCA Decay",         "ms",   ParamType::Log,    1.,      10000.,  500.,   0.001,   10.,     0,    false},
 	{kVcaSustain,   "VCA Sustain",       "%",    ParamType::Float,  0.,      100.,    80.,    0.,      1.,      0,    false},
 	{kVcaRelease,   "VCA Release",       "ms",   ParamType::Log,    1.,      10000.,  250.,   0.001,   10.,     0,    false},
+
+	// LFO 2 - a plain sine that sweeps LFO 1's Shape. Slower at the
+	// bottom than LFO 1 (0.02 Hz, 50 s a cycle), because a shape that
+	// drifts over a phrase is the usual use. Level 0 by default, so the
+	// default patch is unchanged.
+	{kLfo2Rate,     "LFO2 Rate",         "Hz",   ParamType::Log,    0.02,    20.,     0.5,    0.02,    20.,     0,    false},
+	{kLfo2Level,    "LFO2 Level",        "%",    ParamType::Float,  0.,      100.,    0.,     0.,      1.,      0,    true },
 };
 
 //------------------------------------------------------------------------

@@ -16,7 +16,9 @@
 //   * the ADSR times are shown in ms and handed over in SECONDS;
 //   * Resonance is shown in per cent and handed over as LOOP GAIN,
 //     0..kMaxResonanceK, where 1.0 is self-oscillation at every cutoff;
-//   * LFO Shape is shown -100..+100 % and handed over as -1..+1.
+//   * LFO Shape is shown -100..+100 % and handed over as -1..+1;
+//   * LFO2 Level is shown 0..100 % and handed over as 0..1 - how far
+//     LFO 2 sweeps the Shape, in units of kMaxLfo2ShapeSweep.
 //
 // Note what is NOT a range mapping: dB to linear gain, and Hz to the
 // ladder's coefficient. Those are the DSP's arithmetic and live in
@@ -72,6 +74,12 @@ enum Param : Steinberg::Vst::ParamID
 	kVcaDecay,
 	kVcaSustain,
 	kVcaRelease,
+
+	// LFO 2, appended on 29 Sep 2026: a sine whose output sweeps LFO 1's
+	// Shape. At the END, per the rule below, even though the panel puts
+	// it next to LFO 1.
+	kLfo2Rate,
+	kLfo2Level,
 
 	kNumParams,
 

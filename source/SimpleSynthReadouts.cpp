@@ -20,7 +20,7 @@ std::string shortLabel (ParamID tag)
 	std::string label = paramDef (tag).title;
 
 	// The box says which section; the control says what it is.
-	for (const char* prefix : { "VCO1 ", "VCO2 ", "VCO3 ", "LFO ", "VCF ", "VCA " })
+	for (const char* prefix : { "VCO1 ", "VCO2 ", "VCO3 ", "LFO ", "LFO2 ", "VCF ", "VCA " })
 	{
 		const size_t n = std::strlen (prefix);
 		if (label.compare (0, n, prefix) == 0)
@@ -75,6 +75,7 @@ std::string readoutText (ParamID tag, double normalized)
 			break;
 
 		case kLfoRate:
+		case kLfo2Rate:
 			std::snprintf (text, sizeof (text), (plain < 10.0) ? "%.2f Hz" : "%.1f Hz", plain);
 			break;
 
@@ -124,6 +125,7 @@ std::string readoutText (ParamID tag, double normalized)
 			break;
 
 		case kVcaLfo:
+		case kLfo2Level:
 			std::snprintf (text, sizeof (text), (plain < 0.5) ? "off" : "%.0f %%", plain);
 			break;
 
@@ -177,11 +179,55 @@ std::string lfoLineText (const std::function<double (ParamID)>& internalOf)
 	}
 
 	char text[160] = {};
-	std::snprintf (text, sizeof (text),
-	               "LFO %.0f ms/cycle, %s  ->  pitch %.2f st, cutoff %.2f oct, VCA %.0f%%",
-	               1000.0 / rate, detail,
+	std::snprintf (text, sizeof (text), "LFO 1  %.0f ms/cycle, %s", 1000.0 / rate, detail);
+	return std::string (text);
+}
+
+//------------------------------------------------------------------------
+std::string lfoDepthsLineText (const std::function<double (ParamID)>& internalOf)
+{
+	char text[160] = {};
+	std::snprintf (text, sizeof (text), "   ->  pitch %.2f st, cutoff %.2f oct, VCA %.0f%%",
 	               internalOf (kLfoPitch), internalOf (kVcfLfo), internalOf (kVcaLfo) * 100.0);
 	return std::string (text);
+}
+
+//------------------------------------------------------------------------
+std::string lfo2LineText (const std::function<double (ParamID)>& internalOf)
+{
+	// WHERE THE SHAPE ACTUALLY GOES: the knob +/- LFO 2, clamped - from
+	// lfo2ShapeRange(), which calls the sweptLfoShape() the DSP runs. The
+	// clamp is the part worth printing: from a knob off centre, full
+	// Level spends part of each cycle parked at a sawtooth.
+	const double rate  = internalOf (kLfo2Rate);
+	const double level = internalOf (kLfo2Level);
+
+	char text[160] = {};
+	if (level < 0.005)
+	{
+		std::snprintf (text, sizeof (text), "LFO 2  %.0f ms/cycle, off - Shape stays on the knob",
+		               1000.0 / rate);
+	}
+	else
+	{
+		double lo = 0.0, hi = 0.0;
+		lfo2ShapeRange (internalOf (kLfoShape), level, lo, hi);
+		std::snprintf (text, sizeof (text), "LFO 2  %.0f ms/cycle  ->  Shape %+.0f..%+.0f %%",
+		               1000.0 / rate, lo * 100.0, hi * 100.0);
+	}
+	return std::string (text);
+}
+
+//------------------------------------------------------------------------
+const char* panelTitleText ()
+{
+	return "SimpleSynth   -   three VCOs, an MS-20 LFO swept by a sine, a Moog ladder and two ADSRs";
+}
+
+const char* panelFlowText ()
+{
+	return "VCO 1-3 -> mixer -> Moog ladder VCF -> VCA -> output      "
+	       "(mono, last note wins; every new note retriggers both envelopes; lamp = self-oscillating)";
 }
 
 //------------------------------------------------------------------------

@@ -116,6 +116,8 @@ void applyDefaultPatch (SimpleSynthDsp& d)
 	d.setLfoShape (0.0);
 	d.setLfoOutput (LfoOutput::Shape);
 	d.setLfoPitchDepth (0.0);
+	d.setLfo2Rate (0.5);
+	d.setLfo2Level (0.0);
 	d.setCutoffHz (1200.0);
 	d.setResonance (0.20 * kMaxResonanceK);
 	d.setKeyTrack (0.5);
@@ -578,6 +580,180 @@ static void testLfo ()
 	}
 
 	testLfoSine ();
+}
+
+//------------------------------------------------------------------------
+// 5b. LFO 2 - a sine that turns LFO 1's Shape knob
+//------------------------------------------------------------------------
+static void testLfo2 ()
+{
+	std::printf ("LFO 2\n");
+
+	// THE SWEEP ARITHMETIC, which the panel's line and the DSP share.
+	for (double knob : { -1.0, -0.3, 0.0, 0.6, 1.0 })
+		for (double lfo2 : { -1.0, -0.5, 0.0, 0.7, 1.0 })
+			check (sweptLfoShape (knob, 0.0, lfo2) == knob,
+			       "Level 0 leaves the Shape EXACTLY on the knob (" + num (knob) + ", lfo2 " + num (lfo2) + ")");
+	checkClose (sweptLfoShape (0.0, 1.0, 1.0), kMaxLfo2ShapeSweep, 1e-15, "full Level from the centre reaches +sweep");
+	checkClose (sweptLfoShape (0.0, 1.0, -1.0), -kMaxLfo2ShapeSweep, 1e-15, "and -sweep");
+	checkClose (sweptLfoShape (0.0, 0.5, 1.0), 0.5 * kMaxLfo2ShapeSweep, 1e-15, "half Level, half the sweep");
+	check (sweptLfoShape (0.6, 1.0, 1.0) == 1.0, "the sweep is clamped at the rising saw");
+	check (sweptLfoShape (-0.6, 1.0, -1.0) == -1.0, "and at the falling saw");
+	{
+		double lo = 0.0, hi = 0.0;
+		lfo2ShapeRange (0.6, 1.0, lo, hi);
+		checkClose (lo, -0.4, 1e-12, "knob +0.6 at full Level sweeps down to -0.4");
+		checkClose (hi, 1.0, 1e-12, "and up to the end stop");
+	}
+
+	// THE RUNNING SINE: rate, and that it IS a sine.
+	for (double rate : { 0.5, 5.0, 20.0 })
+	{
+		SineLfo lfo;
+		lfo.setSampleRate (48000.0);
+		lfo.setRate (rate);
+		lfo.reset ();
+		std::vector<double> x (static_cast<size_t> (48000.0 * std::max (2.0, 3.0 / rate)));
+		for (auto& s : x) s = lfo.next ();
+		checkClose (measureFrequency (x, 48000.0), rate, rate * 1e-3, "LFO 2 runs at " + num (rate) + " Hz");
+	}
+	{
+		SineLfo lfo;
+		lfo.setSampleRate (44100.0);
+		lfo.setRate (3.0);
+		lfo.reset ();
+		double worst = 0.0;
+		for (int i = 0; i < 44100; ++i)
+		{
+			const double want = std::sin (2.0 * 3.14159265358979323846 * 3.0 * i / 44100.0);
+			worst = std::max (worst, std::fabs (lfo.next () - want));
+		}
+		check (worst < 1e-9, "LFO 2 is a true sine (worst error " + num (worst, "%.2e") + ")");
+	}
+
+	// AT LEVEL 0 LFO 2 IS INAUDIBLE: the Shape is the knob on every
+	// sample, and the audio is bit-identical whatever LFO 2's rate - so a
+	// patch that ignores LFO 2 sounds exactly as it did before LFO 2.
+	{
+		auto render = [] (double lfo2Rate, std::vector<float>& out, bool& shapeOnKnob) {
+			SimpleSynthDsp d;
+			d.setSampleRate (48000.0);
+			applyDefaultPatch (d);
+			d.setLfoShape (0.3);
+			d.setLfoOutput (LfoOutput::Square);
+			d.setLfoCutoffDepth (2.0);
+			d.setLfoPitchDepth (1.0);
+			d.setLfo2Rate (lfo2Rate);
+			d.setLfo2Level (0.0);
+			d.reset ();
+			d.noteOn (48, 1.f);
+			out.assign (48000, 0.f);
+			std::vector<float> r (out.size ());
+			shapeOnKnob = true;
+			for (size_t i = 0; i < out.size (); i += 480)
+			{
+				d.render (&out[i], &r[i], 480);
+				shapeOnKnob = shapeOnKnob && (d.lastLfoShape () == 0.3);
+			}
+		};
+		std::vector<float> a, b;
+		bool knobA = false, knobB = false;
+		render (0.5, a, knobA);
+		render (13.0, b, knobB);
+		check (knobA && knobB, "at Level 0 LFO 1 runs at the Shape knob exactly");
+		check (a == b, "at Level 0 the output is bit-identical whatever LFO 2's rate");
+	}
+
+	// AT FULL LEVEL THE SHAPE SWEEPS - from the centre, end to end; from
+	// +0.6, down to -0.4 and parked at the rising saw at the top.
+	for (double knob : { 0.0, 0.6 })
+	{
+		SimpleSynthDsp d;
+		d.setSampleRate (48000.0);
+		applyDefaultPatch (d);
+		d.setLfoShape (knob);
+		d.setLfo2Rate (2.0);
+		d.setLfo2Level (1.0);
+		d.reset ();
+		double lo = 2.0, hi = -2.0, worstStep = 0.0, prev = d.lastLfoShape ();
+		int parked = 0;
+		float l[1], r[1];
+		const int n = 48000;
+		for (int i = 0; i < n; ++i)
+		{
+			d.render (l, r, 1);
+			const double s = d.lastLfoShape ();
+			lo = std::min (lo, s); hi = std::max (hi, s);
+			worstStep = std::max (worstStep, std::fabs (s - prev));
+			if (s == 1.0) ++parked;
+			prev = s;
+		}
+		double wantLo = 0.0, wantHi = 0.0;
+		lfo2ShapeRange (knob, 1.0, wantLo, wantHi);
+		checkClose (lo, wantLo, 1e-3, "knob " + num (knob) + ": the Shape reaches " + num (wantLo));
+		checkClose (hi, wantHi, 1e-3, "knob " + num (knob) + ": and " + num (wantHi));
+		// A 2 Hz sine of amplitude 1 moves at most 2 pi 2 / 48000 a sample.
+		check (worstStep < 3e-4, "the sweep is smooth (largest step " + num (worstStep, "%.2e") + ")");
+		if (knob > 0.0)
+		{
+			// sin > 0.4 for (pi - 2 asin 0.4) / 2 pi of the cycle = 36.9 %.
+			checkClose (static_cast<double> (parked) / n, 0.369, 0.01,
+			            "from +0.6 it dwells on the rising saw for 37 % of the cycle");
+		}
+	}
+
+	// THE SWEEP REACHES THE SOUND: LFO 1's square, patched to the
+	// cutoff, has its duty swept - so the filter spends a different
+	// fraction of the time up in each half of LFO 2's cycle.
+	{
+		SimpleSynthDsp d;
+		d.setSampleRate (48000.0);
+		applyDefaultPatch (d);
+		d.setLfoOutput (LfoOutput::Square);
+		d.setLfoRate (20.0);
+		d.setLfoShape (0.0);
+		d.setLfoCutoffDepth (1.0);
+		d.setVcfEnvAmount (0.0);
+		d.setKeyTrack (0.0);
+		d.setLfo2Rate (0.5);       // one cycle in 2 s: first second the rising half
+		d.setLfo2Level (0.8);
+		d.reset ();
+		d.noteOn (60, 1.f);
+		float l[1], r[1];
+		int upFirst = 0, upSecond = 0;
+		for (int i = 0; i < 96000; ++i)
+		{
+			d.render (l, r, 1);
+			const bool up = d.lastCutoffHz () > 1200.0;
+			(i < 48000 ? upFirst : upSecond) += up ? 1 : 0;
+		}
+		const double dutyFirst = upFirst / 48000.0, dutySecond = upSecond / 48000.0;
+		std::printf ("  square duty over LFO 2's two halves: %.3f, %.3f\n", dutyFirst, dutySecond);
+		// Mean of 0.5 (1 + 0.8 sin) over a half cycle: 0.5 +/- 0.8/pi.
+		checkClose (dutyFirst, 0.5 + 0.8 / 3.14159265358979323846, 0.02, "the square is wider while LFO 2 is up");
+		checkClose (dutySecond, 0.5 - 0.8 / 3.14159265358979323846, 0.02, "and narrower while it is down");
+	}
+
+	// THE LEVEL IS SMOOTHED: a jump from 0 to 100 % mid-note glides the
+	// sweep in rather than jumping the Shape.
+	{
+		SimpleSynthDsp d;
+		d.setSampleRate (48000.0);
+		applyDefaultPatch (d);
+		d.setLfo2Rate (20.0);
+		d.reset ();
+		float l[1], r[1];
+		for (int i = 0; i < 600; ++i) d.render (l, r, 1);    // a quarter-cycle in: the sine near its top
+		double prev = d.lastLfoShape (), worst = 0.0;
+		d.setLfo2Level (1.0);
+		for (int i = 0; i < 4800; ++i)
+		{
+			d.render (l, r, 1);
+			worst = std::max (worst, std::fabs (d.lastLfoShape () - prev));
+			prev = d.lastLfoShape ();
+		}
+		check (worst < 0.01, "a Level jump glides in (largest Shape step " + num (worst, "%.4f") + ")");
+	}
 }
 
 //------------------------------------------------------------------------
@@ -1195,6 +1371,7 @@ int main ()
 	testOutputStage ();
 	testVcos ();
 	testLfo ();
+	testLfo2 ();
 	testLadder ();
 	testAdsr ();
 	testNotes ();

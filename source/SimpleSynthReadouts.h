@@ -34,9 +34,20 @@ std::string shortLabel (Steinberg::Vst::ParamID tag);
     compact SpySelector. */
 std::string selectorText (Steinberg::Vst::ParamID tag, int position);
 
-/** The LFO line beside the LFO group. `internalOf` gives a parameter's
-    current value in internal units. */
+/** THE THREE READOUT LINES beside the two LFO groups. `internalOf`
+    gives a parameter's current value in internal units.
+
+      lfoLineText        LFO 1's period and which output is patched
+      lfoDepthsLineText  where it goes - pitch, cutoff, VCA
+      lfo2LineText       LFO 2's period and the Shape range it sweeps */
 std::string lfoLineText (const std::function<double (Steinberg::Vst::ParamID)>& internalOf);
+std::string lfoDepthsLineText (const std::function<double (Steinberg::Vst::ParamID)>& internalOf);
+std::string lfo2LineText (const std::function<double (Steinberg::Vst::ParamID)>& internalOf);
+
+/** The two fixed lines across the top of the panel - here so the panel
+    picture's tool prints the same words. */
+const char* panelTitleText ();
+const char* panelFlowText ();
 
 /** THE LFO DISPLAY'S DATA, shared by the editor and the panel picture:
     `cycles` cycles of the PATCHED output (drawn green) and of a
@@ -48,7 +59,8 @@ void lfoDisplayData (double outputPosition, double shape, float* patched, float*
                      int count, double cycles, std::string& patchedLegend,
                      std::string& companionLegend);
 
-/** The engine line: rate, cutoff ceiling, release tail. */
+/** The engine line: rate, cutoff ceiling, release tail. On the title
+    row, right of the title. */
 std::string engineLineText (double sampleRate, double vcaReleaseSeconds);
 
 } // namespace SimpleSynth

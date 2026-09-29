@@ -21,9 +21,15 @@
 // top edge. Four rows, in signal order:
 //
 //   row 0   VCO 1        | VCO 2        | VCO 3          | LFO display
-//   row 1   LFO                | readout lines          |   (rows 0-1)
+//   row 1   LFO 1              | LFO 2    | readouts    |   (rows 0-1)
 //   row 2   VCF                | VCF ENV                | ENV display
 //   row 3   VCA / OUTPUT       | VCA ENV                |   (rows 2-3)
+//
+// LFO 2 (29 Sep 2026) took the first two columns of what had been the
+// readout area, so the readouts are three short lines now, all about
+// the two LFOs; the engine line moved up to the title row, and the
+// note about retriggering into the signal-flow line. THE PANEL DID NOT
+// GROW: the same 1176 x 302.
 //
 // The two ADSR groups are one above the other so Attack sits over
 // Attack; the VCF and VCA groups likewise, so the two LFO depth knobs
@@ -123,9 +129,9 @@ constexpr int kEnvViewBottom = rowY (3) + kSliderHeight + kGroupPadBottom;
 constexpr int kDisplayPoints = 200;
 
 //------------------------------------------------------------------------
-// The readout lines, in row 1 to the right of the LFO group
+// The readout lines, in row 1 to the right of the LFO 2 group
 //------------------------------------------------------------------------
-constexpr int kReadoutX     = columnX (4, 1);
+constexpr int kReadoutX     = columnX (6, 2);
 constexpr int kReadoutWidth = kRowRight - kReadoutX;
 constexpr int kReadout1Y    = rowY (1) - 4;
 constexpr int kReadout2Y    = kReadout1Y + 16;
@@ -136,6 +142,15 @@ constexpr int kReadout3Y    = kReadout2Y + 16;
 //------------------------------------------------------------------------
 constexpr int kEditorWidth  = kDisplayX + kDisplayWidth + kMargin;
 constexpr int kEditorHeight = kEnvViewBottom + kMargin;
+
+/** The title row: the title from the left, the engine line from the
+    readouts' x to the right margin. */
+constexpr int kEngineLineX     = kReadoutX;
+constexpr int kEngineLineWidth = kEditorWidth - kMargin - kEngineLineX;
+constexpr int kTitleWidth      = kEngineLineX - kColumnGap - kContentX;
+
+/** The flow line runs the full width. */
+constexpr int kFlowWidth       = kEditorWidth - kMargin - kContentX;
 
 //------------------------------------------------------------------------
 // The tables
@@ -188,6 +203,10 @@ constexpr Control kControls[] = {
 	{ kLfoOutput,    1, 2, 0, Kind::Selector },
 	{ kLfoPitch,     1, 3, 0, Kind::Slider   },
 
+	// LFO 2 BESIDE LFO 1, because its one destination is LFO 1's Shape.
+	{ kLfo2Rate,     1, 4, 1, Kind::Slider   },
+	{ kLfo2Level,    1, 5, 1, Kind::Slider   },
+
 	{ kCutoff,       2, 0, 0, Kind::Slider   },
 	{ kResonance,    2, 1, 0, Kind::Slider   },
 	{ kKeyTrack,     2, 2, 0, Kind::Slider   },
@@ -216,7 +235,8 @@ constexpr Group kGroups[] = {
 	{ "VCO 1",        0, 0, 3, 0, false },
 	{ "VCO 2",        0, 3, 3, 1, false },
 	{ "VCO 3",        0, 6, 3, 2, true  },
-	{ "LFO",          1, 0, 4, 0, false },
+	{ "LFO 1",        1, 0, 4, 0, false },
+	{ "LFO 2 -> SHAPE", 1, 4, 2, 1, false },
 	{ "VCF",          2, 0, 4, 0, false },
 	{ "VCF ENV",      2, 4, 5, 1, true  },
 	{ "VCA / OUTPUT", 3, 0, 4, 0, false },

@@ -199,11 +199,10 @@ def display(v):
 
 
 # ---------------------------------------------------------------------------
-text(P['contentX'], P['titleY'],
-     'SimpleSynth   -   three VCOs, an MS-20 LFO, a Moog ladder and two ADSRs', fill=VALUE)
-text(P['contentX'], P['flowY'],
-     'VCO 1-3 -> mixer -> Moog ladder VCF -> VCA -> output      '
-     '(mono, last note wins; lamp = self-oscillating)', fill=LABEL)
+# The two fixed lines come from SimpleSynthReadouts.cpp via the dump, like
+# everything else, so the picture says what the editor says.
+text(P['contentX'], P['titleY'], P['title'], fill=VALUE)
+text(P['contentX'], P['flowY'], P['flow'], fill=LABEL)
 
 for g in P['groups']:
     group_box(g['rect'], g['title'])

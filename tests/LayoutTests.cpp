@@ -66,6 +66,10 @@ std::string name (const Control& c)
     which even the smallest face would not fit. */
 constexpr int kTinyCharWidth = 5;
 
+/** The same for panelFont()'s main face (Arial 11), which the title and
+    the flow line use. */
+constexpr int kMainCharWidth = 6;
+
 } // anonymous namespace
 
 //------------------------------------------------------------------------
@@ -178,19 +182,60 @@ int main ()
 		check (static_cast<int> (l.size ()) * kTinyCharWidth <= kColumnWidth, name (c) + " label \"" + l + "\" fits");
 	}
 
-	// The LFO line at its longest: every depth and the rate at their
-	// widest readings.
+	// THE THREE LFO LINES at their longest, over every Output position
+	// and a spread of Shape and Level: the rates at their slowest (most
+	// digits), every depth at full.
+	std::printf ("the readout lines fit\n");
 	{
-		auto widest = [] (Steinberg::Vst::ParamID id) {
-			const ParamDef& d = paramDef (id);
-			return d.toInternal (id == kLfoRate ? 0.0 : 1.0);
-		};
-		const std::string lfo = lfoLineText (widest);
-		std::printf ("  longest LFO line: %d chars\n", static_cast<int> (lfo.size ()));
-		check (static_cast<int> (lfo.size ()) * kTinyCharWidth <= kReadoutWidth,
-		       "the LFO line fits beside the LFO box: " + lfo);
+		size_t longest = 0;
+		for (double output : { 0.0, 0.5, 1.0 })
+			for (double shape : { 0.0, 0.25, 0.5, 0.75, 1.0 })
+				for (double level : { 0.0, 0.001, 0.5, 1.0 })
+				{
+					auto at = [&] (Steinberg::Vst::ParamID id) {
+						const ParamDef& d = paramDef (id);
+						if (id == kLfoRate || id == kLfo2Rate) return d.toInternal (0.0);
+						if (id == kLfoOutput) return d.toInternal (output);
+						if (id == kLfoShape)  return d.toInternal (shape);
+						if (id == kLfo2Level) return d.toInternal (level);
+						return d.toInternal (1.0);
+					};
+					for (const std::string& line : { lfoLineText (at), lfoDepthsLineText (at), lfo2LineText (at) })
+					{
+						longest = std::max (longest, line.size ());
+						if (static_cast<int> (line.size ()) * kTinyCharWidth > kReadoutWidth)
+							check (false, "readout line fits beside the LFO 2 box: " + line);
+					}
+				}
+		std::printf ("  longest LFO line: %d chars in %d px\n", static_cast<int> (longest), kReadoutWidth);
+		check (static_cast<int> (longest) * kTinyCharWidth <= kReadoutWidth, "every LFO line fits beside the LFO 2 box");
+
 		const std::string eng = engineLineText (192000.0, 10.0);
-		check (static_cast<int> (eng.size ()) * kTinyCharWidth <= kReadoutWidth, "the engine line fits: " + eng);
+		check (static_cast<int> (eng.size ()) * kTinyCharWidth <= kEngineLineWidth,
+		       "the engine line fits on the title row: " + eng);
+		const std::string title = panelTitleText ();
+		check (static_cast<int> (title.size ()) * kMainCharWidth <= kTitleWidth,
+		       "the title stops short of the engine line (" + std::to_string (title.size ()) + " chars)");
+		const std::string flow = panelFlowText ();
+		check (static_cast<int> (flow.size ()) * kMainCharWidth <= kFlowWidth,
+		       "the flow line fits the panel (" + std::to_string (flow.size ()) + " chars)");
+		check (kEngineLineX + kEngineLineWidth <= kEditorWidth - kMargin, "the engine line ends inside the margin");
+		check (kTitleY + kLabelHeight <= kFlowY && kFlowY + kLabelHeight <= kLfoViewTop,
+		       "the title row and the flow line are above every box");
+
+		// LFO 2's line from the SAME clamp the DSP runs: knob +60 %, full
+		// Level, reaches -40 % and parks at the rising saw.
+		auto clamped = [] (Steinberg::Vst::ParamID id) {
+			if (id == kLfoShape)  return 0.6;
+			if (id == kLfo2Level) return 1.0;
+			if (id == kLfo2Rate)  return 0.5;
+			return paramDef (id).toInternal (paramDef (id).defaultNormalized ());
+		};
+		const std::string l2 = lfo2LineText (clamped);
+		check (l2.find ("-40..+100") != std::string::npos, "LFO 2's line prints the clamped range: " + l2);
+		check (lfo2LineText ([] (Steinberg::Vst::ParamID id) {
+		           return paramDef (id).toInternal (paramDef (id).defaultNormalized ()); }).find ("off") != std::string::npos,
+		       "at its default Level LFO 2's line says it is off");
 	}
 
 	std::printf ("------------------------\n");

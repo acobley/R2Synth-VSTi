@@ -64,6 +64,8 @@ int main ()
 	std::printf ("  \"width\": %d, \"height\": %d,\n", kEditorWidth, kEditorHeight);
 	std::printf ("  \"contentX\": %d, \"titleY\": %d, \"flowY\": %d, \"labelHeight\": %d, \"titleBand\": %d,\n",
 	             kContentX, kTitleY, kFlowY, kLabelHeight, kGroupTitleBand);
+	std::printf ("  \"title\": %s,\n  \"flow\": %s,\n",
+	             quoted (panelTitleText ()).c_str (), quoted (panelFlowText ()).c_str ());
 
 	std::printf ("  \"groups\": [\n");
 	for (int i = 0; i < kNumGroups; ++i)
@@ -96,12 +98,16 @@ int main ()
 
 	// The readout lines, from the same functions the editor calls.
 	std::printf ("  \"readouts\": [\n");
+	// The engine line sits on the title row; the text baseline of the
+	// title's main face is a couple of pixels lower than the small one.
+	std::printf ("    {\"x\": %d, \"y\": %d, \"colour\": \"value\", \"text\": %s},\n", kEngineLineX, kTitleY,
+	             quoted (engineLineText (sampleRate, internalDefault (kVcaRelease))).c_str ());
 	std::printf ("    {\"x\": %d, \"y\": %d, \"colour\": \"trace\", \"text\": %s},\n", kReadoutX, kReadout1Y,
 	             quoted (lfoLineText (internalDefault)).c_str ());
-	std::printf ("    {\"x\": %d, \"y\": %d, \"colour\": \"value\", \"text\": %s},\n", kReadoutX, kReadout2Y,
-	             quoted (engineLineText (sampleRate, internalDefault (kVcaRelease))).c_str ());
-	std::printf ("    {\"x\": %d, \"y\": %d, \"colour\": \"label\", \"text\": %s}\n", kReadoutX, kReadout3Y,
-	             quoted ("Every new note retriggers both envelopes; letting go returns to the last key held.").c_str ());
+	std::printf ("    {\"x\": %d, \"y\": %d, \"colour\": \"trace\", \"text\": %s},\n", kReadoutX, kReadout2Y,
+	             quoted (lfoDepthsLineText (internalDefault)).c_str ());
+	std::printf ("    {\"x\": %d, \"y\": %d, \"colour\": \"value\", \"text\": %s}\n", kReadoutX, kReadout3Y,
+	             quoted (lfo2LineText (internalDefault)).c_str ());
 	std::printf ("  ],\n");
 
 	// The two displays, drawn by the plug-in's own trace functions.
@@ -115,7 +121,7 @@ int main ()
 	const double lfoShape = envShape ? std::atof (envShape) : internalDefault (kLfoShape);
 	std::string pl, cl;
 	lfoDisplayData (lfoOut, lfoShape, a, b, kDisplayPoints, 2.0, pl, cl);
-	std::printf ("  \"lfoView\": {\"rect\": [%d,%d,%d,%d], \"caption\": \"LFO  (2 cycles)\", \"annotation\": \"%.2f s\", "
+	std::printf ("  \"lfoView\": {\"rect\": [%d,%d,%d,%d], \"caption\": \"LFO 1  (2 cycles)\", \"annotation\": \"%.2f s\", "
 	             "\"legend\": [%s, %s], \"gate\": -1,\n",
 	             kDisplayX, kLfoViewTop, kDisplayX + kDisplayWidth, kLfoViewBottom, 2.0 / internalDefault (kLfoRate),
 	             quoted (pl).c_str (), quoted (cl).c_str ());

@@ -86,19 +86,18 @@ bool PLUGIN_API SimpleSynthEditor::open (void* parent, const PlatformType& platf
 	frame->setBackgroundColor (kPanelBack);
 	frame->open (parent, platformType);
 
-	const int fullWidth = kEditorWidth - Layout::kMargin - Layout::kContentX;
+	// The title and the engine line share the top row.
+	addTextLine (Layout::kContentX, Layout::kTitleY, Layout::kTitleWidth,
+	             panelTitleText (), Colours::kValue, false);
+	mRateLabel = addTextLine (Layout::kEngineLineX, Layout::kTitleY, Layout::kEngineLineWidth,
+	                          "", Colours::kValue, true);
 
-	addTextLine (Layout::kContentX, Layout::kTitleY, fullWidth,
-	             "SimpleSynth   -   three VCOs, an MS-20 LFO, a Moog ladder and two ADSRs",
-	             Colours::kValue, false);
-
-	// The signal path, in the green the section labels use. The lamp is
+	// The signal path, in the green the section labels use, with the one
+	// fact about playing it the panel cannot otherwise show. The lamp is
 	// explained here because it is the one thing on the panel that
 	// lights on its own.
-	addTextLine (Layout::kContentX, Layout::kFlowY, fullWidth,
-	             "VCO 1-3 -> mixer -> Moog ladder VCF -> VCA -> output      "
-	             "(mono, last note wins; lamp = self-oscillating)",
-	             Colours::kLabel, false);
+	addTextLine (Layout::kContentX, Layout::kFlowY, Layout::kFlowWidth,
+	             panelFlowText (), Colours::kLabel, false);
 
 	// ---- the boxes, then the controls in them --------------------------
 	//
@@ -131,16 +130,13 @@ bool PLUGIN_API SimpleSynthEditor::open (void* parent, const PlatformType& platf
 		frame->addView (mEnvView);
 	}
 
-	// ---- the readout lines beside the LFO ------------------------------
-	mLfoLabel  = addTextLine (Layout::kReadoutX, Layout::kReadout1Y, Layout::kReadoutWidth,
-	                          "", Colours::kTrace, true);
-	mRateLabel = addTextLine (Layout::kReadoutX, Layout::kReadout2Y, Layout::kReadoutWidth,
-	                          "", Colours::kValue, true);
-
-	// The one fact about playing it that the panel cannot otherwise show.
-	addTextLine (Layout::kReadoutX, Layout::kReadout3Y, Layout::kReadoutWidth,
-	             "Every new note retriggers both envelopes; letting go returns to the last key held.",
-	             Colours::kLabel, true);
+	// ---- the readout lines beside the two LFOs -------------------------
+	mLfoLabel       = addTextLine (Layout::kReadoutX, Layout::kReadout1Y, Layout::kReadoutWidth,
+	                               "", Colours::kTrace, true);
+	mLfoDepthsLabel = addTextLine (Layout::kReadoutX, Layout::kReadout2Y, Layout::kReadoutWidth,
+	                               "", Colours::kTrace, true);
+	mLfo2Label      = addTextLine (Layout::kReadoutX, Layout::kReadout3Y, Layout::kReadoutWidth,
+	                               "", Colours::kValue, true);
 
 	refreshAllReadouts ();
 
@@ -158,6 +154,8 @@ void PLUGIN_API SimpleSynthEditor::close ()
 	mLfoView = nullptr;
 	mEnvView = nullptr;
 	mLfoLabel = nullptr;
+	mLfoDepthsLabel = nullptr;
+	mLfo2Label = nullptr;
 	mRateLabel = nullptr;
 
 	if (frame)
@@ -284,6 +282,8 @@ void SimpleSynthEditor::refreshDependents (ParamID tag)
 			refreshInfoLines ();
 			break;
 
+		case kLfo2Rate:
+		case kLfo2Level:
 		case kLfoPitch:
 		case kVcfLfo:
 		case kVcaLfo:
@@ -316,6 +316,16 @@ std::string SimpleSynthEditor::lfoLine () const
 	return lfoLineText ([this] (ParamID id) { return internalOf (id); });
 }
 
+std::string SimpleSynthEditor::lfoDepthsLine () const
+{
+	return lfoDepthsLineText ([this] (ParamID id) { return internalOf (id); });
+}
+
+std::string SimpleSynthEditor::lfo2Line () const
+{
+	return lfo2LineText ([this] (ParamID id) { return internalOf (id); });
+}
+
 //------------------------------------------------------------------------
 std::string SimpleSynthEditor::engineLine () const
 {
@@ -326,11 +336,17 @@ std::string SimpleSynthEditor::engineLine () const
 //------------------------------------------------------------------------
 void SimpleSynthEditor::refreshInfoLines ()
 {
-	if (mLfoLabel)
-	{
-		mLfoLabel->setText (lfoLine ().c_str ());
-		mLfoLabel->invalid ();
-	}
+	auto set = [] (CTextLabel* label, const std::string& text) {
+		if (label)
+		{
+			label->setText (text.c_str ());
+			label->invalid ();
+		}
+	};
+	set (mLfoLabel, lfoLine ());
+	set (mLfoDepthsLabel, lfoDepthsLine ());
+	set (mLfo2Label, lfo2Line ());
+
 	if (mRateLabel)
 	{
 		mRateLabel->setText (engineLine ().c_str ());
@@ -361,7 +377,7 @@ void SimpleSynthEditor::refreshLfoDisplay ()
 	// THE PATCHED OUTPUT IS IN CAPITALS with an arrow, the companion in
 	// lower case: both are drawn, because the Shape knob moves both, but
 	// only one of them is reaching anything.
-	mLfoView->setCaption ("LFO  (2 cycles)");
+	mLfoView->setCaption ("LFO 1  (2 cycles)");
 	mLfoView->setAnnotation (annotation);
 	mLfoView->setLegend (patchedLegend, companionLegend);
 	mLfoView->setCurves (patched, companion, Layout::kDisplayPoints);
