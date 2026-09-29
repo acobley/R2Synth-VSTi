@@ -275,15 +275,33 @@ void SimpleSynthEditor::refreshDependents (ParamID tag)
 			refreshResonanceLamp ();
 			break;
 
-		case kLfoRate:
+		case kLfoShapeLive:
+			// ONLY the display: it arrives up to 60 times a second.
+			mLiveShape = paramDef (kLfoShape).toInternal (normalizedOf (kLfoShapeLive));
+			mHaveLiveShape = true;
+			refreshLfoDisplay ();
+			break;
+
 		case kLfoShape:
+			// The knob moved: draw the knob until the processor's next
+			// live value, so a turn shows at once even with no audio.
+			mHaveLiveShape = false;
+			refreshLfoDisplay ();
+			refreshInfoLines ();
+			break;
+
+		case kLfoRate:
 		case kLfoOutput:
 			refreshLfoDisplay ();
 			refreshInfoLines ();
 			break;
 
-		case kLfo2Rate:
 		case kLfo2Level:
+			refreshLfoDisplay ();    // the caption says whether it is swept
+			refreshInfoLines ();
+			break;
+
+		case kLfo2Rate:
 		case kLfoPitch:
 		case kVcfLfo:
 		case kVcaLfo:
@@ -355,6 +373,12 @@ void SimpleSynthEditor::refreshInfoLines ()
 }
 
 //------------------------------------------------------------------------
+double SimpleSynthEditor::displayShape () const
+{
+	return mHaveLiveShape ? mLiveShape : internalOf (kLfoShape);
+}
+
+//------------------------------------------------------------------------
 void SimpleSynthEditor::refreshLfoDisplay ()
 {
 	if (!mLfoView)
@@ -366,7 +390,7 @@ void SimpleSynthEditor::refreshLfoDisplay ()
 	float patched[Layout::kDisplayPoints];
 	float companion[Layout::kDisplayPoints];
 	std::string patchedLegend, companionLegend;
-	lfoDisplayData (internalOf (kLfoOutput), internalOf (kLfoShape), patched, companion,
+	lfoDisplayData (internalOf (kLfoOutput), displayShape (), patched, companion,
 	                Layout::kDisplayPoints, kLfoDisplayCycles, patchedLegend, companionLegend);
 
 	const double rate = internalOf (kLfoRate);
@@ -377,7 +401,7 @@ void SimpleSynthEditor::refreshLfoDisplay ()
 	// THE PATCHED OUTPUT IS IN CAPITALS with an arrow, the companion in
 	// lower case: both are drawn, because the Shape knob moves both, but
 	// only one of them is reaching anything.
-	mLfoView->setCaption ("LFO 1  (2 cycles)");
+	mLfoView->setCaption (lfoDisplayCaption (internalOf (kLfo2Level)));
 	mLfoView->setAnnotation (annotation);
 	mLfoView->setLegend (patchedLegend, companionLegend);
 	mLfoView->setCurves (patched, companion, Layout::kDisplayPoints);

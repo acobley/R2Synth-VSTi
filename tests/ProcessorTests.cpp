@@ -20,6 +20,7 @@
 #include "public.sdk/source/vst/hosting/eventlist.h"
 #include "public.sdk/source/vst/hosting/parameterchanges.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -59,6 +60,7 @@ struct Rig
 	AudioBusBuffers out {};
 	EventList events;
 	ParameterChanges params;
+	ParameterChanges outParams;
 	ProcessData data {};
 
 	explicit Rig (bool use64 = false)
@@ -84,6 +86,7 @@ struct Rig
 		data.outputs = &out;
 		data.inputEvents = &events;
 		data.inputParameterChanges = &params;
+		data.outputParameterChanges = &outParams;
 	}
 
 	~Rig ()
@@ -126,10 +129,25 @@ struct Rig
 	/** One block; the events and parameter changes are consumed. */
 	tresult run ()
 	{
+		outParams.clearQueue ();
 		const tresult r = proc->process (data);
 		events.clear ();
 		params.clearQueue ();
 		return r;
+	}
+
+	/** The value the last block published for `id`, if it published one. */
+	bool published (ParamID id, double& value)
+	{
+		for (int32 i = 0; i < outParams.getParameterCount (); ++i)
+		{
+			IParamValueQueue* q = outParams.getParameterData (i);
+			int32 offset = 0;
+			if (q && q->getParameterId () == id && q->getPointCount () > 0 &&
+			    q->getPoint (q->getPointCount () - 1, offset, value) == kResultTrue)
+				return true;
+		}
+		return false;
 	}
 
 	double peak32 (int from = 0, int to = kBlock) const
@@ -283,6 +301,52 @@ int main ()
 		std::memcpy (future.data (), &v2, 4);
 		auto futureIn = owned (new MemoryStream (future.data (), static_cast<TSize> (future.size ())));
 		check (other.proc->setState (futureIn) == kResultFalse, "a version-2 stream is refused");
+	}
+
+	std::printf ("the live LFO Shape, for the display\n");
+	{
+		// LFO 2 at full Level and 2 Hz: over a second the published Shape
+		// must cover most of the range, at no more than ~60 points a
+		// second, and never out of 0..1.
+		Rig rig;
+		rig.param (kLfo2Level, 1.0);
+		rig.param (kLfo2Rate, kParams[kLfo2Rate].toNormalized (2.0));
+		int blocks = 0, points = 0;
+		double lo = 2.0, hi = -1.0, v = 0.0;
+		for (; blocks < static_cast<int> (kRate / kBlock); ++blocks)
+		{
+			rig.run ();
+			if (rig.published (kLfoShapeLive, v))
+			{
+				++points;
+				lo = std::min (lo, v);
+				hi = std::max (hi, v);
+			}
+		}
+		std::printf ("  %d points in %d blocks, range %.3f..%.3f\n", points, blocks, lo, hi);
+		check (points >= 20, "the swept Shape is published through the second");
+		check (points <= 62, "at no more than 60 a second (plus the first)");
+		check (lo >= 0.0 && hi <= 1.0, "within 0..1");
+		check (lo < 0.1 && hi > 0.9, "and it sweeps nearly end to end");
+	}
+	{
+		// LFO 2 off: ONE point - the knob - and then nothing, because
+		// nothing moves.
+		Rig rig;
+		rig.param (kLfoShape, 0.8);
+		int points = 0;
+		double v = 0.0, first = -1.0;
+		for (int b = 0; b < 40; ++b)
+		{
+			rig.run ();
+			if (rig.published (kLfoShapeLive, v))
+			{
+				if (points == 0) first = v;
+				++points;
+			}
+		}
+		check (points == 1 && std::fabs (first - 0.8) < 1e-9,
+		       "with LFO 2 off it publishes the knob once and then stays quiet (" + std::to_string (points) + ")");
 	}
 
 	std::printf ("tail\n");

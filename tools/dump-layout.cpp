@@ -121,9 +121,11 @@ int main ()
 	const double lfoShape = envShape ? std::atof (envShape) : internalDefault (kLfoShape);
 	std::string pl, cl;
 	lfoDisplayData (lfoOut, lfoShape, a, b, kDisplayPoints, 2.0, pl, cl);
-	std::printf ("  \"lfoView\": {\"rect\": [%d,%d,%d,%d], \"caption\": \"LFO 1  (2 cycles)\", \"annotation\": \"%.2f s\", "
+	std::printf ("  \"lfoView\": {\"rect\": [%d,%d,%d,%d], \"caption\": %s, \"annotation\": \"%.2f s\", "
 	             "\"legend\": [%s, %s], \"gate\": -1,\n",
-	             kDisplayX, kLfoViewTop, kDisplayX + kDisplayWidth, kLfoViewBottom, 2.0 / internalDefault (kLfoRate),
+	             kDisplayX, kLfoViewTop, kDisplayX + kDisplayWidth, kLfoViewBottom,
+	             quoted (lfoDisplayCaption (internalDefault (kLfo2Level))).c_str (),
+	             2.0 / internalDefault (kLfoRate),
 	             quoted (pl).c_str (), quoted (cl).c_str ());
 	printCurve ("a", a, kDisplayPoints, false);
 	printCurve ("b", b, kDisplayPoints, true);

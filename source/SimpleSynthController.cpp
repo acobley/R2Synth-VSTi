@@ -187,6 +187,12 @@ tresult PLUGIN_API SimpleSynthController::initialize (FUnknown* context)
 	bypass->appendString (STR16 ("On"));
 	parameters.addParameter (bypass);
 
+	// The live Shape, published by the processor for the LFO display.
+	// READ-ONLY and HIDDEN: not automatable, not in a host's list, not
+	// saved. See kLfoShapeLive.
+	parameters.addParameter (STR16 ("LFO Shape (live)"), STR16 (""), 0, 0.5,
+	                         ParameterInfo::kIsReadOnly | ParameterInfo::kIsHidden, kLfoShapeLive);
+
 	return kResultOk;
 }
 

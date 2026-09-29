@@ -9,6 +9,7 @@
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 
 #include <algorithm>
+#include <cmath>
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
@@ -116,6 +117,7 @@ tresult PLUGIN_API SimpleSynthProcessor::setActive (TBool state)
 	if (state)
 	{
 		mDsp.reset ();
+		mLastLiveShape = -1.0;
 
 		// THE UI THREAD, which is the only thread a message may be sent
 		// from. Also the only moment that makes a panel opened LATER
@@ -399,7 +401,38 @@ tresult PLUGIN_API SimpleSynthProcessor::process (ProcessData& data)
 		for (int32 c = 0; c < data.outputs[0].numChannels; ++c)
 			data.outputs[0].silenceFlags |= static_cast<uint64> (1) << c;
 
+	mSamplesSinceLive += numSamples;
+	if (!mBypass)
+		publishLiveShape (data);
+
 	return kResultOk;
+}
+
+//------------------------------------------------------------------------
+void SimpleSynthProcessor::publishLiveShape (ProcessData& data)
+{
+	// THROUGH outputParameterChanges, the one route from process() to
+	// the panel that is not silently dropped - see SimpleSynthIDs.h.
+	if (data.outputParameterChanges == nullptr || data.numSamples <= 0)
+		return;
+
+	const bool forced = (mLastLiveShape < 0.0);
+	if (!forced && mSamplesSinceLive < mSampleRate / kLiveShapeUpdatesPerSecond)
+		return;
+
+	// kLfoShape's own normalisation: -1..+1 to 0..1.
+	const double normalized = std::clamp (0.5 * (mDsp.lastLfoShape () + 1.0), 0.0, 1.0);
+	if (!forced && std::fabs (normalized - mLastLiveShape) < 1.0e-3)
+		return;
+
+	int32 index = 0;
+	if (IParamValueQueue* queue = data.outputParameterChanges->addParameterData (kLfoShapeLive, index))
+	{
+		int32 point = 0;
+		queue->addPoint (data.numSamples - 1, normalized, point);
+		mLastLiveShape = normalized;
+		mSamplesSinceLive = 0.0;
+	}
 }
 
 //------------------------------------------------------------------------

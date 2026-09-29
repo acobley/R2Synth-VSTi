@@ -59,6 +59,10 @@ void lfoDisplayData (double outputPosition, double shape, float* patched, float*
                      int count, double cycles, std::string& patchedLegend,
                      std::string& companionLegend);
 
+/** The LFO display's caption - it says when LFO 2 is sweeping the
+    Shape, because then the picture moves on its own. */
+const char* lfoDisplayCaption (double lfo2Level);
+
 /** The engine line: rate, cutoff ceiling, release tail. On the title
     row, right of the title. */
 std::string engineLineText (double sampleRate, double vcaReleaseSeconds);

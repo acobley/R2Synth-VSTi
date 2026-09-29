@@ -96,9 +96,18 @@ enum Param : Steinberg::Vst::ParamID
 	    the mechanism for a value the DSP computes per block that the
 	    panel needs. A sendMessage from process() is silently discarded
 	    by the host's connection proxy (see SimpleSynthIDs.h), whereas
-	    data.outputParameterChanges is delivered. Nothing publishes one
-	    yet. */
-	kBypass = 1000
+	    data.outputParameterChanges is delivered. kLfoShapeLive is the
+	    first. */
+	kBypass = 1000,
+
+	//--------------------------------------------------------------------
+	/** READ-ONLY OUTPUT: the Shape LFO 1 is running at right now - the
+	    knob swept by LFO 2 - published by the processor so the panel's
+	    LFO display can animate with it. Hidden and read-only, so a host
+	    never shows or automates it; NOT in the table and NOT in the
+	    state stream. Same normalisation as kLfoShape (0 = -100 %,
+	    1 = +100 %), so paramDef (kLfoShape).toInternal() reads it. */
+	kLfoShapeLive = 1001
 };
 
 /** The three VCOs' ids are the same three parameters at a stride of

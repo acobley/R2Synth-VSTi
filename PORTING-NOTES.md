@@ -113,6 +113,16 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
     is the knob); the suite renders the same patch with two LFO 2 rates
     and compares every sample. The default patch is unchanged (−6.87 dBFS).
   - The Level is smoothed (20 ms); the Rate is not, like LFO 1's.
+  - **The LFO display animates with the sweep.** The editor cannot see the
+    DSP, so the processor publishes the Shape it is running at as a
+    hidden, read-only OUTPUT parameter, `kLfoShapeLive` (id 1001), through
+    `data.outputParameterChanges` — at most 60 times a second and only
+    when it has moved (`publishLiveShape()`). The editor draws that value;
+    when the Shape knob moves it draws the knob until the next live value,
+    so the display still follows the knob with no audio running. It is not
+    in the table or the state. The caption says "swept by LFO 2" when the
+    Level is up. **Needs checking on the Mac**: that Logic (through the AU
+    wrapper) and your DAW deliver output parameters to the controller.
   - "Wave shape" was read as LFO 1's Shape because it is the only
     continuous wave-shape control; the VCOs' Wave is a Saw/Square switch.
   - The display draws the **patched** output in green (`> SINE`) and, in
@@ -271,7 +281,7 @@ v3.8.1_build_84 — the tag the template pins:
 | `tools/run-tests.sh` — layout and panel text | **914 checks, 0 failures** with LFO 2 (812 before) |
 | Every `source/*.cpp` compiled against the SDK and VSTGUI headers, `-Wall -Wextra` | 8/8, no warnings in our code; `nm -C`: all 57 referenced `SimpleSynth::` symbols defined |
 | `tools/linux-validate/` — the plug-in built on Linux (editor stubbed), **SDK validator** | **47 tests passed, 0 failed** (re-run after the sine and after LFO 2: still 47 / 0) |
-| `tests/ProcessorTests.cpp` against the real processor | **25 checks, 0 failures** (also after LFO 2) |
+| `tests/ProcessorTests.cpp` against the real processor | **30 checks, 0 failures** with the live-Shape output (25 before) |
 
 Run again in the Mac's own Linux VM (aarch64, GCC 11), which found one
 thing: the "quiet signal at resonance 2.5 is SpaceDub's filter to the bit"

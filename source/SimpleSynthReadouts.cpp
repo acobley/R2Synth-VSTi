@@ -219,6 +219,12 @@ std::string lfo2LineText (const std::function<double (ParamID)>& internalOf)
 }
 
 //------------------------------------------------------------------------
+const char* lfoDisplayCaption (double lfo2Level)
+{
+	return (lfo2Level < 0.005) ? "LFO 1  (2 cycles)" : "LFO 1  (2 cycles, swept by LFO 2)";
+}
+
+//------------------------------------------------------------------------
 const char* panelTitleText ()
 {
 	return "SimpleSynth   -   three VCOs, an MS-20 LFO swept by a sine, a Moog ladder and two ADSRs";

@@ -115,6 +115,16 @@ private:
 	VSTGUI::CTextLabel* mLfo2Label      = nullptr;
 	VSTGUI::CTextLabel* mRateLabel      = nullptr;
 
+	/** The Shape LFO 1 is really running at, from kLfoShapeLive, and
+	    whether one has arrived since the Shape knob last moved. Without
+	    one - audio not running, or a host that drops output parameters -
+	    the display falls back to the knob. */
+	double mLiveShape     = 0.0;
+	bool   mHaveLiveShape = false;
+
+	/** The Shape the LFO display draws: the live one when there is one. */
+	double displayShape () const;
+
 	/** Set while the controller is pushing a value INTO a control, so
 	    valueChanged does not send it straight back out as an edit - a
 	    host automating a parameter would otherwise get a feedback loop. */
