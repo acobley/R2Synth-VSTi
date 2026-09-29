@@ -112,6 +112,14 @@ int main ()
 		check (!overlaps (groupRect (g), readouts), std::string (g.title) + " box clear of the readout lines");
 	}
 	check (inside (lfoView, panel) && inside (envView, panel), "both displays inside the panel");
+
+	// THE TITLE MUST BE INSIDE THE BOX'S VIEW - VSTGUI clips a view to its
+	// own rectangle, and a title drawn above it (FilterDrum's way) is cut
+	// in half. SpyGroupBox draws 11 pixels of lettering from 5.5 above
+	// the frame line, which sits kGroupTitleBand + 0.5 down the view.
+	check (kGroupTitleBand + 0.5 - 5.5 >= 0.0, "every box title starts inside its view");
+	check (kGroupTitleBand + 0.5 - 5.5 + 11.0 <= kGroupPadTop + 1.0,
+	       "and ends above the readings of the sliders in the box");
 	check (!overlaps (lfoView, envView), "the displays do not overlap");
 	check (inside (readouts, panel), "the readout lines inside the panel");
 
@@ -134,7 +142,7 @@ int main ()
 			if (g.row == 0) lfoTop = std::min (lfoTop, groupRect (g).top);
 			if (g.row == 3) envBottom = std::max (envBottom, groupRect (g).bottom);
 		}
-		check (lfoTop == kLfoViewTop, "the LFO display's top is the VCO boxes' top");
+		check (lfoTop + kGroupTitleBand == kLfoViewTop, "the LFO display's top is the VCO boxes' frame");
 		check (envBottom == kEnvViewBottom, "the envelope display's bottom is the ENV boxes' bottom");
 		for (const auto& g : kGroups)
 			if (g.stretchToRowRight)

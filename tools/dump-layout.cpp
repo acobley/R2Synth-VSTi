@@ -61,8 +61,8 @@ int main ()
 
 	std::printf ("{\n");
 	std::printf ("  \"width\": %d, \"height\": %d,\n", kEditorWidth, kEditorHeight);
-	std::printf ("  \"contentX\": %d, \"titleY\": %d, \"flowY\": %d, \"labelHeight\": %d,\n",
-	             kContentX, kTitleY, kFlowY, kLabelHeight);
+	std::printf ("  \"contentX\": %d, \"titleY\": %d, \"flowY\": %d, \"labelHeight\": %d, \"titleBand\": %d,\n",
+	             kContentX, kTitleY, kFlowY, kLabelHeight, kGroupTitleBand);
 
 	std::printf ("  \"groups\": [\n");
 	for (int i = 0; i < kNumGroups; ++i)

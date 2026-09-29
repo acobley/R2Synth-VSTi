@@ -121,8 +121,16 @@ def bevel(x0, y0, x1, y1, light, dark):
 
 
 def group_box(rect, title):
-    """SpyGroupBox: a rectangle with its name breaking the top edge."""
+    """SpyGroupBox: a rectangle with its name breaking the top edge.
+
+    The rect is the VIEW; the frame's top edge is titleBand down it
+    (setTitleBand), and the title is centred on that edge. Everything is
+    drawn inside the view - VSTGUI clips a view to its rectangle, and this
+    script used not to, which is how a title cut in half in the plug-in
+    looked whole in the picture."""
     x0, y0, x1, y1 = rect
+    clip_top = y0
+    y0 = y0 + P['titleBand']
     tw = d.textlength(title, font=F_SMALL) / SCALE
     gap0, gap1 = x0 + 4, x0 + 4 + tw + 8
     d.line([s(x0), s(y0), s(gap0), s(y0)], fill=G_FRAME, width=1)
@@ -130,7 +138,8 @@ def group_box(rect, title):
     d.line([s(x0), s(y1) - 1, s(x1) - 1, s(y1) - 1], fill=G_FRAME, width=1)
     d.line([s(x0), s(y0), s(x0), s(y1) - 1], fill=G_FRAME, width=1)
     d.line([s(x1) - 1, s(y0), s(x1) - 1, s(y1) - 1], fill=G_FRAME, width=1)
-    text(x0 + 8, y0 - 5, title, fill=G_FRAME, fnt=F_SMALL)
+    # Centred on the edge, and - like VSTGUI - never above the view.
+    text(x0 + 8, max(y0 - 5.5, clip_top), title, fill=G_FRAME, fnt=F_SMALL)
 
 
 def slider(c):

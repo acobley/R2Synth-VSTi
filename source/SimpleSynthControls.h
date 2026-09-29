@@ -5,7 +5,7 @@
 // which came from Project6, VocalFilter and SpyBand before it - the
 // "interface style from the KorgDrum" this plug-in was asked to use.
 //
-// THREE ADDITIONS ON THIS HOP, all opt-in, so every existing call
+// FOUR ADDITIONS ON THIS HOP, all opt-in, so every existing call
 // behaves exactly as it did in FilterDrum:
 //
 //   * SpyEnvelopeView::setShowAmounts (false) hides the two Amount marker
@@ -14,6 +14,11 @@
 //   * SpyEnvelopeView::setGateMarker (fraction) draws a dotted vertical
 //     line across the plot - where the key went up on the envelope
 //     display.
+//   * SpyGroupBox::setTitleBand (n) draws the frame's top edge n pixels
+//     DOWN the view, through the title, so the whole title is inside the
+//     view. FilterDrum's boxes draw the title 5 pixels ABOVE the view,
+//     where VSTGUI clips it - the top half of every title is cut off
+//     there too. At 0 (the default) nothing changes.
 //   * SpySelector::setCompact (true) draws the switch the SAME HEIGHT AS A
 //     SLIDER'S BAR, in the same place, with the position's name where a
 //     slider has its reading and the label under it where a slider has
@@ -479,6 +484,9 @@ public:
 	SpyGroupBox (const VSTGUI::CRect& size, const std::string& title,
 	             const VSTGUI::CColor& frame);
 
+	/** ADDED FOR SIMPLESYNTH - see the banner. */
+	void setTitleBand (VSTGUI::CCoord band);
+
 	void draw (VSTGUI::CDrawContext* context) override;
 
 	CLASS_METHODS (SpyGroupBox, VSTGUI::CView)
@@ -486,6 +494,7 @@ public:
 private:
 	std::string    mTitle;
 	VSTGUI::CColor mFrame;
+	VSTGUI::CCoord mTitleBand = 0.;
 };
 
 //------------------------------------------------------------------------

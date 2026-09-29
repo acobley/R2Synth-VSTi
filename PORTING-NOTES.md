@@ -124,11 +124,12 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
 Four rows in signal order — VCOs, LFO, VCF + VCF ENV, VCA/OUTPUT + VCA ENV —
 with an LFO display (both outputs, the patched one marked) and an envelope
 display (both ADSRs on one time axis, key-up marked with dots) in a strip on
-the right. 1176 × 318.
+the right. 1176 × 302.
 
 - **`SimpleSynthControls.*` is FilterDrum's control set**, namespace renamed,
-  plus three opt-in additions — `SpyEnvelopeView::setShowAmounts` and
-  `setGateMarker`, and `SpySelector::setCompact` — see its banner. `diff` it against FilterDrum's to see
+  plus four opt-in additions — `SpyEnvelopeView::setShowAmounts` and
+  `setGateMarker`, `SpySelector::setCompact` and `SpyGroupBox::setTitleBand`
+  — see its banner. `diff` it against FilterDrum's to see
   exactly that.
 - **The layout is data** in `SimpleSynthLayout.h`, with no VSTGUI in it.
 - **Every string that depends on a value** is made in
@@ -136,6 +137,14 @@ the right. 1176 × 318.
 - Both, plus the DSP's trace functions, feed **`tools/dump-layout.cpp`**,
   whose JSON `tools/render-panel.py` draws into `docs/panel.png`. So the
   picture is drawn from the code the editor runs, not from a parsed copy.
+- **Box titles are inside the box's view** (`setTitleBand`). FilterDrum's
+  SpyGroupBox draws the title 5 px *above* its view, and VSTGUI clips a
+  view to its rectangle, so the top half of every title was cut off in the
+  plug-in (Andy saw it; `render-panel.py` did not clip, so the picture
+  hid it — it clips now). The view now starts at the top of the lettering
+  and the frame line runs through it; boxes are 53 px tall round a 44 px
+  slider (were 58) with 2 px between rows. **FilterDrum has the same
+  clipped titles.**
 - **The switches are the height of a slider's bar** (`setCompact`): an
   outlined box exactly where a slider's bar sits, the position's name
   where a slider's reading is, the label ("Wave", "Output") under it. They

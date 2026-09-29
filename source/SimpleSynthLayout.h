@@ -51,13 +51,29 @@ constexpr int kTitleY       = 10;
 constexpr int kFlowY        = 30;
 constexpr int kLabelHeight  = 16;
 
-constexpr int kGroupPadX      = 5;    // group box -> the sliders in it
-constexpr int kGroupPadTop    = 9;    // enough for the title on the edge
-constexpr int kGroupPadBottom = 5;
-constexpr int kGroupGap       = 6;    // between two group boxes
+/** THE TITLE IS INSIDE THE BOX'S VIEW, and the frame's top edge is
+    drawn this far down it, through the middle of the title.
 
+    It was FilterDrum's way round: the view's top WAS the frame's top
+    edge and the title was drawn 5 pixels above it - outside the view,
+    where VSTGUI clips every view's drawing to its own rectangle. So the
+    top half of every title was cut off in the plug-in (render-panel.py
+    does not clip, which is why the picture never showed it). Now the
+    view starts at the top of the lettering and SpyGroupBox::
+    setTitleBand() puts the frame line through it, so the whole title is
+    inside what VSTGUI lets the box draw. */
+constexpr int kGroupTitleBand = 5;
+
+constexpr int kGroupPadX      = 5;    // group box -> the sliders in it
+constexpr int kGroupPadTop    = 11;   // view top -> sliders: the whole title, then clear of it
+constexpr int kGroupPadBottom = 3;
+constexpr int kGroupGap       = 6;    // between two group boxes side by side
+constexpr int kRowGap         = 2;    // between one row of boxes and the next
+
+/** The height of a group box's VIEW. The frame drawn in it is
+    kGroupTitleBand shorter: 53 pixels round a 44-pixel slider. */
 constexpr int kGroupHeight  = kSliderHeight + kGroupPadTop + kGroupPadBottom;
-constexpr int kRowPitch     = kGroupHeight + kGroupGap;
+constexpr int kRowPitch     = kGroupHeight + kRowGap;
 
 /** Column 0's left edge. */
 constexpr int kContentX     = kMargin + kGroupPadX;
@@ -75,7 +91,7 @@ constexpr int columnX (int column, int slot)
 }
 
 /** The top of row `row`'s sliders. */
-constexpr int kRow0Y = kFlowY + kLabelHeight + 6 + kGroupPadTop;
+constexpr int kRow0Y = kFlowY + kLabelHeight + 2 + kGroupPadTop;
 
 constexpr int rowY (int row)
 {
@@ -95,11 +111,12 @@ constexpr int kDisplayGap   = 8;
 constexpr int kDisplayX     = kRowRight + kDisplayGap;
 constexpr int kDisplayWidth = 200;
 
-/** Lined up with the GROUP BOXES either side, not with the sliders, so
-    the strip and the boxes share a top and a bottom edge. */
-constexpr int kLfoViewTop    = rowY (0) - kGroupPadTop;
+/** Lined up with the GROUP BOXES' FRAMES either side, not with the
+    sliders or the boxes' views, so the strip and the drawn boxes share a
+    top and a bottom edge. */
+constexpr int kLfoViewTop    = rowY (0) - kGroupPadTop + kGroupTitleBand;
 constexpr int kLfoViewBottom = rowY (1) + kSliderHeight + kGroupPadBottom;
-constexpr int kEnvViewTop    = rowY (2) - kGroupPadTop;
+constexpr int kEnvViewTop    = rowY (2) - kGroupPadTop + kGroupTitleBand;
 constexpr int kEnvViewBottom = rowY (3) + kSliderHeight + kGroupPadBottom;
 
 /** Points per curve - one per pixel of plot is the most that shows. */
@@ -111,8 +128,8 @@ constexpr int kDisplayPoints = 200;
 constexpr int kReadoutX     = columnX (4, 1);
 constexpr int kReadoutWidth = kRowRight - kReadoutX;
 constexpr int kReadout1Y    = rowY (1) - 4;
-constexpr int kReadout2Y    = kReadout1Y + 18;
-constexpr int kReadout3Y    = kReadout2Y + 18;
+constexpr int kReadout2Y    = kReadout1Y + 16;
+constexpr int kReadout3Y    = kReadout2Y + 16;
 
 //------------------------------------------------------------------------
 // The panel
@@ -236,7 +253,11 @@ constexpr Rect groupRect (const Group& g)
 static_assert (kGroupSpacer > 0, "two group boxes side by side must not overlap");
 static_assert (kReadout3Y + kLabelHeight <= kLfoViewBottom,
                "the readout lines must fit in row 1");
-static_assert (kEditorWidth == 1176 && kEditorHeight == 318,
+static_assert (kGroupPadTop >= 11,
+               "a slider's reading must start below the title (11 pixels of lettering)");
+static_assert (kGroupTitleBand > 0 && kGroupTitleBand < kGroupPadTop,
+               "the frame line must run through the title, above the sliders");
+static_assert (kEditorWidth == 1176 && kEditorHeight == 302,
                "the panel changed size - update the banner, docs/panel.png and this assert together");
 
 //------------------------------------------------------------------------

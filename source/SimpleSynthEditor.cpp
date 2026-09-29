@@ -68,9 +68,15 @@ void SimpleSynthEditor::addGroupBox (const Layout::Group& group)
 	// ADDED BEFORE THE CONTROLS IT ENCLOSES, so it is behind them. It is
 	// mouse-disabled and never fills, so a click inside it reaches
 	// whatever is really there.
+	//
+	// THE VIEW STARTS AT THE TOP OF THE TITLE and the frame line is drawn
+	// kGroupTitleBand down it - see the note on kGroupTitleBand in
+	// SimpleSynthLayout.h for why the title used to be cut off.
 	const Layout::Rect r = Layout::groupRect (group);
-	frame->addView (new SpyGroupBox (CRect (r.left, r.top, r.right, r.bottom),
-	                                 group.title, Colours::kGroupFrame));
+	auto* box = new SpyGroupBox (CRect (r.left, r.top, r.right, r.bottom),
+	                             group.title, Colours::kGroupFrame);
+	box->setTitleBand (Layout::kGroupTitleBand);
+	frame->addView (box);
 }
 
 //------------------------------------------------------------------------

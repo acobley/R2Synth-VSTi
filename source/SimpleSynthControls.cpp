@@ -1258,7 +1258,9 @@ void SpyGroupBox::draw (CDrawContext* context)
 
 	const CCoord left   = r.left + 0.5;
 	const CCoord right  = r.right - 0.5;
-	const CCoord top    = r.top + 0.5;
+	// ADDED FOR SIMPLESYNTH: mTitleBand moves the top edge down the view
+	// so the title centred on it is inside the view - see setTitleBand.
+	const CCoord top    = r.top + mTitleBand + 0.5;
 	const CCoord bottom = r.bottom - 0.5;
 
 	if (mTitle.empty ())
@@ -1292,7 +1294,7 @@ void SpyGroupBox::draw (CDrawContext* context)
 	CRect text (r);
 	text.left   = left + kTitleIndent;
 	text.right  = text.left + titleWidth + 2.;
-	text.top    = r.top - 5.;
+	text.top    = top - 5.5;
 	text.bottom = text.top + 11.;
 
 	context->setFontColor (mFrame);
@@ -1305,6 +1307,14 @@ void SpyGroupBox::draw (CDrawContext* context)
 //------------------------------------------------------------------------
 // ADDED FOR SIMPLESYNTH - see the banner in SimpleSynthControls.h
 //------------------------------------------------------------------------
+void SpyGroupBox::setTitleBand (CCoord band)
+{
+	if (band == mTitleBand)
+		return;
+	mTitleBand = band;
+	invalid ();
+}
+
 void SpyEnvelopeView::setShowAmounts (bool show)
 {
 	if (show == mShowAmounts)
