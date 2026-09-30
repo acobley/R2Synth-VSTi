@@ -32,7 +32,9 @@ constexpr int kEvaluationDays = 7;
 
 constexpr std::array<uint16_t, 2> kAcceptedProducts = {kProductBundleV1, kProductSimpleSynthFree};
 
-constexpr const char* kActivationUrl = "https://www.r2-dvd.net/activate.jsp";
+// TEST SERVER while the activation flow is tried out. Put back
+// "https://www.r2-dvd.net/activate.jsp" before any release.
+constexpr const char* kActivationUrl = "http://34.178.20.190/activate.jsp";
 
 constexpr std::array<uint32_t, 0> kRevokedLicenceIds = {};
 

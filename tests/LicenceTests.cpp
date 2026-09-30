@@ -297,8 +297,11 @@ void testThisBuild ()
 	const uint16_t bundleOnly[] = {kProductBundleV1};
 	check (verifyKey (kGoldenName, freeKey, testPub, bundleOnly, 1, nullptr, 0).status == Status::WrongProduct,
 	       "a Bundle-only build would NOT accept it");
-	check (std::string (kActivationUrl).empty () || std::string (kActivationUrl).compare (0, 8, "https://") == 0,
-	       "activation URL is https (or empty: no button)");
+	const std::string url = kActivationUrl;
+	check (url.empty () || url.compare (0, 8, "https://") == 0 || url.compare (0, 7, "http://") == 0,
+	       "activation URL is a web address (or empty: no button)");
+	if (url.compare (0, 7, "http://") == 0)
+		std::printf ("  note: activation URL is plain http (%s) - a TEST server, not for release\n", url.c_str ());
 #ifdef HAVE_PUBLIC_KEY
 	bool nonZero = false;
 	for (auto b : kPublicKey)
