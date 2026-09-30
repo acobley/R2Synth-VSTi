@@ -2,11 +2,24 @@
 // R2Project licence - the badge and the dialog. See LicenceViews.h.
 //------------------------------------------------------------------------
 
+// Opening the activation page in the browser. Before anything else is
+// included: CoreServices pulls in AssertMacros.h, whose un-prefixed
+// check()/verify()/require() macros would otherwise be defined.
+#if defined(__APPLE__)
+#define __ASSERT_MACROS_DEFINE_VERSIONS_WITHOUT_UNDERSCORES 0
+#include <CoreFoundation/CoreFoundation.h>
+#include <CoreServices/CoreServices.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 #include "LicenceViews.h"
 #include "LicenceConfig.h"
 #include "LicencePublicKey.h"
 
 #include <atomic>
+#include <cstring>
 
 using namespace VSTGUI;
 
@@ -59,6 +72,29 @@ public:
 std::string plural (int n, const char* one, const char* many)
 {
 	return std::to_string (n) + " " + (n == 1 ? one : many);
+}
+
+/** Opens `url` in the default browser. Launch Services on macOS - allowed
+    from a sandboxed AU host too; no shell, no NSWorkspace (this is C++). */
+bool openInBrowser (const char* url)
+{
+#if defined(__APPLE__)
+	CFURLRef u = CFURLCreateWithBytes (nullptr, reinterpret_cast<const UInt8*> (url),
+	                                   static_cast<CFIndex> (std::strlen (url)), kCFStringEncodingUTF8, nullptr);
+	if (!u)
+		return false;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+	const OSStatus status = LSOpenCFURLRef (u, nullptr);
+#pragma clang diagnostic pop
+	CFRelease (u);
+	return status == noErr;
+#elif defined(_WIN32)
+	return reinterpret_cast<INT_PTR> (ShellExecuteA (nullptr, "open", url, nullptr, nullptr, SW_SHOWNORMAL)) > 32;
+#else
+	(void)url;
+	return false;
+#endif
 }
 
 } // namespace
@@ -160,7 +196,7 @@ LicenceDialog::LicenceDialog (const CRect& size, R2Licence::LicenceStore& store,
 	mNameField = new CTextEdit (CRect (fx, fy, fx + fw, fy + 20.), nullptr, -1);
 	fy += 28.;
 	mKeyLabel = addLabel (CRect (x, fy + 2., fx, fy + 18.), panelFont (), Colours::kLabel);
-	mKeyLabel->setText ("Key");
+	mKeyLabel->setText ("Code");
 	mKeyField = new CTextEdit (CRect (fx, fy, fx + fw, fy + 20.), nullptr, -1);
 	for (auto* field : {mNameField, mKeyField})
 	{
@@ -173,17 +209,25 @@ LicenceDialog::LicenceDialog (const CRect& size, R2Licence::LicenceStore& store,
 		field->setImmediateTextChange (true);
 		addView (field);
 	}
-	mNameField->setPlaceholderString ("Your name, exactly as in the licence email");
+	mNameField->setPlaceholderString ("Your name, exactly as on the activation page");
 	mKeyField->setPlaceholderString ("BNDL1-...");
 	fy += 30.;
 	mStatus = addLabel (CRect (x, fy, x + w, fy + kLineHeight), panelFont (), kBad);
 
-	mEnterButton = addButton ("Enter licence", [this] { showPage (Page::Enter); });
+	mGetCodeButton = addButton ("Get activation code", [this] {
+		if (!openInBrowser (R2Licence::kActivationUrl))
+		{
+			mLine[2]->setText ((std::string ("Couldn't open the browser - go to ") + R2Licence::kActivationUrl).c_str ());
+			mLine[2]->setFontColor (kBad);
+			mLine[2]->invalid ();
+		}
+	});
+	mEnterButton = addButton ("Enter code", [this] { showPage (Page::Enter); });
 	mContinueButton = addButton ("Continue evaluating", [this] { if (mOnClose) mOnClose (); });
-	mPasteButton = addButton ("Paste from email", [this] { pasteFromClipboard (); });
+	mPasteButton = addButton ("Paste", [this] { pasteFromClipboard (); });
 	mActivateButton = addButton ("Activate", [this] { activate (); });
 	mCancelButton = addButton ("Cancel", [this] { if (mOnClose) mOnClose (); });
-	mChangeButton = addButton ("Change licence", [this] { showPage (Page::Enter); });
+	mChangeButton = addButton ("Change code", [this] { showPage (Page::Enter); });
 	mCloseButton = addButton ("Close", [this] { if (mOnClose) mOnClose (); });
 }
 
@@ -271,20 +315,23 @@ void LicenceDialog::showPage (Page page)
 			{
 				mTitle->setText ("Thank you for trying SimpleSynth");
 				mLine[0]->setText ("It's free to try and keeps working in full - there's no time limit.");
-				mLine[1]->setText ("If you enjoy it, please support its development with an R2Project licence.");
+				mLine[1]->setText ("A free activation code turns this reminder off - it takes your name and email.");
 				const std::string when =
 				    d.reminderDue ? "You've been evaluating it for " + plural (d.daysUsed, "day", "days") + "."
 				                  : (d.daysLeft == 0 ? std::string ("This is the last day of the evaluation.")
 				                                     : plural (d.daysLeft, "day", "days") + " of the evaluation left.");
 				mLine[2]->setText (when.c_str ());
 			}
-			placeButtons ({mEnterButton, mContinueButton});
+			if (*R2Licence::kActivationUrl)
+				placeButtons ({mGetCodeButton, mEnterButton, mContinueButton});
+			else
+				placeButtons ({mEnterButton, mContinueButton});
 			break;
 		}
 
 		case Page::Enter:
-			mTitle->setText ("Enter your licence");
-			mLine[0]->setText ("Type or paste your name and key exactly as they appear in your licence email.");
+			mTitle->setText ("Enter your activation code");
+			mLine[0]->setText ("Copy your name and code from the activation page and press Paste, or type them.");
 			if (mDecision.licensed || mDecision.outOfScope)
 				mNameField->setText (mDecision.licensedName.c_str ());
 			placeButtons ({mPasteButton, mActivateButton, mCancelButton});
@@ -293,14 +340,16 @@ void LicenceDialog::showPage (Page page)
 		case Page::Licensed:
 		{
 			const auto& d = mDecision;
-			mTitle->setText ("SimpleSynth is licensed");
+			mTitle->setText ("SimpleSynth is activated");
 			mLine[0]->setText (("Licensed to " + d.licensedName).c_str ());
 			std::string detail = "Licence " + std::to_string (d.payload.licenceId) + "  -  issued " +
 			                     R2Licence::formatDate (d.payload.issueDay);
 			if (R2Licence::kPublicKeyIsDevelopment)
 				detail += "  -  DEVELOPMENT KEY";
 			mLine[1]->setText (detail.c_str ());
-			mLine[2]->setText ("Thank you for supporting R2Project.");
+			mLine[2]->setText (d.payload.product == R2Licence::kProductSimpleSynthFree
+			                       ? "Thank you for registering."
+			                       : "Thank you for supporting R2Project.");
 			placeButtons ({mChangeButton, mCloseButton});
 			break;
 		}
@@ -368,7 +417,7 @@ void LicenceDialog::pasteFromClipboard ()
 	if (!pasteLicence (clipboardText ()))
 	{
 		mStatus->setFontColor (kBad);
-		mStatus->setText ("There's no BNDL1-... key on the clipboard. Copy it from your licence email first.");
+		mStatus->setText ("There's no BNDL1-... code on the clipboard. Copy it from the activation page first.");
 		mStatus->invalid ();
 	}
 }
@@ -384,7 +433,7 @@ bool LicenceDialog::pasteLicence (const std::string& text)
 		mNameField->setText (name.c_str ());
 	mKeyField->setText (key.c_str ());
 	mStatus->setFontColor (kGood);
-	mStatus->setText (name.empty () ? "Key pasted - check the name, then Activate."
+	mStatus->setText (name.empty () ? "Code pasted - check the name, then Activate."
 	                                : "Name and key pasted - press Activate.");
 	mNameField->invalid ();
 	mKeyField->invalid ();

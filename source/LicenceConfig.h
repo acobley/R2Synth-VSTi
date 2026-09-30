@@ -7,7 +7,10 @@
 //                       reminder starts (day 0..kEvaluationDays: no nag).
 //                       Change the number and rebuild; nothing else.
 //   kAcceptedProducts   product codes this build treats as licensed
-//                       (Version policy). v1.x builds: {kProductBundleV1}.
+//                       (Version policy). SimpleSynth v1.x: the paid
+//                       bundle and SimpleSynth's free registration.
+//   kActivationUrl      where the reminder's "Get activation code" button
+//                       goes. Empty: no button.
 //   kRevokedLicenceIds  licence IDs refunded or leaked - exported from
 //                       `SELECT licence_id FROM licence WHERE status='revoked'`
 //                       at release time.
@@ -27,7 +30,9 @@ namespace R2Licence {
 
 constexpr int kEvaluationDays = 7;
 
-constexpr std::array<uint16_t, 1> kAcceptedProducts = {kProductBundleV1};
+constexpr std::array<uint16_t, 2> kAcceptedProducts = {kProductBundleV1, kProductSimpleSynthFree};
+
+constexpr const char* kActivationUrl = "https://www.r2-dvd.net/activate.jsp";
 
 constexpr std::array<uint32_t, 0> kRevokedLicenceIds = {};
 

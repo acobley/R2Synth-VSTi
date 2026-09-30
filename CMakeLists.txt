@@ -317,6 +317,12 @@ target_link_libraries(${PLUGIN_NAME}
         vstgui_support
 )
 
+# The licence reminder's "Get activation code" button opens the website
+# with Launch Services (LSOpenCFURLRef, source/LicenceViews.cpp).
+if(APPLE)
+    target_link_libraries(${PLUGIN_NAME} PRIVATE "-framework CoreServices")
+endif()
+
 # Everything in resource/ except the AU identity plist, which is not a
 # plug-in resource - it is an input to smtg_target_add_auv2 below.
 # CONFIGURE_DEPENDS omitted for the same reason as the sources above.

@@ -324,12 +324,12 @@ std::string badgeText (const Decision& d)
 		return prefix + name;
 	}
 	if (d.reminderDue)
-		return "Evaluation - enter licence...";
+		return "Evaluation - activate...";
 	if (d.daysLeft == 0)
-		return "Evaluation - last day - licence...";
+		return "Evaluation - last day - activate...";
 	if (d.daysLeft == 1)
-		return "Evaluation - 1 day left - licence...";
-	return "Evaluation - " + std::to_string (d.daysLeft) + " days left - licence...";
+		return "Evaluation - 1 day left - activate...";
+	return "Evaluation - " + std::to_string (d.daysLeft) + " days left - activate...";
 }
 
 std::string activationMessage (Status status)
@@ -337,19 +337,19 @@ std::string activationMessage (Status status)
 	switch (status)
 	{
 		case Status::Valid:
-			return "Thank you - SimpleSynth is licensed.";
+			return "Thank you - SimpleSynth is activated.";
 		case Status::Malformed:
-			return "That isn't a complete key. Paste the whole BNDL1-... key from your email.";
+			return "That isn't a complete code. Paste the whole BNDL1-... code.";
 		case Status::UnknownVersion:
-			return "That key needs a newer version of SimpleSynth.";
+			return "That code needs a newer version of SimpleSynth.";
 		case Status::BadSignature:
-			return "That key isn't valid. Check it was copied in full, exactly as sent.";
+			return "That code isn't valid. Check it was copied in full, exactly as shown.";
 		case Status::WrongName:
-			return "That key is for a different name. Enter the name exactly as in your email.";
+			return "That code is for a different name. Enter the name exactly as shown with it.";
 		case Status::Revoked:
-			return "That licence has been withdrawn. Please get in touch.";
+			return "That code has been withdrawn. Please get in touch.";
 		case Status::WrongProduct:
-			return "That licence is genuine but doesn't cover this version of SimpleSynth.";
+			return "That code is genuine but doesn't cover this version of SimpleSynth.";
 	}
 	return "";
 }

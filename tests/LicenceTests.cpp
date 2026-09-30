@@ -277,6 +277,28 @@ void testThisBuild ()
 	for (auto p : kAcceptedProducts)
 		hasV1 = hasV1 || p == kProductBundleV1;
 	check (hasV1, "a v1.x build accepts Bundle v1 keys");
+
+	// The website's free registration (activate.jsp, product 0x0101). This
+	// key was made by the JAVA server code (LicenceTool issue, RFC test seed)
+	// and matches reference_key.py - so a code from the site activates.
+	const char* freeKey =
+		"BNDL1-040G2-00000-0G242-H9GWM-YZJ8R-96VGR-GQBRD-KVC7J-2H81A-1R69M-70SAB-2XCT7-AXR9B-"
+		"2C10R-3SFQF-MZT0A-YHMNX-965KS-35SBK-5C7KT-YXBHM-CKWGR-MTN8E-MSDFD-F9XQY-ATR0W";
+	uint8_t testPub[32];
+	publicKeyFromSeed (hex (kTestSeed).data (), testPub);
+	Result fr = verifyKey (kGoldenName, freeKey, testPub, kAcceptedProducts.data (), kAcceptedProducts.size (),
+	                       kRevokedLicenceIds.data (), kRevokedLicenceIds.size ());
+	check (fr.status == Status::Valid && fr.payload.product == kProductSimpleSynthFree && fr.payload.licenceId == 1 &&
+	           fr.payload.issueDay == daysFromCivil (2026, 9, 30),
+	       "this build accepts a free registration code made by the Java server");
+	check (issueKey (kGoldenName, kProductSimpleSynthFree, 1, uint16_t (daysFromCivil (2026, 9, 30)),
+	                 hex (kTestSeed).data ()) == freeKey,
+	       "C++ makes the identical free code");
+	const uint16_t bundleOnly[] = {kProductBundleV1};
+	check (verifyKey (kGoldenName, freeKey, testPub, bundleOnly, 1, nullptr, 0).status == Status::WrongProduct,
+	       "a Bundle-only build would NOT accept it");
+	check (std::string (kActivationUrl).empty () || std::string (kActivationUrl).compare (0, 8, "https://") == 0,
+	       "activation URL is https (or empty: no button)");
 #ifdef HAVE_PUBLIC_KEY
 	bool nonZero = false;
 	for (auto b : kPublicKey)
@@ -417,7 +439,7 @@ void testWords ()
 	d.daysLeft = 1;
 	check (badgeText (d).find ("1 day left") != std::string::npos, "badge: singular");
 	d.reminderDue = true;
-	check (badgeText (d).size () <= kBadgeMaxChars && badgeText (d).find ("enter licence") != std::string::npos,
+	check (badgeText (d).size () <= kBadgeMaxChars && badgeText (d).find ("activate") != std::string::npos,
 	       "badge after the evaluation: " + badgeText (d));
 
 	d = Decision ();

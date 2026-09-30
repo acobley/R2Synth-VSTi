@@ -416,3 +416,34 @@ Implements "Licence key format" from the Nag-ware Licensing Design doc.
   fallback needed. Not yet: auval (should show no UI); docs/panel.png has
   no badge.
 
+
+### Step 3 (part): free activation codes from the website (branch licence-server, 30 Sep)
+
+- The site (WebPages, branch licence-server) now issues FREE codes at
+  https://www.r2-dvd.net/activate.jsp: name + email in, a signed key out,
+  recorded in MySQL. Product code **0x0101 `kProductSimpleSynthFree`**
+  (LicenceKey.h), so it never counts as a paid Bundle v1 (0x0001) licence.
+  WebPages/LICENSING.md has the server side.
+- LicenceConfig.h: `kAcceptedProducts = {kProductBundleV1,
+  kProductSimpleSynthFree}`; `kActivationUrl` (empty = no button).
+- Reminder page: new first button **Get activation code** opens
+  kActivationUrl in the browser - `openInBrowser()` in LicenceViews.cpp,
+  LSOpenCFURLRef (CoreServices, linked in CMakeLists.txt; the deprecation
+  warning is silenced), ShellExecuteA on Windows. If it fails the reminder
+  shows the URL instead. AssertMacros' un-prefixed macros are switched off
+  before CoreServices is included.
+- Wording is "activation code" throughout: buttons Enter code / Paste /
+  Change code; badge "... - activate..."; activation messages say "code".
+  The Licensed page thanks for registering when the key is 0x0101.
+- The site's result page offers "Copy name and code", which copies
+  "Name: ...\nKey: BNDL1-..." - exactly what extractFromPaste reads, so
+  Paste fills both fields.
+- Tests (167): this build accepts a 0x0101 key MADE BY THE JAVA SERVER
+  (golden string, also in WebPages' LicenceKeyTest), C++ makes the identical
+  key, a bundle-only build would refuse it, kActivationUrl is https.
+- NOT YET CHECKED on the Mac: the Xcode build (the Apple branch of
+  openInBrowser was not compiled here; the Linux branch was), the button
+  opening Safari from Reaper and from Logic's sandboxed AU host, and the
+  whole round trip against the test server. Codes from a server signing
+  with the DEVELOPMENT seed work in this build; production needs the real
+  keypair first (LICENSING.md).

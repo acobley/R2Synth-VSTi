@@ -12,9 +12,10 @@
 //
 // All the decisions and all the words that matter are in LicenceState.h,
 // where they are tested; this file only lays them out. The design is the
-// Nag-ware Licensing Design doc: the reminder thanks you, offers Enter
-// licence and Continue evaluating, and Continue works for ever. Buy
-// licence appears only once LicenceConfig.h has a kBuyUrl.
+// Nag-ware Licensing Design doc: the reminder thanks you, offers Get
+// activation code (the website's free registration, LicenceConfig.h
+// kActivationUrl), Enter code and Continue evaluating, and Continue works
+// for ever.
 //------------------------------------------------------------------------
 
 #pragma once
@@ -61,8 +62,8 @@ class LicenceDialog : public VSTGUI::CViewContainer
 public:
 	enum class Page
 	{
-		Reminder,  // thanks, days used, Enter licence / Continue evaluating
-		Enter,     // name + key fields, Activate
+		Reminder,  // thanks, days used, Get activation code / Enter code / Continue evaluating
+		Enter,     // name + code fields, Paste, Activate
 		Licensed   // "Licensed to ...": the About box
 	};
 
@@ -110,6 +111,7 @@ private:
 	VSTGUI::CTextEdit* mKeyField = nullptr;
 	VSTGUI::CTextLabel* mStatus = nullptr;
 
+	SpyPresetButton* mGetCodeButton = nullptr;
 	SpyPresetButton* mEnterButton = nullptr;
 	SpyPresetButton* mContinueButton = nullptr;
 	SpyPresetButton* mPasteButton = nullptr;
@@ -117,7 +119,7 @@ private:
 	SpyPresetButton* mCancelButton = nullptr;
 	SpyPresetButton* mChangeButton = nullptr;
 	SpyPresetButton* mCloseButton = nullptr;
-	SpyPresetButton* mAllButtons[7] = {};
+	SpyPresetButton* mAllButtons[8] = {};
 };
 
 } // namespace SimpleSynth
