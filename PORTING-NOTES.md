@@ -344,7 +344,7 @@ before building** — otherwise the build compiles the old file list and fails
 with *"Bundle does not export the required 'GetPluginFactory' function"* or
 the source-manifest guard stops it.
 
-## Licensing (step 1: key format, dev keypair, Mac tools)
+## Licensing (step 1: key format, keypair, Mac tools)
 
 Implements "Licence key format" from the Nag-ware Licensing Design doc.
 
@@ -362,10 +362,11 @@ Implements "Licence key format" from the Nag-ware Licensing Design doc.
 - `source/LicenceConfig.h` - per-build knobs: `kEvaluationDays` (7),
   `kAcceptedProducts`, `kRevokedLicenceIds`. None is in the key or the
   licence file, so a rebuild never invalidates a licence or restarts a trial.
-- `source/LicencePublicKey.h` - GENERATED, committed, currently the
-  DEVELOPMENT key (`kPublicKeyIsDevelopment = true`). Its private seed is
-  `licence-dev/dev-signing-seed.hex` (gitignored, 0600). Replace both with
-  the production keypair before release; dev-signed keys then stop working.
+- `source/LicencePublicKey.h` - GENERATED, committed. Was the DEVELOPMENT
+  key (`36c38c64...6210`, seed `licence-dev/dev-signing-seed.hex`, gitignored,
+  0600) until 4 Oct 2026; now the PRODUCTION key (`fa762a61...6c28`,
+  `kPublicKeyIsDevelopment = false`, commit 1f5127d) - see "Production
+  signing key" below. Dev-signed keys no longer verify.
 - Mac tools: `tools/licence/build.sh` -> `build-licence/r2-licence-keygen`,
   `r2-licence-issue --seed licence-dev/dev-signing-seed.hex --name "..." [--id N]`,
   `r2-licence-check "name" "key"` (same checks as the plugin build).
@@ -444,6 +445,31 @@ Implements "Licence key format" from the Nag-ware Licensing Design doc.
 - NOT YET CHECKED on the Mac: the Xcode build (the Apple branch of
   openInBrowser was not compiled here; the Linux branch was), the button
   opening Safari from Reaper and from Logic's sandboxed AU host, and the
-  whole round trip against the test server. Codes from a server signing
-  with the DEVELOPMENT seed work in this build; production needs the real
-  keypair first (LICENSING.md).
+  whole round trip against the test server. (All since done - see below.)
+- VERIFIED: the round trip (unlicensed -> Get activation code -> activate.jsp
+  -> code -> Paste -> activated) against the test server
+  http://34.7.233.43 works in Reaper (VST3, 1 Oct) and Logic Pro (AU,
+  3 Oct), with the server signing with the DEVELOPMENT seed. DB rows,
+  lost-code recovery and rate limits checked by hand; WebPages' registration
+  tests pass 76 on real MySQL 9.7.2 (3 Oct).
+
+### Production signing key (3-4 Oct 2026)
+
+- Made once on the Mac, offline, WITHOUT `--dev`:
+  `build-licence/r2-licence-keygen --seed <outside the repo>/production-signing-seed.hex --header source/LicencePublicKey.h`
+- Public key (hex): `fa762a61b93917494c727cc81383335d31b12cf51ed80dc130c9402b79c46c28`.
+  Header committed on `licence-server` as 1f5127d.
+- The PRIVATE seed lives OUTSIDE the repo (only `licence-dev/` is
+  gitignored) and is backed up offline. Never commit or paste it. Losing it
+  means no new code will ever work in shipped builds; leaking it lets anyone
+  make codes. Replacing the keypair invalidates every code ever issued.
+- `r2-licence-issue` / `r2-licence-check` compile the header in: rebuild
+  them (`tools/licence/build.sh`) after it changes, and pass the production
+  seed to `--seed`.
+- The server signs with whatever is in `/etc/r2project/signing-seed.hex`:
+  overwrite it with the production seed (mode 600), restart Tomcat, and
+  check `LicenceTool pubkey` prints `fa762a61...6c28` (WebPages LICENSING.md).
+  The build and the server must switch together - dev-signed codes don't
+  verify in this build, and a dev-key build rejects production codes.
+- TO DO: rebuild + run-tests.sh, production seed on the test server, one
+  full round trip in Reaper and Logic.
