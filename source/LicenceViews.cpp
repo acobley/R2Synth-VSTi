@@ -15,9 +15,11 @@
 #endif
 
 #include "LicenceViews.h"
+#include "SimpleSynthPanelViews.h"
 #include "LicenceConfig.h"
 #include "LicencePublicKey.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 
@@ -119,8 +121,60 @@ void LicenceBadge::setDecision (const R2Licence::Decision& decision)
 	invalid ();
 }
 
+bool LicenceBadge::hit (const CPoint& where) const
+{
+	return mPill ? mPillRect.pointInside (where) : getViewSize ().pointInside (where);
+}
+
+void LicenceBadge::drawPill (CDrawContext* context)
+{
+	const CRect r = getViewSize ();
+	context->setDrawMode (kAntiAliasing | kNonIntegralMode);
+
+	context->setFont (Panel::fontTitle ());
+	const CCoord textWidth = context->getStringWidth (mText.c_str ());
+	const CCoord height = r.getHeight ();
+	const CCoord width = std::min (r.getWidth (), textWidth + 40.);
+	mPillRect = CRect (r.right - width, r.top, r.right, r.bottom);
+
+	const CColor back   = mLicensed ? CColor (23, 39, 31, 255)   : CColor (42, 36, 24, 255);
+	const CColor edge   = mLicensed ? CColor (43, 74, 58, 255)   : CColor (74, 59, 30, 255);
+	const CColor ink    = mLicensed ? CColor (143, 224, 187, 255) : CColor (242, 194, 122, 255);
+	const CColor dotInk = Panel::Palette::accent (mLicensed ? Layout::Accent::Amp : Layout::Accent::Osc);
+
+	auto path = owned (context->createGraphicsPath ());
+	if (path)
+	{
+		CRect pill (mPillRect);
+		pill.inset (0.5, 0.5);
+		path->addRoundRect (pill, height / 2.);
+		context->setFillColor (back);
+		context->drawGraphicsPath (path, CDrawContext::kPathFilled);
+		context->setFrameColor (edge);
+		context->setLineWidth (1.);
+		context->setLineStyle (kLineSolid);
+		context->drawGraphicsPath (path, CDrawContext::kPathStroked);
+	}
+
+	const CPoint dot (mPillRect.left + 16., (r.top + r.bottom) / 2.);
+	context->setFillColor (dotInk);
+	context->drawEllipse (CRect (dot.x - 4., dot.y - 4., dot.x + 4., dot.y + 4.), kDrawFilled);
+
+	context->setFontColor (mPressed ? Panel::Palette::kText : ink);
+	CRect text (mPillRect);
+	text.left += 28.;
+	context->drawString (mText.c_str (), text, kLeftText, true);
+	setDirty (false);
+}
+
 void LicenceBadge::draw (CDrawContext* context)
 {
+	if (mPill)
+	{
+		drawPill (context);
+		return;
+	}
+
 	const CRect r = getViewSize ();
 	context->setFont (panelFontTiny ());
 	context->setFontColor (mPressed ? Colours::kValue : (mLicensed ? Colours::kLabel : Colours::kGroupFrame));
@@ -130,7 +184,7 @@ void LicenceBadge::draw (CDrawContext* context)
 
 void LicenceBadge::onMouseDownEvent (MouseDownEvent& event)
 {
-	if (!event.buttonState.isLeft ())
+	if (!event.buttonState.isLeft () || !hit (event.mousePosition))
 		return;
 	mPressed = true;
 	invalid ();
@@ -144,7 +198,7 @@ void LicenceBadge::onMouseUpEvent (MouseUpEvent& event)
 	mPressed = false;
 	invalid ();
 	event.consumed = true;
-	if (getViewSize ().pointInside (event.mousePosition) && mHandler)
+	if (hit (event.mousePosition) && mHandler)
 		mHandler ();  // last: the handler opens a modal session
 }
 

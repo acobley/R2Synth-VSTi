@@ -315,6 +315,55 @@ double ladderLoopGain (double w, double coefficient, double resonance)
 	return g * fb * mag * mag * mag * mag;
 }
 
+double ladderResponseGain (double w, double coefficient, double resonance)
+{
+	const double F = coefficient * 1.16;
+	double phase = 0.0, mag = 0.0;
+	stageResponse (w, F, phase, mag);
+	const double g  = 0.35013 * F * F * F * F;
+	const double fb = resonance * (1.0 - 0.15 * F * F);
+
+	// G = g * S^4, as a magnitude and a phase.
+	const double gMag   = g * mag * mag * mag * mag;
+	const double gPhase = 4.0 * phase;
+
+	// 1 + G fb e^{-jw}
+	const double loopMag = gMag * fb;
+	const double dRe = 1.0 + loopMag * std::cos (gPhase - w);
+	const double dIm = loopMag * std::sin (gPhase - w);
+	const double den = std::sqrt (dRe * dRe + dIm * dIm);
+
+	return (den > 1.0e-12) ? gMag / den : 1.0e12;
+}
+
+void traceFilterResponse (double cutoffHz, double resonanceK, double sampleRate,
+                          double minHz, double maxHz, float* dbOut, int count)
+{
+	if (dbOut == nullptr || count <= 0)
+		return;
+	if (sampleRate < 1000.0)
+		sampleRate = 44100.0;
+
+	// EXACTLY process()'s set-up: the clamp, the lookup, the scaling.
+	const double cutoff = std::clamp (cutoffHz, kMinCutoffHz, cutoffCeilingHz (sampleRate));
+	double coeff = 0.0, unityFeedback = 0.0;
+	ladderTuning ().lookup (cutoff / sampleRate, coeff, unityFeedback);
+	const double feedback = resonanceK * unityFeedback;
+
+	for (int i = 0; i < count; ++i)
+	{
+		const double t  = (count > 1) ? static_cast<double> (i) / (count - 1) : 0.0;
+		const double hz = minHz * std::pow (maxHz / minHz, t);
+		if (hz >= 0.5 * sampleRate)
+		{
+			dbOut[i] = -120.f;
+			continue;
+		}
+		const double gain = ladderResponseGain (2.0 * kPi * hz / sampleRate, coeff, feedback);
+		dbOut[i] = static_cast<float> (20.0 * std::log10 (std::max (gain, 1.0e-6)));
+	}
+}
+
 const LadderTuning& ladderTuning ()
 {
 	static const LadderTuning table = [] {
@@ -585,6 +634,11 @@ void SimpleSynthDsp::reset ()
 
 	mHeldCount = 0;
 	mCurrentNote = -1;
+
+	mPitch = 60.0;
+	mGlideStep = 0.0;
+	mGlideSamples = 0;
+	mHavePitch = false;
 }
 
 //------------------------------------------------------------------------
@@ -671,6 +725,40 @@ void SimpleSynthDsp::setVcfEnvAmount (double octaves)
 void SimpleSynthDsp::setVcfEnvelope (const AdsrSpec& spec) { mVcfEnv.setSpec (spec); }
 void SimpleSynthDsp::setVcaEnvelope (const AdsrSpec& spec) { mVcaEnv.setSpec (spec); }
 
+void SimpleSynthDsp::setPortamento (double seconds)
+{
+	mPortamentoSeconds = std::clamp (seconds, kMinPortamentoSeconds, kMaxPortamentoSeconds);
+}
+
+//------------------------------------------------------------------------
+void SimpleSynthDsp::startPitchTo (int note)
+{
+	const double target = static_cast<double> (note);
+
+	// A JUMP: portamento off, or nothing to slide from - the first note
+	// after a reset has no previous pitch, and sliding up to it from an
+	// arbitrary middle C would be a swoop nobody played.
+	if (!mHavePitch || !portamentoActive (mPortamentoSeconds))
+	{
+		mPitch = target;
+		mGlideStep = 0.0;
+		mGlideSamples = 0;
+		mHavePitch = true;
+		return;
+	}
+
+	// A SLIDE, in a straight line in semitones, from WHERE THE PITCH IS -
+	// mid-slide included, so a fast run of notes never jumps - to the
+	// new note in the knob's time, whatever the interval. Whether the
+	// previous key is still down makes no difference: the pitch is held
+	// between notes, so a detached note glides exactly as a legato one.
+	const int samples = std::max (1, static_cast<int> (std::lround (mPortamentoSeconds * mSampleRate)));
+	mGlideSamples = samples;
+	mGlideStep = (target - mPitch) / samples;
+}
+
+//------------------------------------------------------------------------
+
 //------------------------------------------------------------------------
 void SimpleSynthDsp::noteOn (int pitch, float /*velocity*/)
 {
@@ -698,6 +786,7 @@ void SimpleSynthDsp::noteOn (int pitch, float /*velocity*/)
 
 	mHeld[mHeldCount++] = pitch;
 	mCurrentNote = pitch;
+	startPitchTo (pitch);
 
 	// EVERY NEW NOTE RETRIGGERS, from wherever the envelopes are.
 	mVcfEnv.gateOn ();
@@ -727,6 +816,7 @@ void SimpleSynthDsp::noteOff (int pitch)
 		// Back to the most recent key still down, at ITS pitch, without
 		// retriggering: the key being held has already been struck.
 		mCurrentNote = mHeld[mHeldCount - 1];
+		startPitchTo (mCurrentNote);    // slides back, like any note change
 		return;
 	}
 
@@ -760,9 +850,18 @@ float SimpleSynthDsp::renderSample ()
 	const double vcfEnv = mVcfEnv.next ();
 	const double vcaEnv = mVcaEnv.next ();
 
-	// Before the first note the VCOs still run - an analogue VCO does -
-	// at middle C, behind a closed VCA.
-	const double note = (mCurrentNote >= 0) ? static_cast<double> (mCurrentNote) : 60.0;
+	// THE PITCH, gliding if a slide is under way. Before the first note
+	// the VCOs still run - an analogue VCO does - at middle C (mPitch's
+	// reset value), behind a closed VCA. The last step lands EXACTLY on
+	// the note, so a finished slide is in tune to the bit.
+	if (mGlideSamples > 0)
+	{
+		if (--mGlideSamples == 0)
+			mPitch = static_cast<double> (mCurrentNote);
+		else
+			mPitch += mGlideStep;
+	}
+	const double note = mPitch;
 
 	// ---- VCOs and mixer ------------------------------------------------
 	const double vibrato = lfo * mLfoPitch.next ();

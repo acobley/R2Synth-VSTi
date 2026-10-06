@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include "SimpleSynthLayout.h"
 #include "SimpleSynthParams.h"
 
 #include <functional>
@@ -63,8 +64,43 @@ void lfoDisplayData (double outputPosition, double shape, float* patched, float*
     Shape, because then the picture moves on its own. */
 const char* lfoDisplayCaption (double lfo2Level);
 
-/** The engine line: rate, cutoff ceiling, release tail. On the title
-    row, right of the title. */
+/** The engine line: rate, cutoff ceiling, release tail. In the
+    header, right of the wordmark. */
 std::string engineLineText (double sampleRate, double vcaReleaseSeconds);
+
+/** The word under a control: the layout's own when it gives one ("Env
+    Amt", "A", "Cutoff" for the LFO's cutoff depth), else shortLabel(). */
+std::string controlLabel (const Layout::Control& control);
+
+/** THE FILTER DISPLAY'S DATA: the ladder's response for the Cutoff and
+    Resonance KNOBS - traceFilterResponse(), so the curve is the filter's
+    own transfer function set up the way process() sets it up - mapped
+    to 0..1 of the display's height (Layout::kFilterTopDb at the top,
+    kFilterBottomDb at the bottom, clamped), over kFilterMinHz..
+    kFilterMaxHz. `markerX` / `markerY` (0..1, y up) are where the cutoff
+    sits on that curve, for the dot. */
+void filterDisplayData (double cutoffHz, double resonanceK, double sampleRate,
+                        float* curve, int count, double& markerX, double& markerY);
+
+/** What the filter display shows, in words: "live" when it is drawing
+    the cutoff and resonance the processor reports (the knobs moved by
+    the envelope, key tracking and LFO 1), "at the knobs" when it has
+    none - no audio running, or a knob has just moved. */
+const char* filterDisplayCaption (bool live = false);
+
+/** A screen's time span as printed: "929 ms", "2.40 s". */
+std::string spanText (double seconds);
+
+/** The filter envelope's Amount WITH ITS SIGN, for its screen: an
+    inverted envelope is the same shape as an upright one, so only the
+    text can say which it is. */
+std::string envAmountText (double octaves);
+
+/** The filter screen's figure: the Cutoff and Resonance readings. */
+std::string filterDisplayAnnotation (double cutoffNormalized, double resonanceNormalized);
+
+/** The line along the foot of the modulation strip: LFO 1's line and
+    LFO 2's, side by side. */
+std::string modInfoLineText (const std::function<double (Steinberg::Vst::ParamID)>& internalOf);
 
 } // namespace SimpleSynth

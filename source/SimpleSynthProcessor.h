@@ -120,16 +120,19 @@ private:
 	double mSampleRate = 44100.0;
 	bool   mBypass     = false;
 
-	/** kLfoShapeLive: the last value published and how long ago. At most
-	    kLiveShapeUpdatesPerSecond a second, and only when it has moved -
-	    it is for the eye, and every point costs the host a trip to the UI
-	    thread. mLastLiveShape < 0 forces the next block to publish. */
-	static constexpr double kLiveShapeUpdatesPerSecond = 60.0;
-	double mLastLiveShape    = -1.0;
+	/** THE LIVE OUTPUTS - kLfoShapeLive, kCutoffLive, kResonanceLive:
+	    the last value published for each, and how long since the last
+	    publication. At most kLiveUpdatesPerSecond a second, and each only
+	    when it has moved - they are for the eye, and every point costs
+	    the host a trip to the UI thread. A last value < 0 forces that one
+	    out on the next block. */
+	static constexpr double kLiveUpdatesPerSecond = 60.0;
+	static constexpr int    kNumLive = 3;
+	double mLastLive[kNumLive] = { -1.0, -1.0, -1.0 };
 	double mSamplesSinceLive = 0.0;
 
-	/** Publish kLfoShapeLive if it is due. From process(). */
-	void publishLiveShape (Steinberg::Vst::ProcessData& data);
+	/** Publish the live outputs that are due. From process(). */
+	void publishLive (Steinberg::Vst::ProcessData& data);
 
 	/** What the host last sent for each table parameter, normalised.
 	    Written by applyParam, read by getState and by applyEnvelope.

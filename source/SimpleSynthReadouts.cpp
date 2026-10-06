@@ -134,6 +134,15 @@ std::string readoutText (ParamID tag, double normalized)
 			std::snprintf (text, sizeof (text), (plain < 0.5) ? "off" : "%.0f %%", plain);
 			break;
 
+		case kPortamento:
+			// "off" at the bottom - from the DSP's own predicate - then
+			// the envelope times' style.
+			if (!portamentoActive (def.toInternal (normalized)))
+			{
+				std::snprintf (text, sizeof (text), "off");
+				break;
+			}
+			[[fallthrough]];
 		default:
 			if (def.type == ParamType::Log && std::strcmp (def.units, "ms") == 0)
 			{
@@ -285,6 +294,84 @@ std::string engineLineText (double sampleRate, double vcaReleaseSeconds)
 	               "Engine: %.0f Hz    cutoff ceiling %.0f Hz    release tail %.2f s",
 	               sampleRate, cutoffCeilingHz (sampleRate), releaseTailSeconds (vcaReleaseSeconds));
 	return std::string (text);
+}
+
+//------------------------------------------------------------------------
+std::string controlLabel (const Layout::Control& control)
+{
+	return (control.label != nullptr) ? std::string (control.label) : shortLabel (control.tag);
+}
+
+//------------------------------------------------------------------------
+void filterDisplayData (double cutoffHz, double resonanceK, double sampleRate,
+                        float* curve, int count, double& markerX, double& markerY)
+{
+	using namespace Layout;
+	auto toY = [] (double db) {
+		const double y = (db - kFilterBottomDb) / (kFilterTopDb - kFilterBottomDb);
+		return (y < 0.0) ? 0.0 : (y > 1.0) ? 1.0 : y;
+	};
+
+	// AT LOOP GAIN 1 AND OVER the filter is an oscillator and the linear
+	// response has no meaning past it (the loop is unstable; it is
+	// limitFeedback() that sets the level). Drawn at the edge instead -
+	// a peak far off the top of the screen - which is what it sounds
+	// like: a sine at the cutoff.
+	if (selfOscillating (resonanceK))
+		resonanceK = 0.999;
+
+	if (curve != nullptr && count > 0)
+	{
+		traceFilterResponse (cutoffHz, resonanceK, sampleRate, kFilterMinHz, kFilterMaxHz, curve, count);
+		for (int i = 0; i < count; ++i)
+			curve[i] = static_cast<float> (toY (curve[i]));
+	}
+
+	// The dot: at the cutoff the FILTER uses - clamped to the ceiling
+	// exactly as process() clamps it - and on the curve there.
+	if (sampleRate < 1000.0)
+		sampleRate = 44100.0;
+	double hz = cutoffHz;
+	if (hz < kMinCutoffHz) hz = kMinCutoffHz;
+	if (hz > cutoffCeilingHz (sampleRate)) hz = cutoffCeilingHz (sampleRate);
+	float db = 0.f;
+	traceFilterResponse (cutoffHz, resonanceK, sampleRate, hz, hz, &db, 1);
+	markerX = std::log (hz / kFilterMinHz) / std::log (kFilterMaxHz / kFilterMinHz);
+	markerY = toY (db);
+}
+
+const char* filterDisplayCaption (bool live)
+{
+	return live ? "live" : "at the knobs";
+}
+
+//------------------------------------------------------------------------
+std::string spanText (double seconds)
+{
+	char text[32] = {};
+	if (seconds >= 1.0)
+		std::snprintf (text, sizeof (text), "%.2f s", seconds);
+	else
+		std::snprintf (text, sizeof (text), "%.0f ms", seconds * 1000.0);
+	return text;
+}
+
+std::string envAmountText (double octaves)
+{
+	char text[32] = {};
+	std::snprintf (text, sizeof (text), "%+.1f oct", octaves);
+	return text;
+}
+
+std::string filterDisplayAnnotation (double cutoffNormalized, double resonanceNormalized)
+{
+	return readoutText (kCutoff, cutoffNormalized) + "   " + readoutText (kResonance, resonanceNormalized);
+}
+
+//------------------------------------------------------------------------
+std::string modInfoLineText (const std::function<double (Steinberg::Vst::ParamID)>& internalOf)
+{
+	return lfoLineText (internalOf) + "        " + lfo2LineText (internalOf);
 }
 
 } // namespace SimpleSynth

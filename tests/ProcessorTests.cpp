@@ -349,6 +349,118 @@ int main ()
 		       "with LFO 2 off it publishes the knob once and then stays quiet (" + std::to_string (points) + ")");
 	}
 
+	std::printf ("the live cutoff and resonance, for the filter screen\n");
+	{
+		// A note with the default +3 oct envelope: the published cutoff
+		// must climb well above the knob during the attack and come back
+		// towards it - the modulation, not the knob.
+		Rig rig;
+		const double knob = kParams[kCutoff].defaultNormalized ();
+		rig.note (true, 60, 0);
+		int points = 0;
+		double hi = -1.0, last = -1.0, v = 0.0;
+		for (int b = 0; b < static_cast<int> (kRate / kBlock); ++b)
+		{
+			rig.run ();
+			if (rig.published (kCutoffLive, v))
+			{
+				++points;
+				hi = std::max (hi, v);
+				last = v;
+				check (v >= 0.0 && v <= 1.0, "the live cutoff stays within 0..1");
+			}
+		}
+		const double hiHz = kParams[kCutoff].toInternal (hi);
+		std::printf ("  %d points; peak %.0f Hz, last %.0f Hz (knob %.0f Hz)\n", points, hiHz,
+		             kParams[kCutoff].toInternal (last), kParams[kCutoff].toInternal (knob));
+		check (points >= 5 && points <= 62, "the cutoff is published through the note, at most 60 a second");
+		check (hiHz > kParams[kCutoff].toInternal (knob) * 4.0, "the envelope's sweep shows (two octaves and more)");
+		check (last < hi, "and falls back from its peak");
+	}
+	{
+		// LFO 1 on the resonance: the published resonance swings round
+		// the knob.
+		Rig rig;
+		rig.param (kVcfLfoRes, kParams[kVcfLfoRes].toNormalized (50.0));
+		rig.param (kLfoRate, kParams[kLfoRate].toNormalized (4.0));
+		int points = 0;
+		double lo = 2.0, hi = -1.0, v = 0.0;
+		for (int b = 0; b < static_cast<int> (kRate / kBlock); ++b)
+		{
+			rig.run ();
+			if (rig.published (kResonanceLive, v))
+			{
+				++points;
+				lo = std::min (lo, v);
+				hi = std::max (hi, v);
+			}
+		}
+		const double knob = kParams[kResonance].defaultNormalized ();
+		std::printf ("  resonance: %d points, %.3f..%.3f round the knob's %.3f\n", points, lo, hi, knob);
+		check (points >= 20, "the swinging resonance is published through the second");
+		check (lo < knob - 0.05 && hi > knob + 0.05, "and swings both sides of the knob");
+	}
+	{
+		// Nothing moving: each published once, then quiet.
+		Rig rig;
+		int cut = 0, res = 0;
+		double v = 0.0;
+		for (int b = 0; b < 40; ++b)
+		{
+			rig.run ();
+			if (rig.published (kCutoffLive, v)) ++cut;
+			if (rig.published (kResonanceLive, v)) ++res;
+		}
+		check (cut == 1 && res == 1, "with nothing moving each is published once and then stays quiet (" +
+		                             std::to_string (cut) + ", " + std::to_string (res) + ")");
+	}
+
+	std::printf ("portamento reaches the voice\n");
+	{
+		// Key track 100 %, no envelope, no LFO: the published live cutoff
+		// is the pitch, so how long it takes to settle after a jump of
+		// two octaves is how long the VCOs took to slide there.
+		auto settleSeconds = [] (double portamentoMs, bool detached) {
+			Rig rig;
+			rig.param (kKeyTrack, 1.0);
+			rig.param (kVcfEnvAmount, kParams[kVcfEnvAmount].toNormalized (0.0));
+			rig.param (kPortamento, kParams[kPortamento].toNormalized (portamentoMs));
+			rig.note (true, 48, 0);
+			for (int b = 0; b < static_cast<int> (0.3 * kRate / kBlock); ++b)
+				rig.run ();
+			if (detached)
+			{
+				rig.note (false, 48, 0);
+				rig.run ();
+			}
+			rig.note (true, 72, 0);
+			double v = 0.0, last = 0.0, settledAt = -1.0;
+			for (int b = 0; b < static_cast<int> (1.5 * kRate / kBlock); ++b)
+			{
+				rig.run ();
+				if (rig.published (kCutoffLive, v))
+				{
+					last = v;
+					// Within 1 % of the final cutoff: 72 is an octave above
+					// middle C, so 2.4 kHz from the 1.2 kHz knob.
+					const double hz = paramDef (kCutoff).toInternal (v);
+					if (settledAt < 0.0 && hz > 2400.0 * 0.99)
+						settledAt = (b + 1) * kBlock / kRate;
+				}
+			}
+			(void) last;
+			return settledAt;
+		};
+		const double off = settleSeconds (kMinPortamentoSeconds * 1000.0, false);
+		const double legato = settleSeconds (500.0, false);
+		const double detached = settleSeconds (500.0, true);
+		std::printf ("  two octaves settle in: off %.3f s, 500 ms legato %.3f s, 500 ms detached %.3f s\n",
+		             off, legato, detached);
+		check (off >= 0.0 && off < 0.1, "off: the pitch jumps (only the 20 ms smoothing of the knobs)");
+		check (legato > 0.45 && legato < 0.6, "500 ms: overlapping notes slide in the knob's time");
+		check (detached > 0.45 && detached < 0.6, "and so do notes that do not overlap");
+	}
+
 	std::printf ("tail\n");
 	{
 		Rig rig;

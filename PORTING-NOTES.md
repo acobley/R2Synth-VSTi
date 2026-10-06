@@ -175,10 +175,91 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
   tracked while the key is held. **Retrigger starts from the current level** —
   on a mono synth that retriggers every note, a reset to zero would click on
   every legato phrase.
+- **Portamento** (param 31, `kPortamento`, appended 6 Oct 2026 on `UpdatedUI`):
+  the VCOs' pitch slides from the last note to the new one in a **straight
+  line in semitones, in the knob's time whatever the interval** (1 ms–5 s,
+  log). **Always, not only legato**: the pitch is held between notes like an
+  analogue keyboard's CV, so a key struck after the previous one was released
+  slides too; so does the fall-back to a held key when the sounding one is
+  released. A note struck mid-slide starts from where the pitch is. **The
+  bottom of the knob is OFF** (`portamentoActive()`, shared by DSP, panel and
+  host text) and is the default, so old projects and the default patch are
+  unchanged. The first note after a reset never slides. Key tracking follows
+  the gliding pitch. Envelopes still retrigger on every note. Knob in the Amp
+  section beside Output (mint — every control wears its section's colour).
+  Tests: DspTests `testPortamento` (22 checks incl. the audio's period gliding
+  110→155→220 Hz, 44.1/48/96 k), ProcessorTests "portamento reaches the voice"
+  (live cutoff settles in 0.011 s off, 0.501 s at 500 ms legato AND detached).
 
 ## The panel
 
 ![The panel](docs/panel.png)
+
+### The "signal flow" panel (branch `UpdatedUI`, 4 Oct 2026)
+
+From the design `Designs/SimpleSynth-ConceptA-SignalFlow.png` (the Designs
+folder is git-ignored locally via `.git/info/exclude`). 1200 × 640:
+a header (wordmark, engine line, licence pill), then OSCILLATORS › FILTER ›
+AMP left to right, then a MODULATION strip (LFO 1 scope + Rate/Shape/Output,
+LFO 2, and all four LFO 1 depths together). One colour per section — osc
+amber, filter blue, amp mint, mod violet — on the knobs' value arcs.
+Parameters, controller and processor unchanged.
+
+- **New views in `SimpleSynthPanelViews.*`** (namespace `Panel`):
+  `Backdrop` (everything static, from the layout tables), `Knob`,
+  `SegmentSwitch`, `Scope`, `Lamp`. Paths and text only, no bitmaps.
+  `SimpleSynthControls.*` is untouched — the licence dialog still uses
+  `SpyPresetButton` — but the panel no longer uses its sliders, boxes or
+  envelope view.
+- **Knobs**: vertical drag (200 px = full range), Shift ×0.1, double-click
+  = the table's default (`setDefaultValue`) — except the three VCO Tunes,
+  which go to 0 st (VCO 2's default is −12; 6 Oct) — wheel 1 % a click. The whole
+  rectangle, reading and label included, takes the drag. Tune, Shape and
+  Env Amount are drawn **bipolar** (arc from the top).
+- **Filter screen** = `traceFilterResponse()` (new, `SimpleSynthDsp`):
+  `ladderResponseGain()` closes SpaceDub's stage response round the loop
+  (`H = G / (1 + G·fb·z⁻¹)`) and is set up exactly as `process()` sets the
+  filter up (ceiling clamp, `ladderTuning()` lookup, resonance × unity
+  feedback). **DSP test: within 0.25 dB of a measured `MoogLadder` at 27
+  points** (3 cutoffs × 3 resonances × 3 frequencies). At loop gain ≥ 1
+  it is drawn at the edge of oscillation (a peak off the top).
+- **The filter screen follows the modulation live** (4 Oct): two more
+  hidden read-only outputs, **`kCutoffLive` (1002) and `kResonanceLive`
+  (1003)**, on exactly `kLfoShapeLive`'s terms — published from
+  `process()` through `outputParameterChanges` (`publishLive()` now does
+  all three, ≤ 60/s each, only when moved), in `kCutoff`'s / `kResonance`'s
+  own normalisation. The screen draws the live curve and dot ("live") with
+  the knobs' curve dim behind it; with no live pair yet, or just after a
+  knob moves, it shows the knobs ("at the knobs"). Processor tests: the
+  envelope's sweep shows in the published cutoff, LFO 1 on the resonance
+  swings it both sides of the knob, and nothing moving publishes once.
+  The SELF-OSC lamp follows the live resonance too (6 Oct), so it flashes
+  when LFO 1 swings the filter into self-oscillation; knob-only until the
+  first live value and briefly after the knob moves. Sampled at <= 60/s, so
+  a very fast LFO can cross 1.0 between samples.
+- **Envelope screens**: the filter and amp envelopes now have a screen
+  each, but both come from one `traceEnvelopes()` run, so they **share one
+  time axis** as the single display did; the amp screen prints the span,
+  the filter screen the signed Amount.
+- **Licence**: `LicenceBadge::setPill (true)` draws it as a pill in the
+  header (amber evaluating, mint licensed); off is the old line. The
+  dialog itself is unchanged (old style).
+- **Readouts**: the three LFO lines became one info line along the foot of
+  the strip (`modInfoLineText()` = LFO 1's line + LFO 2's); the depths line
+  went (each depth has its own knob reading). `controlLabel()`,
+  `spanText()`, `envAmountText()`, `filterDisplayAnnotation()` are new in
+  `SimpleSynthReadouts.cpp` so the editor and `dump-layout` share them.
+- **Tests**: `LayoutTests` rewritten for the new tables (2058 checks:
+  every parameter once, no overlaps, each control in its section and
+  colour, every reading/label/segment fits, the info line at its longest,
+  the filter screen's data); DSP 315; licence 167; Linux validator 47/0,
+  processor tests 30/0. `render-panel.py` redrawn for the new look.
+- **A new source file**: re-run `./setup-xcode.sh` (or cmake configure) —
+  the pre-build source guard will otherwise stop the Xcode build.
+- **Left out of the design for now** (no engine support yet): presets +
+  Save, Undo, Size, output meter.
+
+### Before: the FilterDrum grid (master)
 
 Four rows in signal order — VCOs, LFO 1 + LFO 2, VCF + VCF ENV,
 VCA/OUTPUT + VCA ENV — with an LFO display (both outputs, the patched one marked) and an envelope
@@ -270,7 +351,7 @@ only as odd host behaviour:
 |---|---|
 | `getProcessContextRequirements` | The LFO is free-running in Hz. The moment anything reads tempo, add the override — code in the banner of `SimpleSynthProcessor.h` — or the tempo reads 120 in every host and the validator prints `- None` |
 | Velocity, pitch bend, mod wheel | VST3 delivers bend and CCs only through `IMidiMapping` to parameters; none is mapped |
-| Glide / legato envelopes | Every note retriggers, by decision |
+| Legato (non-retriggering) envelopes | Every note retriggers, by decision. Portamento exists (6 Oct) and glides regardless of overlap |
 | Sample-accurate automation | The last point of each queue is applied per block; the 20 ms smoothers hide the rest |
 
 ## Measured levels
@@ -452,6 +533,12 @@ Implements "Licence key format" from the Nag-ware Licensing Design doc.
   3 Oct), with the server signing with the DEVELOPMENT seed. DB rows,
   lost-code recovery and rate limits checked by hand; WebPages' registration
   tests pass 76 on real MySQL 9.7.2 (3 Oct).
+- **6 Oct: `kActivationUrl` back to the real site,
+  `https://www.r2-dvd.net/activate.jsp`** (LicenceConfig.h). The licence
+  tests no longer print the "plain http - TEST server" note. Server side
+  still to do before the real site takes registrations: deploy the
+  licence-server WAR there, and take Andy's test IP out of WebPages'
+  context.xml and tools/checkallow.py.
 
 ### Production signing key (3-4 Oct 2026)
 

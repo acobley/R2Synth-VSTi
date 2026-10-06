@@ -32,9 +32,10 @@ constexpr int kEvaluationDays = 7;
 
 constexpr std::array<uint16_t, 2> kAcceptedProducts = {kProductBundleV1, kProductSimpleSynthFree};
 
-// TEST SERVER while the activation flow is tried out. Put back
-// "https://www.r2-dvd.net/activate.jsp" before any release.
-constexpr const char* kActivationUrl = "http://34.7.233.43/activate.jsp";
+// THE REAL SITE (6 Oct 2026). It pointed at the test server,
+// http://34.7.233.43/activate.jsp, while the activation flow was tried
+// out (1-4 Oct). HTTPS, so the result page's Copy button works.
+constexpr const char* kActivationUrl = "https://www.r2-dvd.net/activate.jsp";
 
 constexpr std::array<uint32_t, 0> kRevokedLicenceIds = {};
 

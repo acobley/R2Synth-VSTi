@@ -12,35 +12,36 @@
 //   * tools/dump-layout.cpp + tools/render-panel.py, which draw
 //     docs/panel.png from these tables.
 //
-// It needs SimpleSynthParams.h for the tags, and that needs one header-
-// only file from the SDK (pluginterfaces/vst/vsttypes.h) - so the layout
-// test is compiled with -I<sdk>, unlike the DSP suite. Nothing is linked.
+// THE "SIGNAL FLOW" PANEL (branch UpdatedUI, 4 Oct 2026), from the
+// design Designs/SimpleSynth-ConceptA-SignalFlow.png. It replaces the
+// FilterDrum grid of bar sliders: the same 30 parameters, laid out the
+// way the sound travels. (Portamento, 6 Oct, joined Output in the Amp
+// section: the 31st.)
 //
-// THE GRID is FilterDrum's: 94-pixel columns eight apart, 44-pixel
-// sliders, every group of controls in a SpyGroupBox with its name on the
-// top edge. Four rows, in signal order:
+//   +--------------------------------------------------------------+
+//   | SIMPLESYNTH | engine line                     [licence pill] |  header
+//   +--------------------------------------------------------------+
+//   | OSCILLATORS  >  FILTER (curve, 4 knobs,   >  AMP (envelope,  |
+//   | 3 rows: wave,    filter env + ADSR)           ADSR, output)   |
+//   +--------------------------------------------------------------+
+//   | MODULATION: LFO 1 (scope, rate, shape, output) | LFO 2 |      |
+//   |             LFO 1 depth: pitch, cutoff, resonance, amp        |
+//   +--------------------------------------------------------------+
 //
-//   row 0   VCO 1        | VCO 2        | VCO 3          | LFO display
-//   row 1   LFO 1              | LFO 2    | readouts    |   (rows 0-1)
-//   row 2   VCF (five)           | VCF ENV              | ENV display
-//   row 3   VCA / OUTPUT         | VCA ENV              |   (rows 2-3)
+// ONE COLOUR PER SECTION (oscillators amber, filter blue, amp mint,
+// modulation violet), carried by the knobs' value arcs, so a knob's
+// colour says which part of the voice it moves. THE FOUR LFO 1 DEPTHS
+// ARE TOGETHER in the modulation strip, in violet, rather than each at
+// its destination as on the MS-20 grid: one place to see everything the
+// LFO does.
 //
-// LFO 2 (29 Sep 2026) took the first two columns of what had been the
-// readout area, so the readouts are three short lines now, all about
-// the two LFOs; the engine line moved up to the title row, and the
-// note about retriggering into the signal-flow line. THE PANEL DID NOT
-// GROW: the same 1176 x 302.
+// KNOBS, NOT BAR SLIDERS. A knob is drawn top-centred in its rectangle
+// with its reading and its label under it, and the WHOLE rectangle takes
+// the drag, so the text is part of the target. Vertical drag; Shift is
+// fine; double-click returns the default; the wheel steps.
 //
-// LFO 1 -> RESONANCE (29 Sep 2026, later) widened the VCF group to five
-// columns so the depth sits at its destination next to the cutoff
-// depth, and the two ADSR groups moved one column right with it. Rows
-// 2-3 are now the widest (ten columns, one boundary), so kRowRight is
-// theirs and THE PANEL GREW 94 pixels (one column): 1270 x 302.
-//
-// The two ADSR groups are one above the other so Attack sits over
-// Attack; the VCF and VCA groups likewise, so the two LFO depth knobs
-// that live at their destinations - the MS-20's way - are in the same
-// column.
+// The panel is 1200 x 640 - bigger than the old 1270 x 302 strip, and
+// closer to the shape of a screen.
 //------------------------------------------------------------------------
 
 #pragma once
@@ -51,252 +52,272 @@ namespace SimpleSynth {
 namespace Layout {
 
 //------------------------------------------------------------------------
-// The grid
-//------------------------------------------------------------------------
-constexpr int kMargin       = 16;
-constexpr int kColumnWidth  = 94;
-constexpr int kColumnGap    = 8;
-constexpr int kColumnPitch  = kColumnWidth + kColumnGap;
-constexpr int kSliderHeight = 44;
-
-constexpr int kTitleY       = 10;
-constexpr int kFlowY        = 30;
-constexpr int kLabelHeight  = 16;
-
-/** THE TITLE IS INSIDE THE BOX'S VIEW, and the frame's top edge is
-    drawn this far down it, through the middle of the title.
-
-    It was FilterDrum's way round: the view's top WAS the frame's top
-    edge and the title was drawn 5 pixels above it - outside the view,
-    where VSTGUI clips every view's drawing to its own rectangle. So the
-    top half of every title was cut off in the plug-in (render-panel.py
-    does not clip, which is why the picture never showed it). Now the
-    view starts at the top of the lettering and SpyGroupBox::
-    setTitleBand() puts the frame line through it, so the whole title is
-    inside what VSTGUI lets the box draw. */
-constexpr int kGroupTitleBand = 5;
-
-constexpr int kGroupPadX      = 5;    // group box -> the sliders in it
-constexpr int kGroupPadTop    = 11;   // view top -> sliders: the whole title, then clear of it
-constexpr int kGroupPadBottom = 3;
-constexpr int kGroupGap       = 6;    // between two group boxes side by side
-constexpr int kRowGap         = 2;    // between one row of boxes and the next
-
-/** The height of a group box's VIEW. The frame drawn in it is
-    kGroupTitleBand shorter: 53 pixels round a 44-pixel slider. */
-constexpr int kGroupHeight  = kSliderHeight + kGroupPadTop + kGroupPadBottom;
-constexpr int kRowPitch     = kGroupHeight + kRowGap;
-
-/** Column 0's left edge. */
-constexpr int kContentX     = kMargin + kGroupPadX;
-
-/** WHAT A GROUP BOUNDARY COSTS. Two boxes side by side need their
-    padding and a gap between them, which is more than the gap between
-    two columns - so every group to the left of a column pushes it
-    right by this much. A column's x is therefore (column, slot), where
-    slot is how many group boundaries lie to its left. */
-constexpr int kGroupSpacer  = 2 * kGroupPadX + kGroupGap - kColumnGap;
-
-constexpr int columnX (int column, int slot)
+/** A rectangle, left/top/right/bottom, in panel pixels. */
+struct Rect
 {
-	return kContentX + column * kColumnPitch + slot * kGroupSpacer;
-}
+	int left, top, right, bottom;
 
-/** The top of row `row`'s sliders. */
-constexpr int kRow0Y = kFlowY + kLabelHeight + 2 + kGroupPadTop;
-
-constexpr int rowY (int row)
-{
-	return kRow0Y + row * kRowPitch;
-}
-
-/** The right edge of the widest row - three VCO groups of three - and
-    therefore of every row: a row with fewer boxes stretches its last
-    box to here, so the right-hand edges line up and the strip of
-    displays beside them is one straight edge. */
-constexpr int kRowRight = ((columnX (9, 2) > columnX (10, 1)) ? columnX (9, 2) : columnX (10, 1))
-                         - kColumnGap + kGroupPadX;
-
-//------------------------------------------------------------------------
-// The displays, in a strip to the right, each spanning two rows
-//------------------------------------------------------------------------
-constexpr int kDisplayGap   = 8;
-constexpr int kDisplayX     = kRowRight + kDisplayGap;
-constexpr int kDisplayWidth = 200;
-
-/** Lined up with the GROUP BOXES' FRAMES either side, not with the
-    sliders or the boxes' views, so the strip and the drawn boxes share a
-    top and a bottom edge. */
-constexpr int kLfoViewTop    = rowY (0) - kGroupPadTop + kGroupTitleBand;
-constexpr int kLfoViewBottom = rowY (1) + kSliderHeight + kGroupPadBottom;
-constexpr int kEnvViewTop    = rowY (2) - kGroupPadTop + kGroupTitleBand;
-constexpr int kEnvViewBottom = rowY (3) + kSliderHeight + kGroupPadBottom;
-
-/** Points per curve - one per pixel of plot is the most that shows. */
-constexpr int kDisplayPoints = 200;
-
-//------------------------------------------------------------------------
-// The readout lines, in row 1 to the right of the LFO 2 group
-//------------------------------------------------------------------------
-constexpr int kReadoutX     = columnX (6, 2);
-constexpr int kReadoutWidth = kRowRight - kReadoutX;
-constexpr int kReadout1Y    = rowY (1) - 4;
-constexpr int kReadout2Y    = kReadout1Y + 16;
-constexpr int kReadout3Y    = kReadout2Y + 16;
+	constexpr int width () const { return right - left; }
+	constexpr int height () const { return bottom - top; }
+};
 
 //------------------------------------------------------------------------
 // The panel
 //------------------------------------------------------------------------
-constexpr int kEditorWidth  = kDisplayX + kDisplayWidth + kMargin;
-constexpr int kEditorHeight = kEnvViewBottom + kMargin;
+constexpr int kEditorWidth  = 1200;
+constexpr int kEditorHeight = 640;
+constexpr int kMargin       = 16;
 
-/** The title row: the title from the left, the engine line from the
-    readouts' x to the right margin. */
-constexpr int kEngineLineX     = kReadoutX;
-constexpr int kEngineLineWidth = kEditorWidth - kMargin - kEngineLineX;
-constexpr int kTitleWidth      = kEngineLineX - kColumnGap - kContentX;
+constexpr int kHeaderHeight = 56;
 
-/** The flow line runs the full width. */
-constexpr int kFlowWidth       = kEditorWidth - kMargin - kContentX;
+/** Inside a section: the title row, and the padding round it. */
+constexpr int kSectionPadX     = 14;
+constexpr int kSectionPadTop   = 12;
+constexpr int kSectionTitleH   = 18;
+constexpr int kSectionRadius   = 10;
 
-/** THE LICENCE BADGE (LicenceViews.h): one tiny line in the bottom
-    margin, right-aligned under the display strip - "Evaluation - 5 days
-    left - licence..." or "Licensed to ...". Click it for the licence
-    dialog. The panel did not grow for it. */
-constexpr int kBadgeX      = kDisplayX;
-constexpr int kBadgeWidth  = kDisplayWidth;
-constexpr int kBadgeY      = kEnvViewBottom + 2;
-constexpr int kBadgeHeight = 12;
+/** Under every knob: two pixels, the reading, the label. */
+constexpr int kKnobGap       = 2;
+constexpr int kKnobValueH    = 13;
+constexpr int kKnobLabelH    = 12;
+constexpr int kKnobTextBand  = kKnobGap + kKnobValueH + kKnobLabelH;
+
+/** A segmented switch's height. */
+constexpr int kSwitchHeight = 30;
+
+/** CHARACTER WIDTHS for the fit tests - generous averages for the faces
+    the editor asks for (Menlo 10 for readings, Helvetica Neue bold 10
+    in capitals for labels). The tests use them to check that the widest
+    reading of every knob fits the knob's rectangle. */
+constexpr int kValueCharWidth  = 6;
+constexpr int kLabelCharWidth  = 7;
+constexpr int kNoteCharWidth   = 6;
 
 //------------------------------------------------------------------------
-// The tables
+// Sections
+//------------------------------------------------------------------------
+enum class Accent
+{
+	Osc,      // amber
+	Filter,   // blue
+	Amp,      // mint
+	Mod       // violet
+};
+
+struct Section
+{
+	const char* title;
+	const char* subtitle;   // may be empty
+	Accent accent;
+	Rect r;
+};
+
+constexpr Rect kOscRect    { 16,  72,  356,  436 };
+constexpr Rect kFilterRect { 384, 72,  846,  436 };
+constexpr Rect kAmpRect    { 874, 72,  1184, 436 };
+constexpr Rect kModRect    { 16,  448, 1184, 624 };
+
+constexpr Section kSections[] = {
+	{ "OSCILLATORS", "mixed equally into the filter", Accent::Osc,    kOscRect    },
+	{ "FILTER",      "Moog ladder, 24 dB",            Accent::Filter, kFilterRect },
+	{ "AMP",         "envelope + output",             Accent::Amp,    kAmpRect    },
+	{ "MODULATION",  "",                              Accent::Mod,    kModRect    },
+};
+constexpr int kNumSections = static_cast<int> (sizeof (kSections) / sizeof (kSections[0]));
+
+/** The top of a section's contents: under its title row. */
+constexpr int contentTop (const Rect& section)
+{
+	return section.top + kSectionPadTop + kSectionTitleH + 10;
+}
+
+/** The two chevrons between the sections: the signal goes this way. */
+struct Point { int x, y; };
+constexpr Point kChevrons[] = { { 370, 254 }, { 860, 254 } };
+
+//------------------------------------------------------------------------
+// The oscillator rows
+//------------------------------------------------------------------------
+constexpr int kOscRowTop   = contentTop (kOscRect);   // 112
+constexpr int kOscRowPitch = 96;
+
+constexpr int oscRowTop (int vco) { return kOscRowTop + vco * kOscRowPitch; }
+
+//------------------------------------------------------------------------
+// Controls
 //------------------------------------------------------------------------
 enum class Kind
 {
-	Slider,      // SpySlider - drag left and right
-	Selector     // SpySelector - click steps through named positions
+	Knob,     // PanelKnob - vertical drag
+	Switch    // PanelSwitch - one segment per named position
 };
 
 struct Control
 {
 	Steinberg::Vst::ParamID tag;
-	int  row;
-	int  column;
-	int  slot;
-	Kind kind;
-};
-
-struct Group
-{
-	const char* title;
-	int  row;
-	int  firstColumn;
-	int  columns;
-	int  slot;
-	bool stretchToRowRight;   // see kRowRight
-};
-
-/** Every control on the panel. THE VCOs ARE ONE ROW OF THREE IDENTICAL
-    GROUPS because the three VCOs are one implementation - see
-    vcoParam() - so a difference between them on the panel has to be
-    real. */
-constexpr Control kControls[] = {
-	{ kVco1Wave,     0, 0, 0, Kind::Selector },
-	{ kVco1Tune,     0, 1, 0, Kind::Slider   },
-	{ kVco1Level,    0, 2, 0, Kind::Slider   },
-	{ kVco2Wave,     0, 3, 1, Kind::Selector },
-	{ kVco2Tune,     0, 4, 1, Kind::Slider   },
-	{ kVco2Level,    0, 5, 1, Kind::Slider   },
-	{ kVco3Wave,     0, 6, 2, Kind::Selector },
-	{ kVco3Tune,     0, 7, 2, Kind::Slider   },
-	{ kVco3Level,    0, 8, 2, Kind::Slider   },
-
-	// The LFO's own three, then its PITCH depth - the one destination
-	// that has no group of its own to sit in, because it moves all three
-	// VCOs at once.
-	{ kLfoRate,      1, 0, 0, Kind::Slider   },
-	{ kLfoShape,     1, 1, 0, Kind::Slider   },
-	{ kLfoOutput,    1, 2, 0, Kind::Selector },
-	{ kLfoPitch,     1, 3, 0, Kind::Slider   },
-
-	// LFO 2 BESIDE LFO 1, because its one destination is LFO 1's Shape.
-	{ kLfo2Rate,     1, 4, 1, Kind::Slider   },
-	{ kLfo2Level,    1, 5, 1, Kind::Slider   },
-
-	{ kCutoff,       2, 0, 0, Kind::Slider   },
-	{ kResonance,    2, 1, 0, Kind::Slider   },
-	{ kKeyTrack,     2, 2, 0, Kind::Slider   },
-	{ kVcfLfo,       2, 3, 0, Kind::Slider   },
-	{ kVcfLfoRes,    2, 4, 0, Kind::Slider   },   // LFO 1 -> resonance, beside the cutoff depth
-	{ kVcfAttack,    2, 5, 1, Kind::Slider   },
-	{ kVcfDecay,     2, 6, 1, Kind::Slider   },
-	{ kVcfSustain,   2, 7, 1, Kind::Slider   },
-	{ kVcfRelease,   2, 8, 1, Kind::Slider   },
-	{ kVcfEnvAmount, 2, 9, 1, Kind::Slider   },
-
-	// The VCA's LFO depth directly under the VCF's, so the two depth
-	// knobs that live at their destinations share a column. The Output
-	// Level takes column 0, under Cutoff: the two knobs reached for
-	// first sit at the left edge, one above the other.
-	{ kVcaLfo,       3, 3, 0, Kind::Slider   },
-	{ kOutputLevel,  3, 0, 0, Kind::Slider   },
-	{ kVcaAttack,    3, 5, 1, Kind::Slider   },
-	{ kVcaDecay,     3, 6, 1, Kind::Slider   },
-	{ kVcaSustain,   3, 7, 1, Kind::Slider   },
-	{ kVcaRelease,   3, 8, 1, Kind::Slider   },
-};
-
-constexpr int kNumControls = static_cast<int> (sizeof (kControls) / sizeof (kControls[0]));
-
-constexpr Group kGroups[] = {
-	{ "VCO 1",        0, 0, 3, 0, false },
-	{ "VCO 2",        0, 3, 3, 1, false },
-	{ "VCO 3",        0, 6, 3, 2, true  },
-	{ "LFO 1",        1, 0, 4, 0, false },
-	{ "LFO 2 -> SHAPE", 1, 4, 2, 1, false },
-	{ "VCF",          2, 0, 5, 0, false },
-	{ "VCF ENV",      2, 5, 5, 1, true  },
-	{ "VCA / OUTPUT", 3, 0, 5, 0, false },
-	{ "VCA ENV",      3, 5, 5, 1, true  },
-};
-
-constexpr int kNumGroups = static_cast<int> (sizeof (kGroups) / sizeof (kGroups[0]));
-
-//------------------------------------------------------------------------
-/** A rectangle, left/top/right/bottom, in panel pixels. */
-struct Rect
-{
-	int left, top, right, bottom;
+	Kind   kind;
+	Accent accent;
+	int    x, y;        // top left of the control's rectangle
+	int    width;
+	int    diameter;    // knobs only; 0 for a switch
+	bool   bipolar;     // the arc grows from the top, not from the left end
+	const char* label;  // nullptr: shortLabel() - the title less its section
 };
 
 constexpr Rect controlRect (const Control& c)
 {
-	return { columnX (c.column, c.slot), rowY (c.row),
-	         columnX (c.column, c.slot) + kColumnWidth, rowY (c.row) + kSliderHeight };
+	return { c.x, c.y, c.x + c.width,
+	         c.y + ((c.kind == Kind::Knob) ? c.diameter + kKnobTextBand : kSwitchHeight) };
 }
 
-constexpr Rect groupRect (const Group& g)
+/** EVERY PARAMETER ON THE PANEL, once each - the tests hold it to that. */
+constexpr Control kControls[] = {
+	// ---- the oscillators: one row each, the same three controls -------
+	{ kVco1Wave,  Kind::Switch, Accent::Osc, 64,  oscRowTop (0) + 31, 122, 0,  false, nullptr },
+	{ kVco1Tune,  Kind::Knob,   Accent::Osc, 210, oscRowTop (0) + 6,  64,  52, true,  nullptr },
+	{ kVco1Level, Kind::Knob,   Accent::Osc, 278, oscRowTop (0) + 6,  64,  52, false, nullptr },
+	{ kVco2Wave,  Kind::Switch, Accent::Osc, 64,  oscRowTop (1) + 31, 122, 0,  false, nullptr },
+	{ kVco2Tune,  Kind::Knob,   Accent::Osc, 210, oscRowTop (1) + 6,  64,  52, true,  nullptr },
+	{ kVco2Level, Kind::Knob,   Accent::Osc, 278, oscRowTop (1) + 6,  64,  52, false, nullptr },
+	{ kVco3Wave,  Kind::Switch, Accent::Osc, 64,  oscRowTop (2) + 31, 122, 0,  false, nullptr },
+	{ kVco3Tune,  Kind::Knob,   Accent::Osc, 210, oscRowTop (2) + 6,  64,  52, true,  nullptr },
+	{ kVco3Level, Kind::Knob,   Accent::Osc, 278, oscRowTop (2) + 6,  64,  52, false, nullptr },
+
+	// ---- the filter: the two big ones, then key track and the amount --
+	{ kCutoff,        Kind::Knob, Accent::Filter, 412, 218, 80, 66, false, nullptr },
+	{ kResonance,     Kind::Knob, Accent::Filter, 521, 218, 80, 66, false, nullptr },
+	{ kKeyTrack,      Kind::Knob, Accent::Filter, 629, 232, 80, 52, false, nullptr },
+	{ kVcfEnvAmount,  Kind::Knob, Accent::Filter, 738, 232, 80, 52, true,  "Env Amt" },
+
+	// ---- the filter envelope, under its own small picture -------------
+	{ kVcfAttack,  Kind::Knob, Accent::Filter, 588, 328, 56, 38, false, "A" },
+	{ kVcfDecay,   Kind::Knob, Accent::Filter, 650, 328, 56, 38, false, "D" },
+	{ kVcfSustain, Kind::Knob, Accent::Filter, 712, 328, 56, 38, false, "S" },
+	{ kVcfRelease, Kind::Knob, Accent::Filter, 774, 328, 56, 38, false, "R" },
+
+	// ---- the amp -------------------------------------------------------
+	{ kVcaAttack,   Kind::Knob, Accent::Amp, 888,  226, 64, 44, false, nullptr },
+	{ kVcaDecay,    Kind::Knob, Accent::Amp, 960,  226, 64, 44, false, nullptr },
+	{ kVcaSustain,  Kind::Knob, Accent::Amp, 1033, 226, 64, 44, false, nullptr },
+	{ kVcaRelease,  Kind::Knob, Accent::Amp, 1106, 226, 64, 44, false, nullptr },
+	{ kOutputLevel, Kind::Knob, Accent::Amp, 888,  316, 72, 56, false, "Output" },
+
+	// Portamento: a VOICE control, so it sits with Output and the note on
+	// how the voice plays, in the Amp section's colour (the colour is the
+	// section's - the tests hold every control to that).
+	{ kPortamento,  Kind::Knob, Accent::Amp, 972,  316, 76, 56, false, nullptr },
+
+	// ---- LFO 1 ---------------------------------------------------------
+	{ kLfoRate,   Kind::Knob,   Accent::Mod, 192, 500, 64,  52, false, nullptr },
+	{ kLfoShape,  Kind::Knob,   Accent::Mod, 262, 500, 64,  52, true,  nullptr },
+	{ kLfoOutput, Kind::Switch, Accent::Mod, 338, 528, 174, 0,  false, nullptr },
+
+	// ---- LFO 2, which sweeps LFO 1's Shape ------------------------------
+	{ kLfo2Rate,  Kind::Knob, Accent::Mod, 552, 500, 64, 52, false, nullptr },
+	{ kLfo2Level, Kind::Knob, Accent::Mod, 622, 500, 64, 52, false, nullptr },
+
+	// ---- everything LFO 1 moves, together ------------------------------
+	{ kLfoPitch,  Kind::Knob, Accent::Mod, 726, 500, 70, 52, false, "Pitch" },
+	{ kVcfLfo,    Kind::Knob, Accent::Mod, 830, 500, 70, 52, false, "Cutoff" },
+	{ kVcfLfoRes, Kind::Knob, Accent::Mod, 934, 500, 70, 52, false, "Resonance" },
+	{ kVcaLfo,    Kind::Knob, Accent::Mod, 1038, 500, 70, 52, false, "Amp" },
+};
+constexpr int kNumControls = static_cast<int> (sizeof (kControls) / sizeof (kControls[0]));
+
+//------------------------------------------------------------------------
+// The displays
+//------------------------------------------------------------------------
+constexpr Rect kFilterView    { 398, 112, 832,  208 };
+constexpr Rect kFilterEnvView { 398, 344, 548,  396 };
+constexpr Rect kAmpEnvView    { 888, 112, 1170, 216 };
+constexpr Rect kLfoView       { 30,  506, 180,  570 };
+
+/** Points per curve. The widest display is 434 pixels; 200 points is
+    one every two pixels or better on all of them. */
+constexpr int kDisplayPoints = 200;
+
+/** The filter display's axes: 20 Hz..20 kHz, +18..-48 dB. */
+constexpr double kFilterMinHz    = 20.0;
+constexpr double kFilterMaxHz    = 20000.0;
+constexpr double kFilterTopDb    = 18.0;
+constexpr double kFilterBottomDb = -48.0;
+
+//------------------------------------------------------------------------
+// Fixed lettering, rules and lines of text
+//------------------------------------------------------------------------
+enum class CaptionStyle
 {
-	const int left  = columnX (g.firstColumn, g.slot) - kGroupPadX;
-	const int right = g.stretchToRowRight
-	                    ? kRowRight
-	                    : columnX (g.firstColumn + g.columns, g.slot) - kColumnGap + kGroupPadX;
-	return { left, rowY (g.row) - kGroupPadTop, right, rowY (g.row) + kSliderHeight + kGroupPadBottom };
-}
+	Block,    // a block's name, small capitals in the section's colour
+	Field,    // a control's heading, small capitals, grey
+	Note,     // ordinary text, grey
+	Badge     // an oscillator's number, in a disc
+};
+
+struct Caption
+{
+	const char* text;
+	CaptionStyle style;
+	Accent accent;
+	Rect r;
+};
+
+constexpr Caption kCaptions[] = {
+	{ "1", CaptionStyle::Badge, Accent::Osc, { 30, oscRowTop (0) + 34, 54, oscRowTop (0) + 58 } },
+	{ "2", CaptionStyle::Badge, Accent::Osc, { 30, oscRowTop (1) + 34, 54, oscRowTop (1) + 58 } },
+	{ "3", CaptionStyle::Badge, Accent::Osc, { 30, oscRowTop (2) + 34, 54, oscRowTop (2) + 58 } },
+
+	{ "FILTER ENV", CaptionStyle::Block, Accent::Filter, { 398, 328, 548, 340 } },
+
+	{ "Mono, last note",        CaptionStyle::Note, Accent::Amp, { 1058, 326, 1170, 340 } },
+	{ "wins. Every note",       CaptionStyle::Note, Accent::Amp, { 1058, 342, 1170, 356 } },
+	{ "retriggers both",        CaptionStyle::Note, Accent::Amp, { 1058, 358, 1170, 372 } },
+	{ "envelopes.",             CaptionStyle::Note, Accent::Amp, { 1058, 374, 1170, 388 } },
+
+	{ "LFO 1 - MS-20 STYLE",   CaptionStyle::Block, Accent::Mod, { 30,  488, 330, 500 } },
+	{ "OUTPUT",                CaptionStyle::Field, Accent::Mod, { 338, 512, 512, 524 } },
+	{ "LFO 2 -> LFO 1 SHAPE",  CaptionStyle::Block, Accent::Mod, { 552, 488, 700, 500 } },
+	{ "LFO 1 DEPTH",           CaptionStyle::Block, Accent::Mod, { 726, 488, 1108, 500 } },
+};
+constexpr int kNumCaptions = static_cast<int> (sizeof (kCaptions) / sizeof (kCaptions[0]));
+
+/** Hairlines: the rules between the oscillator rows, under the filter's
+    knobs and the amp's ADSR, and between the modulation blocks. */
+constexpr Rect kRules[] = {
+	{ 30,  oscRowTop (0), 342, oscRowTop (0) + 1 },
+	{ 30,  oscRowTop (1), 342, oscRowTop (1) + 1 },
+	{ 30,  oscRowTop (2), 342, oscRowTop (2) + 1 },
+	{ 398, 320, 832, 321 },
+	{ 888, 306, 1170, 307 },
+	{ 532, 488, 533, 580 },
+	{ 706, 488, 707, 580 },
+};
+
+//------------------------------------------------------------------------
+// The lines whose text changes, and the lamp
+//------------------------------------------------------------------------
+/** The header: the wordmark, then the engine line (rate, cutoff
+    ceiling, release tail), then the licence pill at the right. */
+constexpr Rect kWordmark   { 20,  0,  210, kHeaderHeight };
+constexpr Rect kEngineLine { 230, 20, 830, 36 };
+constexpr Rect kBadge      { 840, 12, 1184, 44 };
+
+/** The self-oscillation lamp, at the right of the filter's title row. */
+constexpr Rect kSelfOscLamp { 752, 84, 832, 102 };
+
+/** One line along the foot of the modulation strip: what LFO 1 and
+    LFO 2 are doing, in words. */
+constexpr Rect kModInfoLine { 30, 592, 1170, 606 };
 
 //------------------------------------------------------------------------
 // The arithmetic, asserted rather than trusted
 //------------------------------------------------------------------------
-static_assert (kGroupSpacer > 0, "two group boxes side by side must not overlap");
-static_assert (kReadout3Y + kLabelHeight <= kLfoViewBottom,
-               "the readout lines must fit in row 1");
-static_assert (kGroupPadTop >= 11,
-               "a slider's reading must start below the title (11 pixels of lettering)");
-static_assert (kGroupTitleBand > 0 && kGroupTitleBand < kGroupPadTop,
-               "the frame line must run through the title, above the sliders");
-static_assert (kBadgeY + kBadgeHeight <= kEditorHeight,
-               "the licence badge must fit in the bottom margin");
-static_assert (kEditorWidth == 1270 && kEditorHeight == 302,
+static_assert (kOscRowTop == 112, "the oscillator rows start under the section title");
+static_assert (oscRowTop (2) + 52 + kKnobTextBand + 6 <= kOscRect.bottom - 12,
+               "the third oscillator row fits its section");
+static_assert (kModInfoLine.bottom <= kModRect.bottom - 12, "the info line fits the modulation strip");
+static_assert (kModRect.bottom + kMargin == kEditorHeight, "the strip ends a margin above the bottom");
+static_assert (kAmpRect.right + kMargin == kEditorWidth, "the amp ends a margin from the right");
+static_assert (kEditorWidth == 1200 && kEditorHeight == 640,
                "the panel changed size - update the banner, docs/panel.png and this assert together");
 
 //------------------------------------------------------------------------

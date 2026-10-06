@@ -117,7 +117,8 @@ tresult PLUGIN_API SimpleSynthProcessor::setActive (TBool state)
 	if (state)
 	{
 		mDsp.reset ();
-		mLastLiveShape = -1.0;
+		for (double& last : mLastLive)
+			last = -1.0;
 
 		// THE UI THREAD, which is the only thread a message may be sent
 		// from. Also the only moment that makes a panel opened LATER
@@ -223,6 +224,8 @@ void SimpleSynthProcessor::applyParam (ParamID id, double normalized)
 		case kVcfLfo:        mDsp.setLfoCutoffDepth (v); break;
 		case kVcfLfoRes:     mDsp.setLfoResonanceDepth (v); break;
 		case kVcfEnvAmount:  mDsp.setVcfEnvAmount (v); break;
+
+		case kPortamento:    mDsp.setPortamento (v); break;
 
 		case kVcfAttack: case kVcfDecay: case kVcfSustain: case kVcfRelease:
 			applyEnvelope (true);
@@ -404,36 +407,52 @@ tresult PLUGIN_API SimpleSynthProcessor::process (ProcessData& data)
 
 	mSamplesSinceLive += numSamples;
 	if (!mBypass)
-		publishLiveShape (data);
+		publishLive (data);
 
 	return kResultOk;
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthProcessor::publishLiveShape (ProcessData& data)
+void SimpleSynthProcessor::publishLive (ProcessData& data)
 {
 	// THROUGH outputParameterChanges, the one route from process() to
 	// the panel that is not silently dropped - see SimpleSynthIDs.h.
 	if (data.outputParameterChanges == nullptr || data.numSamples <= 0)
 		return;
 
-	const bool forced = (mLastLiveShape < 0.0);
-	if (!forced && mSamplesSinceLive < mSampleRate / kLiveShapeUpdatesPerSecond)
+	bool forced = false;
+	for (double last : mLastLive)
+		forced = forced || (last < 0.0);
+	if (!forced && mSamplesSinceLive < mSampleRate / kLiveUpdatesPerSecond)
 		return;
 
-	// kLfoShape's own normalisation: -1..+1 to 0..1.
-	const double normalized = std::clamp (0.5 * (mDsp.lastLfoShape () + 1.0), 0.0, 1.0);
-	if (!forced && std::fabs (normalized - mLastLiveShape) < 1.0e-3)
-		return;
+	// EACH IN ITS OWN PARAMETER'S NORMALISATION, so the panel reads it
+	// back with that parameter's toInternal().
+	const ParamDef& res = paramDef (kResonance);
+	const ParamID ids[kNumLive] = { kLfoShapeLive, kCutoffLive, kResonanceLive };
+	const double values[kNumLive] = {
+		std::clamp (0.5 * (mDsp.lastLfoShape () + 1.0), 0.0, 1.0),       // -1..+1
+		paramDef (kCutoff).toNormalized (mDsp.lastCutoffHz ()),         // log Hz
+		std::clamp ((mDsp.lastResonance () - res.internalMin) / (res.internalMax - res.internalMin), 0.0, 1.0)
+	};
 
-	int32 index = 0;
-	if (IParamValueQueue* queue = data.outputParameterChanges->addParameterData (kLfoShapeLive, index))
+	bool published = false;
+	for (int i = 0; i < kNumLive; ++i)
 	{
-		int32 point = 0;
-		queue->addPoint (data.numSamples - 1, normalized, point);
-		mLastLiveShape = normalized;
-		mSamplesSinceLive = 0.0;
+		const bool due = (mLastLive[i] < 0.0) || std::fabs (values[i] - mLastLive[i]) >= 1.0e-3;
+		if (!due)
+			continue;
+		int32 index = 0;
+		if (IParamValueQueue* queue = data.outputParameterChanges->addParameterData (ids[i], index))
+		{
+			int32 point = 0;
+			queue->addPoint (data.numSamples - 1, values[i], point);
+			mLastLive[i] = values[i];
+			published = true;
+		}
 	}
+	if (published)
+		mSamplesSinceLive = 0.0;
 }
 
 //------------------------------------------------------------------------

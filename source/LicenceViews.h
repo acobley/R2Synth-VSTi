@@ -44,6 +44,12 @@ public:
 	void setDecision (const R2Licence::Decision& decision);
 	void setHandler (std::function<void ()> handler) { mHandler = std::move (handler); }
 
+	/** ADDED FOR THE UPDATED PANEL: draw the text in a rounded PILL,
+	    right-aligned in the view - amber with a dot while evaluating,
+	    mint once licensed - and take clicks only on the pill. Off (the
+	    default) is the old one-line badge, unchanged. */
+	void setPill (bool pill) { mPill = pill; invalid (); }
+
 	void draw (VSTGUI::CDrawContext* context) override;
 	void onMouseDownEvent (VSTGUI::MouseDownEvent& event) override;
 	void onMouseUpEvent (VSTGUI::MouseUpEvent& event) override;
@@ -53,7 +59,12 @@ private:
 	std::string mText;
 	bool mLicensed = false;
 	bool mPressed = false;
+	bool mPill = false;
+	VSTGUI::CRect mPillRect;   // where the pill was last drawn
 	std::function<void ()> mHandler;
+
+	void drawPill (VSTGUI::CDrawContext* context);
+	bool hit (const VSTGUI::CPoint& where) const;
 };
 
 //------------------------------------------------------------------------

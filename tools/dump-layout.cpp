@@ -2,12 +2,12 @@
 // tools/dump-layout.cpp - the panel as JSON, for tools/render-panel.py
 //
 // WHY A C++ TOOL AND NOT A PARSER. Everything the picture needs - the
-// positions, the boxes, the text on every control, the two displays'
+// positions, the sections, the text on every control, the four screens'
 // curves - is printed here by the SAME code the editor runs:
 // SimpleSynthLayout.h for where things are, SimpleSynthReadouts.cpp for
-// what they say, traceLfo() and traceEnvelopes() for the curves. The
-// Python script only draws. So the picture cannot drift from the panel
-// without this failing to compile first.
+// what they say, traceFilterResponse(), traceLfo() and traceEnvelopes()
+// for the curves. The Python script only draws. So the picture cannot
+// drift from the panel without this failing to compile first.
 //
 // The values are the parameter table's DEFAULTS, so docs/panel.png is the
 // panel as it opens on a fresh instance at 48 k.
@@ -41,17 +41,52 @@ std::string quoted (const std::string& s)
 	return out + "\"";
 }
 
+std::string rect (const Rect& r)
+{
+	char t[64];
+	std::snprintf (t, sizeof (t), "[%d,%d,%d,%d]", r.left, r.top, r.right, r.bottom);
+	return t;
+}
+
+const char* accentName (Accent a)
+{
+	switch (a)
+	{
+		case Accent::Osc:    return "\"osc\"";
+		case Accent::Filter: return "\"filter\"";
+		case Accent::Amp:    return "\"amp\"";
+		case Accent::Mod:    return "\"mod\"";
+	}
+	return "\"osc\"";
+}
+
+const char* styleName (CaptionStyle s)
+{
+	switch (s)
+	{
+		case CaptionStyle::Block: return "\"block\"";
+		case CaptionStyle::Field: return "\"field\"";
+		case CaptionStyle::Note:  return "\"note\"";
+		case CaptionStyle::Badge: return "\"badge\"";
+	}
+	return "\"note\"";
+}
+
 double internalDefault (Steinberg::Vst::ParamID id)
 {
 	return paramDef (id).toInternal (paramDef (id).defaultNormalized ());
 }
 
-void printCurve (const char* key, const float* v, int n, bool last)
+std::string curve (const float* v, int n)
 {
-	std::printf ("  %s: [", quoted (key).c_str ());
+	std::string out = "[";
+	char t[24];
 	for (int i = 0; i < n; ++i)
-		std::printf ("%s%.4f", i ? "," : "", v[i]);
-	std::printf ("]%s\n", last ? "" : ",");
+	{
+		std::snprintf (t, sizeof (t), "%s%.4f", i ? "," : "", v[i]);
+		out += t;
+	}
+	return out + "]";
 }
 
 } // anonymous namespace
@@ -59,96 +94,104 @@ void printCurve (const char* key, const float* v, int n, bool last)
 int main ()
 {
 	const double sampleRate = 48000.0;
+	const int n = kDisplayPoints;
 
 	std::printf ("{\n");
-	std::printf ("  \"width\": %d, \"height\": %d,\n", kEditorWidth, kEditorHeight);
-	std::printf ("  \"contentX\": %d, \"titleY\": %d, \"flowY\": %d, \"labelHeight\": %d, \"titleBand\": %d,\n",
-	             kContentX, kTitleY, kFlowY, kLabelHeight, kGroupTitleBand);
-	std::printf ("  \"title\": %s,\n  \"flow\": %s,\n",
-	             quoted (panelTitleText ()).c_str (), quoted (panelFlowText ()).c_str ());
+	std::printf ("  \"width\": %d, \"height\": %d, \"headerHeight\": %d,\n", kEditorWidth, kEditorHeight, kHeaderHeight);
+	std::printf ("  \"sectionPadX\": %d, \"sectionPadTop\": %d, \"sectionTitleH\": %d, \"sectionRadius\": %d,\n",
+	             kSectionPadX, kSectionPadTop, kSectionTitleH, kSectionRadius);
+	std::printf ("  \"knobGap\": %d, \"knobValueH\": %d, \"knobLabelH\": %d,\n", kKnobGap, kKnobValueH, kKnobLabelH);
+	std::printf ("  \"wordmark\": %s, \"engineLine\": {\"rect\": %s, \"text\": %s},\n", rect (kWordmark).c_str (),
+	             rect (kEngineLine).c_str (), quoted (engineLineText (sampleRate, internalDefault (kVcaRelease))).c_str ());
+	std::printf ("  \"badge\": %s,\n", rect (kBadge).c_str ());
+	std::printf ("  \"lamp\": {\"rect\": %s, \"on\": %s},\n", rect (kSelfOscLamp).c_str (),
+	             selfOscillating (internalDefault (kResonance)) ? "true" : "false");
+	std::printf ("  \"info\": {\"rect\": %s, \"text\": %s},\n", rect (kModInfoLine).c_str (),
+	             quoted (modInfoLineText (internalDefault)).c_str ());
 
-	std::printf ("  \"groups\": [\n");
-	for (int i = 0; i < kNumGroups; ++i)
-	{
-		const Rect r = groupRect (kGroups[i]);
-		std::printf ("    {\"title\": %s, \"rect\": [%d,%d,%d,%d]}%s\n", quoted (kGroups[i].title).c_str (),
-		             r.left, r.top, r.right, r.bottom, (i + 1 < kNumGroups) ? "," : "");
-	}
+	std::printf ("  \"sections\": [\n");
+	for (int i = 0; i < kNumSections; ++i)
+		std::printf ("    {\"title\": %s, \"subtitle\": %s, \"accent\": %s, \"rect\": %s}%s\n",
+		             quoted (kSections[i].title).c_str (), quoted (kSections[i].subtitle).c_str (),
+		             accentName (kSections[i].accent), rect (kSections[i].r).c_str (), (i + 1 < kNumSections) ? "," : "");
+	std::printf ("  ],\n");
+
+	std::printf ("  \"chevrons\": [");
+	for (size_t i = 0; i < sizeof (kChevrons) / sizeof (kChevrons[0]); ++i)
+		std::printf ("%s[%d,%d]", i ? "," : "", kChevrons[i].x, kChevrons[i].y);
+	std::printf ("],\n");
+
+	std::printf ("  \"rules\": [");
+	for (size_t i = 0; i < sizeof (kRules) / sizeof (kRules[0]); ++i)
+		std::printf ("%s%s", i ? "," : "", rect (kRules[i]).c_str ());
+	std::printf ("],\n");
+
+	std::printf ("  \"captions\": [\n");
+	for (int i = 0; i < kNumCaptions; ++i)
+		std::printf ("    {\"text\": %s, \"style\": %s, \"accent\": %s, \"rect\": %s}%s\n",
+		             quoted (kCaptions[i].text).c_str (), styleName (kCaptions[i].style),
+		             accentName (kCaptions[i].accent), rect (kCaptions[i].r).c_str (),
+		             (i + 1 < kNumCaptions) ? "," : "");
 	std::printf ("  ],\n");
 
 	std::printf ("  \"controls\": [\n");
 	for (int i = 0; i < kNumControls; ++i)
 	{
 		const Control& c = kControls[i];
-		const Rect r = controlRect (c);
-		const double n = paramDef (c.tag).defaultNormalized ();
-		const bool selector = (c.kind == Kind::Selector);
-		const std::string text = selector ? selectorText (c.tag, static_cast<int> (internalDefault (c.tag)))
-		                                  : readoutText (c.tag, n);
-		const bool lamp = (c.tag == kResonance);
-		std::printf ("    {\"kind\": %s, \"rect\": [%d,%d,%d,%d], \"value\": %.4f, \"text\": %s, \"label\": %s, "
-		             "\"lamp\": %s, \"lit\": %s}%s\n",
-		             selector ? "\"selector\"" : "\"slider\"", r.left, r.top, r.right, r.bottom, n,
-		             quoted (text).c_str (), quoted (shortLabel (c.tag)).c_str (),
-		             lamp ? "true" : "false",
-		             (lamp && selfOscillating (internalDefault (kResonance))) ? "true" : "false",
-		             (i + 1 < kNumControls) ? "," : "");
+		const double v = paramDef (c.tag).defaultNormalized ();
+		std::string names = "[";
+		if (c.kind == Kind::Switch)
+			for (int p = 0; p <= paramDef (c.tag).stepCount; ++p)
+				names += std::string (p ? "," : "") + quoted (enumName (c.tag, p));
+		names += "]";
+		std::printf ("    {\"kind\": %s, \"accent\": %s, \"rect\": %s, \"diameter\": %d, \"bipolar\": %s, "
+		             "\"value\": %.4f, \"text\": %s, \"label\": %s, \"names\": %s}%s\n",
+		             (c.kind == Kind::Knob) ? "\"knob\"" : "\"switch\"", accentName (c.accent),
+		             rect (controlRect (c)).c_str (), c.diameter, c.bipolar ? "true" : "false", v,
+		             quoted (readoutText (c.tag, v)).c_str (), quoted (controlLabel (c)).c_str (),
+		             names.c_str (), (i + 1 < kNumControls) ? "," : "");
 	}
 	std::printf ("  ],\n");
 
-	// The readout lines, from the same functions the editor calls.
-	std::printf ("  \"readouts\": [\n");
-	// The engine line sits on the title row; the text baseline of the
-	// title's main face is a couple of pixels lower than the small one.
-	std::printf ("    {\"x\": %d, \"y\": %d, \"colour\": \"value\", \"text\": %s},\n", kEngineLineX, kTitleY,
-	             quoted (engineLineText (sampleRate, internalDefault (kVcaRelease))).c_str ());
-	std::printf ("    {\"x\": %d, \"y\": %d, \"colour\": \"trace\", \"text\": %s},\n", kReadoutX, kReadout1Y,
-	             quoted (lfoLineText (internalDefault)).c_str ());
-	std::printf ("    {\"x\": %d, \"y\": %d, \"colour\": \"trace\", \"text\": %s},\n", kReadoutX, kReadout2Y,
-	             quoted (lfoDepthsLineText (internalDefault)).c_str ());
-	std::printf ("    {\"x\": %d, \"y\": %d, \"colour\": \"value\", \"text\": %s}\n", kReadoutX, kReadout3Y,
-	             quoted (lfo2LineText (internalDefault)).c_str ());
-	std::printf ("  ],\n");
+	// ---- the four screens, from the editor's own functions ---------------
+	float filter[kDisplayPoints];
+	double mx = 0.0, my = 0.0;
+	filterDisplayData (internalDefault (kCutoff), internalDefault (kResonance), sampleRate, filter, n, mx, my);
 
-	// The two displays, drawn by the plug-in's own trace functions.
-	// The LFO display for whichever output the environment asks for
-	// (SS_LFO_OUTPUT=0/1/2, SS_LFO_SHAPE=-1..1), defaults otherwise - so
-	// the picture can show any output without a second copy of the maths.
-	float a[kDisplayPoints], b[kDisplayPoints];
-	const char* envOut = std::getenv ("SS_LFO_OUTPUT");
-	const char* envShape = std::getenv ("SS_LFO_SHAPE");
-	const double lfoOut = envOut ? std::atof (envOut) : internalDefault (kLfoOutput);
-	const double lfoShape = envShape ? std::atof (envShape) : internalDefault (kLfoShape);
-	std::string pl, cl;
-	lfoDisplayData (lfoOut, lfoShape, a, b, kDisplayPoints, 2.0, pl, cl);
-	std::printf ("  \"lfoView\": {\"rect\": [%d,%d,%d,%d], \"caption\": %s, \"annotation\": \"%.2f s\", "
-	             "\"legend\": [%s, %s], \"gate\": -1,\n",
-	             kDisplayX, kLfoViewTop, kDisplayX + kDisplayWidth, kLfoViewBottom,
-	             quoted (lfoDisplayCaption (internalDefault (kLfo2Level))).c_str (),
-	             2.0 / internalDefault (kLfoRate),
-	             quoted (pl).c_str (), quoted (cl).c_str ());
-	printCurve ("a", a, kDisplayPoints, false);
-	printCurve ("b", b, kDisplayPoints, true);
-	std::printf ("  },\n");
-
-	AdsrSpec vcf { internalDefault (kVcfAttack), internalDefault (kVcfDecay),
-	               internalDefault (kVcfSustain), internalDefault (kVcfRelease) };
-	AdsrSpec vca { internalDefault (kVcaAttack), internalDefault (kVcaDecay),
-	               internalDefault (kVcaSustain), internalDefault (kVcaRelease) };
+	AdsrSpec vcf, vca;
+	vcf.attack = internalDefault (kVcfAttack);  vcf.decay = internalDefault (kVcfDecay);
+	vcf.sustain = internalDefault (kVcfSustain); vcf.release = internalDefault (kVcfRelease);
+	vca.attack = internalDefault (kVcaAttack);  vca.decay = internalDefault (kVcaDecay);
+	vca.sustain = internalDefault (kVcaSustain); vca.release = internalDefault (kVcaRelease);
+	float vcfCurve[kDisplayPoints], vcaCurve[kDisplayPoints];
 	double gateOff = 0.0;
-	const double span = traceEnvelopes (vcf, vca, a, b, kDisplayPoints, &gateOff);
-	char legend[48];
-	std::snprintf (legend, sizeof (legend), "VCF ENV %+.1foct", internalDefault (kVcfEnvAmount));
-	std::printf ("  \"envView\": {\"rect\": [%d,%d,%d,%d], \"caption\": \"ENVELOPES  (key up at the dots)\", "
-	             "\"annotation\": \"%s\", \"legend\": [%s, \"VCA ENV\"], \"gate\": %.4f,\n",
-	             kDisplayX, kEnvViewTop, kDisplayX + kDisplayWidth, kEnvViewBottom,
-	             (span >= 1.0 ? (std::to_string (span).substr (0, 4) + " s").c_str ()
-	                          : (std::to_string (static_cast<int> (span * 1000.0 + 0.5)) + " ms").c_str ()),
-	             quoted (legend).c_str (), gateOff / span);
-	printCurve ("a", a, kDisplayPoints, false);
-	printCurve ("b", b, kDisplayPoints, true);
-	std::printf ("  }\n");
+	const double span = traceEnvelopes (vcf, vca, vcfCurve, vcaCurve, n, &gateOff);
+	const std::string amount = envAmountText (internalDefault (kVcfEnvAmount));
 
+	float patched[kDisplayPoints], companion[kDisplayPoints];
+	std::string patchedLegend, companionLegend;
+	lfoDisplayData (internalDefault (kLfoOutput), internalDefault (kLfoShape), patched, companion, n, 2.0,
+	                patchedLegend, companionLegend);
+
+	const std::string filterNote = filterDisplayAnnotation (paramDef (kCutoff).defaultNormalized (),
+	                                                        paramDef (kResonance).defaultNormalized ());
+
+	std::printf ("  \"screens\": [\n");
+	std::printf ("    {\"rect\": %s, \"accent\": \"filter\", \"fill\": true, \"caption\": %s, \"annotation\": %s, "
+	             "\"legend\": [\"20 Hz\", \"20 kHz\"], \"marker\": [%.4f, %.4f], \"gate\": -1, \"main\": %s, \"companion\": []},\n",
+	             rect (kFilterView).c_str (), quoted (filterDisplayCaption ()).c_str (), quoted (filterNote).c_str (),
+	             mx, my, curve (filter, n).c_str ());
+	std::printf ("    {\"rect\": %s, \"accent\": \"filter\", \"fill\": true, \"caption\": \"\", \"annotation\": %s, "
+	             "\"legend\": [\"\", \"\"], \"marker\": [-1, 0], \"gate\": %.4f, \"main\": %s, \"companion\": []},\n",
+	             rect (kFilterEnvView).c_str (), quoted (amount).c_str (), gateOff / span, curve (vcfCurve, n).c_str ());
+	std::printf ("    {\"rect\": %s, \"accent\": \"amp\", \"fill\": true, \"caption\": \"key up at the dotted line\", "
+	             "\"annotation\": %s, \"legend\": [\"\", \"\"], \"marker\": [-1, 0], \"gate\": %.4f, \"main\": %s, \"companion\": []},\n",
+	             rect (kAmpEnvView).c_str (), quoted (spanText (span)).c_str (), gateOff / span, curve (vcaCurve, n).c_str ());
+	std::printf ("    {\"rect\": %s, \"accent\": \"mod\", \"fill\": false, \"caption\": \"\", \"annotation\": \"\", "
+	             "\"legend\": [%s, %s], \"marker\": [-1, 0], \"gate\": -1, \"main\": %s, \"companion\": %s}\n",
+	             rect (kLfoView).c_str (), quoted (patchedLegend).c_str (), quoted (companionLegend).c_str (),
+	             curve (patched, n).c_str (), curve (companion, n).c_str ());
+	std::printf ("  ]\n");
 	std::printf ("}\n");
 	return 0;
 }

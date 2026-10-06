@@ -22,15 +22,16 @@ namespace SimpleSynth {
 //------------------------------------------------------------------------
 namespace {
 
-/** The panel's background - FilterDrum's. Darker than the controls' bar
-    fill so the bars read as raised, which is what the DXi's Draw3dRect
-    did. */
-const CColor kPanelBack (44, 48, 44, 255);
-
-/** How many LFO cycles the display shows. Two, so the join between one
+/** How many LFO cycles the screen shows. Two, so the join between one
     cycle and the next - where a sawtooth resets - is in the middle of
     the picture rather than at its edges. */
 constexpr double kLfoDisplayCycles = 2.0;
+
+CRect toCRect (const Layout::Rect& r)
+{
+	return CRect (r.left, r.top, r.right, r.bottom);
+}
+
 
 } // anonymous namespace
 
@@ -44,36 +45,18 @@ SimpleSynthEditor::SimpleSynthEditor (SimpleSynthController* controller)
 }
 
 //------------------------------------------------------------------------
-CTextLabel* SimpleSynthEditor::addTextLine (int x, int y, int width, const char* text,
-                                            const CColor& colour, bool small)
+CTextLabel* SimpleSynthEditor::addTextLine (const Layout::Rect& r, CFontRef font,
+                                            const CColor& colour, CHoriTxtAlign align)
 {
-	CRect r (x, y, x + width, y + Layout::kLabelHeight);
-	auto* label = new CTextLabel (r, text);
-	label->setFont (small ? panelFontSmall () : panelFont ());
+	auto* label = new CTextLabel (toCRect (r), "");
+	label->setFont (font);
 	label->setFontColor (colour);
-	label->setBackColor (kPanelBack);
-	label->setFrameColor (kPanelBack);
-	label->setHoriAlign (kLeftText);
+	label->setTransparency (true);
+	label->setStyle (CParamDisplay::kNoFrame);
+	label->setHoriAlign (align);
 	label->setMouseEnabled (false);
 	frame->addView (label);
 	return label;
-}
-
-//------------------------------------------------------------------------
-void SimpleSynthEditor::addGroupBox (const Layout::Group& group)
-{
-	// ADDED BEFORE THE CONTROLS IT ENCLOSES, so it is behind them. It is
-	// mouse-disabled and never fills, so a click inside it reaches
-	// whatever is really there.
-	//
-	// THE VIEW STARTS AT THE TOP OF THE TITLE and the frame line is drawn
-	// kGroupTitleBand down it - see the note on kGroupTitleBand in
-	// SimpleSynthLayout.h for why the title used to be cut off.
-	const Layout::Rect r = Layout::groupRect (group);
-	auto* box = new SpyGroupBox (CRect (r.left, r.top, r.right, r.bottom),
-	                             group.title, Colours::kGroupFrame);
-	box->setTitleBand (Layout::kGroupTitleBand);
-	frame->addView (box);
 }
 
 //------------------------------------------------------------------------
@@ -84,60 +67,35 @@ bool PLUGIN_API SimpleSynthEditor::open (void* parent, const PlatformType& platf
 
 	CRect frameSize (0, 0, kEditorWidth, kEditorHeight);
 	frame = new CFrame (frameSize, this);
-	frame->setBackgroundColor (kPanelBack);
+	frame->setBackgroundColor (Panel::Palette::kGround);
 	frame->open (parent, platformType);
 
-	// The title and the engine line share the top row.
-	addTextLine (Layout::kContentX, Layout::kTitleY, Layout::kTitleWidth,
-	             panelTitleText (), Colours::kValue, false);
-	mRateLabel = addTextLine (Layout::kEngineLineX, Layout::kTitleY, Layout::kEngineLineWidth,
-	                          "", Colours::kValue, true);
+	// ---- everything that never changes, behind everything else ----------
+	frame->addView (new Panel::Backdrop (frameSize));
 
-	// The signal path, in the green the section labels use, with the one
-	// fact about playing it the panel cannot otherwise show. The lamp is
-	// explained here because it is the one thing on the panel that
-	// lights on its own.
-	addTextLine (Layout::kContentX, Layout::kFlowY, Layout::kFlowWidth,
-	             panelFlowText (), Colours::kLabel, false);
+	// ---- the screens -------------------------------------------------------
+	auto addScope = [this] (const Layout::Rect& r, Layout::Accent main, const CColor& companion, bool fill) {
+		auto* scope = new Panel::Scope (toCRect (r));
+		scope->setColours (Panel::Palette::accent (main), companion);
+		scope->setFill (fill);
+		frame->addView (scope);
+		return scope;
+	};
+	mFilterView    = addScope (Layout::kFilterView, Layout::Accent::Filter, Panel::Palette::kDim, true);
+	mFilterEnvView = addScope (Layout::kFilterEnvView, Layout::Accent::Filter, Panel::Palette::kMuted, true);
+	mAmpEnvView    = addScope (Layout::kAmpEnvView, Layout::Accent::Amp, Panel::Palette::kMuted, true);
+	mLfoView       = addScope (Layout::kLfoView, Layout::Accent::Mod, Panel::Palette::kDim, false);
 
-	// ---- the boxes, then the controls in them --------------------------
-	//
-	// BACK TO FRONT, because a SpyGroupBox is a line and whatever is
-	// added later draws over it.
-	for (const auto& g : Layout::kGroups)
-		addGroupBox (g);
+	// ---- the lamp, and the two lines of text that change -------------------
+	mSelfOscLamp = new Panel::Lamp (toCRect (Layout::kSelfOscLamp), "Self-osc");
+	frame->addView (mSelfOscLamp);
 
+	mEngineLabel  = addTextLine (Layout::kEngineLine, Panel::fontSubtitle (), Panel::Palette::kSubtle, kLeftText);
+	mModInfoLabel = addTextLine (Layout::kModInfoLine, Panel::fontValue (), Panel::Palette::kSubtle, kLeftText);
+
+	// ---- the controls -----------------------------------------------------
 	for (const auto& c : Layout::kControls)
 		addControl (c);
-
-	// THE LAMP, on the resonance knob - the DXi SlideSpin's own 10 x 10
-	// corner lamp, and exactly what it was for.
-	if (auto* res = dynamic_cast<SpySlider*> (mControls[kResonance]))
-		res->setUseIndicator (true);
-
-	// ---- the two displays ----------------------------------------------
-	{
-		CRect r (Layout::kDisplayX, Layout::kLfoViewTop,
-		         Layout::kDisplayX + Layout::kDisplayWidth, Layout::kLfoViewBottom);
-		mLfoView = new SpyEnvelopeView (r);
-		mLfoView->setShowAmounts (false);
-		frame->addView (mLfoView);
-	}
-	{
-		CRect r (Layout::kDisplayX, Layout::kEnvViewTop,
-		         Layout::kDisplayX + Layout::kDisplayWidth, Layout::kEnvViewBottom);
-		mEnvView = new SpyEnvelopeView (r);
-		mEnvView->setShowAmounts (false);
-		frame->addView (mEnvView);
-	}
-
-	// ---- the readout lines beside the two LFOs -------------------------
-	mLfoLabel       = addTextLine (Layout::kReadoutX, Layout::kReadout1Y, Layout::kReadoutWidth,
-	                               "", Colours::kTrace, true);
-	mLfoDepthsLabel = addTextLine (Layout::kReadoutX, Layout::kReadout2Y, Layout::kReadoutWidth,
-	                               "", Colours::kTrace, true);
-	mLfo2Label      = addTextLine (Layout::kReadoutX, Layout::kReadout3Y, Layout::kReadoutWidth,
-	                               "", Colours::kValue, true);
 
 	refreshAllReadouts ();
 
@@ -149,9 +107,8 @@ bool PLUGIN_API SimpleSynthEditor::open (void* parent, const PlatformType& platf
 	// the audio path; an unlicensed SimpleSynth sounds exactly the same.
 	{
 		const auto decision = mLicence.editorOpened (R2Licence::LicenceStore::today ());
-		mLicenceBadge = new LicenceBadge (CRect (Layout::kBadgeX, Layout::kBadgeY,
-		                                         Layout::kBadgeX + Layout::kBadgeWidth,
-		                                         Layout::kBadgeY + Layout::kBadgeHeight));
+		mLicenceBadge = new LicenceBadge (toCRect (Layout::kBadge));
+		mLicenceBadge->setPill (true);
 		mLicenceBadge->setDecision (decision);
 		mLicenceBadge->setHandler ([this] { openLicenceDialog (); });
 		frame->addView (mLicenceBadge);
@@ -217,12 +174,13 @@ void PLUGIN_API SimpleSynthEditor::close ()
 	mLicenceBadge = nullptr;
 
 	mControls.clear ();
+	mFilterView = nullptr;
+	mFilterEnvView = nullptr;
+	mAmpEnvView = nullptr;
 	mLfoView = nullptr;
-	mEnvView = nullptr;
-	mLfoLabel = nullptr;
-	mLfoDepthsLabel = nullptr;
-	mLfo2Label = nullptr;
-	mRateLabel = nullptr;
+	mSelfOscLamp = nullptr;
+	mEngineLabel = nullptr;
+	mModInfoLabel = nullptr;
 
 	if (frame)
 	{
@@ -232,50 +190,54 @@ void PLUGIN_API SimpleSynthEditor::close ()
 }
 
 //------------------------------------------------------------------------
-//------------------------------------------------------------------------
 void SimpleSynthEditor::addControl (const Layout::Control& c)
 {
-	const Layout::Rect lr = Layout::controlRect (c);
-	const CRect r (lr.left, lr.top, lr.right, lr.bottom);
+	const CRect r = toCRect (Layout::controlRect (c));
 	const ParamID tag = c.tag;
 
-	if (c.kind == Layout::Kind::Selector)
+	if (c.kind == Layout::Kind::Switch)
 	{
-		auto* sel = new SpySelector (r, this, static_cast<int32_t> (tag));
+		auto* sw = new Panel::SegmentSwitch (r, this, static_cast<int32_t> (tag), c.accent);
 
 		// THE NAMES COME FROM enumName(), the same list the controller's
 		// toString reads, so the panel and the host's automation lane
 		// say the same word.
-		//
-		// COMPACT: the switch is drawn the height of a slider's bar, with
-		// its label underneath like a slider's - see SpySelector::
-		// setCompact.
 		std::vector<std::string> names;
 		for (int i = 0; i <= paramDef (tag).stepCount; ++i)
-			names.push_back (selectorText (tag, i));
-		sel->setNames (names);
-		sel->setCompact (true);
-		sel->setLabel (shortLabel (tag));
-		registerControl (tag, sel);
+			names.push_back (enumName (tag, i));
+		sw->setNames (names);
+		registerControl (tag, sw);
 		return;
 	}
 
-	auto* slider = new SpySlider (r, this, static_cast<int32_t> (tag));
-	slider->setLabel (shortLabel (tag));
+	auto* knob = new Panel::Knob (r, this, static_cast<int32_t> (tag), c.accent, c.diameter, c.bipolar);
+	knob->setLabel (controlLabel (c));
 
 	// THE PANEL BORROWS readoutFor() rather than formatting in the
 	// control, so every number on the panel has one source.
-	slider->setFormatter ([this, tag] (float /*normalized*/) { return readoutFor (tag); });
-
-	registerControl (tag, slider);
+	knob->setFormatter ([this, tag] (float /*normalized*/) { return readoutFor (tag); });
+	registerControl (tag, knob);
 }
 
 //------------------------------------------------------------------------
 void SimpleSynthEditor::registerControl (ParamID tag, CControl* control)
 {
 	mControls[tag] = control;
+
+	// Double-click on a knob returns here: the table's default, the
+	// same value a fresh instance opens with - EXCEPT THE THREE TUNES,
+	// which return to 0 st, in tune. VCO 2's table default is -12 st
+	// (the default patch has it an octave down), and a double-click that
+	// sent one Tune to 0 and another to -12 read as a bug (Andy, 6 Oct).
+	// A fresh instance still opens with VCO 2 an octave down.
+	const bool isTune = (tag == kVco1Tune || tag == kVco2Tune || tag == kVco3Tune);
+	control->setDefaultValue (static_cast<float> (isTune ? paramDef (tag).toNormalized (0.0)
+	                                                     : paramDef (tag).defaultNormalized ()));
+
 	if (mController)
 		control->setValueNormalized (static_cast<float> (mController->getParamNormalized (tag)));
+	else
+		control->setValueNormalized (static_cast<float> (paramDef (tag).defaultNormalized ()));
 	frame->addView (control);
 }
 
@@ -295,6 +257,11 @@ double SimpleSynthEditor::normalizedOf (ParamID tag) const
 double SimpleSynthEditor::internalOf (ParamID tag) const
 {
 	return paramDef (tag).toInternal (normalizedOf (tag));
+}
+
+double SimpleSynthEditor::sampleRate () const
+{
+	return mController ? mController->getHostSampleRate () : 44100.0;
 }
 
 //------------------------------------------------------------------------
@@ -337,12 +304,37 @@ void SimpleSynthEditor::refreshDependents (ParamID tag)
 {
 	switch (tag)
 	{
+		case kCutoff:
+			// The knob moved: draw the knob until the processor's next
+			// live pair, so a turn shows at once even with no audio.
+			mHaveLiveFilter = false;
+			refreshFilterDisplay ();
+			break;
+
 		case kResonance:
+			mHaveLiveFilter = false;
+			mHaveLiveResonance = false;
 			refreshResonanceLamp ();
+			refreshFilterDisplay ();
+			break;
+
+		case kCutoffLive:
+			// ONLY the screen: these arrive up to 60 times a second.
+			mLiveCutoffHz = paramDef (kCutoff).toInternal (normalizedOf (kCutoffLive));
+			mHaveLiveFilter = true;
+			refreshFilterDisplay ();
+			break;
+
+		case kResonanceLive:
+			mLiveResonance = paramDef (kResonance).toInternal (normalizedOf (kResonanceLive));
+			mHaveLiveFilter = true;
+			mHaveLiveResonance = true;
+			refreshResonanceLamp ();    // the lamp follows LFO 1 too
+			refreshFilterDisplay ();
 			break;
 
 		case kLfoShapeLive:
-			// ONLY the display: it arrives up to 60 times a second.
+			// ONLY the screen: it arrives up to 60 times a second.
 			mLiveShape = paramDef (kLfoShape).toInternal (normalizedOf (kLfoShapeLive));
 			mHaveLiveShape = true;
 			refreshLfoDisplay ();
@@ -358,28 +350,24 @@ void SimpleSynthEditor::refreshDependents (ParamID tag)
 
 		case kLfoRate:
 		case kLfoOutput:
+		case kLfo2Level:
 			refreshLfoDisplay ();
 			refreshInfoLines ();
 			break;
 
-		case kLfo2Level:
-			refreshLfoDisplay ();    // the caption says whether it is swept
-			refreshInfoLines ();
-			break;
-
 		case kLfo2Rate:
-		case kLfoPitch:
-		case kVcfLfo:
-		case kVcfLfoRes:
-		case kVcaLfo:
 			refreshInfoLines ();
 			break;
 
 		case kVcfAttack: case kVcfDecay: case kVcfSustain: case kVcfRelease:
-		case kVcaAttack: case kVcaDecay: case kVcaSustain: case kVcaRelease:
+		case kVcaAttack: case kVcaDecay: case kVcaSustain:
 		case kVcfEnvAmount:
-			refreshEnvelopeDisplay ();
-			refreshInfoLines ();
+			refreshEnvelopeDisplays ();
+			break;
+
+		case kVcaRelease:
+			refreshEnvelopeDisplays ();
+			refreshInfoLines ();    // the release tail is on the engine line
 			break;
 
 		default:
@@ -395,27 +383,14 @@ std::string SimpleSynthEditor::readoutFor (ParamID tag) const
 	return readoutText (tag, normalizedOf (tag));
 }
 
-//------------------------------------------------------------------------
-std::string SimpleSynthEditor::lfoLine () const
+std::string SimpleSynthEditor::modInfoLine () const
 {
-	return lfoLineText ([this] (ParamID id) { return internalOf (id); });
+	return modInfoLineText ([this] (ParamID id) { return internalOf (id); });
 }
 
-std::string SimpleSynthEditor::lfoDepthsLine () const
-{
-	return lfoDepthsLineText ([this] (ParamID id) { return internalOf (id); });
-}
-
-std::string SimpleSynthEditor::lfo2Line () const
-{
-	return lfo2LineText ([this] (ParamID id) { return internalOf (id); });
-}
-
-//------------------------------------------------------------------------
 std::string SimpleSynthEditor::engineLine () const
 {
-	const double rate = mController ? mController->getHostSampleRate () : 44100.0;
-	return engineLineText (rate, internalOf (kVcaRelease));
+	return engineLineText (sampleRate (), internalOf (kVcaRelease));
 }
 
 //------------------------------------------------------------------------
@@ -428,15 +403,8 @@ void SimpleSynthEditor::refreshInfoLines ()
 			label->invalid ();
 		}
 	};
-	set (mLfoLabel, lfoLine ());
-	set (mLfoDepthsLabel, lfoDepthsLine ());
-	set (mLfo2Label, lfo2Line ());
-
-	if (mRateLabel)
-	{
-		mRateLabel->setText (engineLine ().c_str ());
-		mRateLabel->invalid ();
-	}
+	set (mModInfoLabel, modInfoLine ());
+	set (mEngineLabel, engineLine ());
 }
 
 //------------------------------------------------------------------------
@@ -446,38 +414,68 @@ double SimpleSynthEditor::displayShape () const
 }
 
 //------------------------------------------------------------------------
+void SimpleSynthEditor::refreshFilterDisplay ()
+{
+	if (!mFilterView)
+		return;
+
+	// THE KNOBS' CURVE always; THE LIVE CURVE over it when the processor
+	// has sent one - the filter as the envelope, key tracking and LFO 1
+	// have moved it. Live, the knobs' curve stays as a dim companion, so
+	// the modulation shows as the distance between the two.
+	float knobs[Layout::kDisplayPoints];
+	double knobX = 0.0, knobY = 0.0;
+	filterDisplayData (internalOf (kCutoff), internalOf (kResonance), sampleRate (),
+	                   knobs, Layout::kDisplayPoints, knobX, knobY);
+
+	mFilterView->setLegend ("20 Hz", "20 kHz");
+	if (mHaveLiveFilter)
+	{
+		float live[Layout::kDisplayPoints];
+		double liveX = 0.0, liveY = 0.0;
+		filterDisplayData (mLiveCutoffHz, mLiveResonance, sampleRate (),
+		                   live, Layout::kDisplayPoints, liveX, liveY);
+
+		mFilterView->setCaption (filterDisplayCaption (true));
+		mFilterView->setAnnotation (filterDisplayAnnotation (normalizedOf (kCutoffLive),
+		                                                     normalizedOf (kResonanceLive)));
+		mFilterView->setMarker (liveX, liveY);
+		mFilterView->setCurves (live, knobs, Layout::kDisplayPoints);
+		return;
+	}
+
+	mFilterView->setCaption (filterDisplayCaption (false));
+	mFilterView->setAnnotation (filterDisplayAnnotation (normalizedOf (kCutoff), normalizedOf (kResonance)));
+	mFilterView->setMarker (knobX, knobY);
+	mFilterView->setCurves (knobs, nullptr, Layout::kDisplayPoints);
+}
+
+//------------------------------------------------------------------------
 void SimpleSynthEditor::refreshLfoDisplay ()
 {
 	if (!mLfoView)
 		return;
 
 	// lfoDisplayData() - shared with the panel picture's tool - traces
-	// the PATCHED output in green and a companion in red, through the
-	// same lfoOutputValue() the running LFO uses.
+	// the PATCHED output and a companion, through the same
+	// lfoOutputValue() the running LFO uses.
 	float patched[Layout::kDisplayPoints];
 	float companion[Layout::kDisplayPoints];
 	std::string patchedLegend, companionLegend;
 	lfoDisplayData (internalOf (kLfoOutput), displayShape (), patched, companion,
 	                Layout::kDisplayPoints, kLfoDisplayCycles, patchedLegend, companionLegend);
 
-	const double rate = internalOf (kLfoRate);
-
-	char annotation[32] = {};
-	std::snprintf (annotation, sizeof (annotation), "%.2f s", kLfoDisplayCycles / rate);
-
-	// THE PATCHED OUTPUT IS IN CAPITALS with an arrow, the companion in
-	// lower case: both are drawn, because the Shape knob moves both, but
-	// only one of them is reaching anything.
-	mLfoView->setCaption (lfoDisplayCaption (internalOf (kLfo2Level)));
-	mLfoView->setAnnotation (annotation);
+	// The screen is small: no caption - the period is on the info line
+	// under it - and the two legends along the foot, the patched one in
+	// capitals.
 	mLfoView->setLegend (patchedLegend, companionLegend);
 	mLfoView->setCurves (patched, companion, Layout::kDisplayPoints);
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::refreshEnvelopeDisplay ()
+void SimpleSynthEditor::refreshEnvelopeDisplays ()
 {
-	if (!mEnvView)
+	if (!mFilterEnvView || !mAmpEnvView)
 		return;
 
 	// Built from PARAMETERS through toInternal() - the same conversion
@@ -498,39 +496,41 @@ void SimpleSynthEditor::refreshEnvelopeDisplay ()
 	float vcaCurve[Layout::kDisplayPoints];
 	double gateOff = 0.0;
 	const double span = traceEnvelopes (vcf, vca, vcfCurve, vcaCurve, Layout::kDisplayPoints, &gateOff);
+	const double gate = (span > 0.0) ? gateOff / span : -1.0;
 
-	char annotation[32] = {};
-	if (span >= 1.0)
-		std::snprintf (annotation, sizeof (annotation), "%.2f s", span);
-	else
-		std::snprintf (annotation, sizeof (annotation), "%.0f ms", span * 1000.0);
+	// THE TWO SCREENS SHARE ONE TIME AXIS - traceEnvelopes() runs both
+	// through one note - so a filter release that outlasts the amp's
+	// still shows as the longer of the two, as it did on the old single
+	// display. The amp screen prints the span; the filter screen the
+	// amount, WITH ITS SIGN, because an inverted envelope is the same
+	// shape as an upright one and only the text can say so.
+	mFilterEnvView->setAnnotation (envAmountText (internalOf (kVcfEnvAmount)));
+	mFilterEnvView->setGateMarker (gate);
+	mFilterEnvView->setCurves (vcfCurve, nullptr, Layout::kDisplayPoints);
 
-	// The VCF legend carries the Amount WITH ITS SIGN: an inverted
-	// envelope is the same shape as an upright one, so neither the curve
-	// nor anything else on the display could show the difference.
-	char vcfLegend[32] = {};
-	std::snprintf (vcfLegend, sizeof (vcfLegend), "VCF ENV %+.1foct", internalOf (kVcfEnvAmount));
-
-	mEnvView->setCaption ("ENVELOPES  (key up at the dots)");
-	mEnvView->setAnnotation (annotation);
-	mEnvView->setLegend (vcfLegend, "VCA ENV");
-	mEnvView->setGateMarker ((span > 0.0) ? gateOff / span : -1.0);
-	mEnvView->setCurves (vcfCurve, vcaCurve, Layout::kDisplayPoints);
+	mAmpEnvView->setCaption ("key up at the dotted line");
+	mAmpEnvView->setAnnotation (spanText (span));
+	mAmpEnvView->setGateMarker (gate);
+	mAmpEnvView->setCurves (vcaCurve, nullptr, Layout::kDisplayPoints);
 }
 
 //------------------------------------------------------------------------
 void SimpleSynthEditor::refreshResonanceLamp ()
 {
-	auto it = mControls.find (kResonance);
-	if (it == mControls.end () || it->second == nullptr)
-		return;
-
-	if (auto* slider = dynamic_cast<SpySlider*> (it->second))
+	// selfOscillating() ON THE INTERNAL VALUE - loop gain, not per cent -
+	// the predicate the DSP's own table is built around.
+	//
+	// THE LIVE RESONANCE when there is one (6 Oct): the knob moved by
+	// LFO 1, as the processor publishes it, so the lamp flashes when the
+	// LFO swings the filter into self-oscillation. The knob alone until
+	// the first live value, and again for a moment after the knob moves,
+	// so a turn shows at once with no audio running - the filter
+	// screen's rule. The live value arrives at up to 60 a second, so an
+	// LFO faster than that can cross 1.0 between two of them.
+	if (mSelfOscLamp)
 	{
-		// selfOscillating() ON THE INTERNAL VALUE - loop gain, not per
-		// cent - the predicate the DSP's own table is built around.
-		slider->setIndicator (selfOscillating (internalOf (kResonance)));
-		slider->invalid ();
+		const double k = mHaveLiveResonance ? mLiveResonance : internalOf (kResonance);
+		mSelfOscLamp->setOn (selfOscillating (k));
 	}
 }
 
@@ -542,8 +542,9 @@ void SimpleSynthEditor::refreshAllReadouts ()
 			entry.second->invalid ();
 
 	refreshResonanceLamp ();
+	refreshFilterDisplay ();
 	refreshLfoDisplay ();
-	refreshEnvelopeDisplay ();
+	refreshEnvelopeDisplays ();
 	refreshInfoLines ();
 }
 

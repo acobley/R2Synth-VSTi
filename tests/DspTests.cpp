@@ -127,6 +127,7 @@ void applyDefaultPatch (SimpleSynthDsp& d)
 	d.setVcfEnvelope ({ 0.005, 0.300, 0.30, 0.300 });
 	d.setLfoVcaDepth (0.0);
 	d.setVcaEnvelope ({ 0.003, 0.500, 0.80, 0.250 });
+	d.setPortamento (kMinPortamentoSeconds);   // off
 }
 
 /** SpaceDub's DelayLine filter loop, copied verbatim from
@@ -1052,6 +1053,145 @@ static void testNotes ()
 }
 
 //------------------------------------------------------------------------
+// Portamento: every note slides from the last, overlapping or not
+//------------------------------------------------------------------------
+static void testPortamento ()
+{
+	std::printf ("portamento\n");
+
+	const double fs = 48000.0;
+	SimpleSynthDsp dsp;
+	dsp.setSampleRate (fs);
+	applyDefaultPatch (dsp);
+	dsp.reset ();
+
+	std::vector<float> l (96000), r (96000);
+	auto run = [&] (int n) { dsp.render (l.data (), r.data (), n); };
+
+	// ---- the predicate and the range --------------------------------
+	check (!portamentoActive (kMinPortamentoSeconds), "the bottom of the knob is off");
+	check (portamentoActive (0.002), "2 ms glides");
+
+	// ---- OFF: an exact jump, as before portamento existed ------------
+	dsp.noteOn (48, 1.f);
+	run (100);
+	dsp.noteOn (60, 1.f);
+	run (1);
+	check (dsp.currentPitch () == 60.0 && !dsp.gliding (), "off: the new note sounds at once");
+	dsp.allNotesOff ();
+
+	// ---- ON, the first note after a reset does NOT slide in ----------
+	const double t = 0.100;   // 100 ms
+	dsp.setPortamento (t);
+	dsp.reset ();
+	dsp.noteOn (48, 1.f);
+	run (1);
+	check (dsp.currentPitch () == 48.0 && !dsp.gliding (), "the first note after a reset starts in tune");
+
+	// ---- OVERLAPPING (legato): 48 held, 60 struck --------------------
+	const int n = static_cast<int> (t * fs);   // 4800 samples
+	dsp.noteOn (60, 1.f);
+	run (n / 2);
+	checkClose (dsp.currentPitch (), 54.0, 0.01, "legato: half way through the time, half way in pitch (linear)");
+	run (n / 2 - 1);
+	check (dsp.gliding (), "still sliding one sample before the time is up");
+	run (1);
+	check (dsp.currentPitch () == 60.0 && !dsp.gliding (), "legato: arrives EXACTLY on the note, in the knob's time");
+
+	// ---- DETACHED: every key released before the next is struck ------
+	dsp.noteOff (48);                  // the held one first, so 60 never falls back
+	dsp.noteOff (60);
+	check (!dsp.gateOpen (), "no key down");
+	run (2400);
+	check (dsp.currentPitch () == 60.0, "the pitch is held after key-up");
+	dsp.noteOn (72, 1.f);
+	run (n / 4);
+	checkClose (dsp.currentPitch (), 63.0, 0.01, "detached: a note struck after the last was RELEASED still slides");
+	run (n);
+	check (dsp.currentPitch () == 72.0, "and arrives");
+
+	// ---- THE TIME IS THE TIME, whatever the interval -----------------
+	dsp.noteOn (73, 1.f);
+	run (n / 2);
+	checkClose (dsp.currentPitch (), 72.5, 0.001, "a semitone takes the same time as an octave");
+	run (n);
+	check (dsp.currentPitch () == 73.0, "the semitone arrives");
+
+	// ---- A NEW NOTE MID-SLIDE starts from where the pitch IS ----------
+	dsp.noteOn (61, 1.f);              // 73 -> 61
+	run (n / 2);                       // at 67
+	const double mid = dsp.currentPitch ();
+	checkClose (mid, 67.0, 0.01, "mid-slide at 67");
+	dsp.noteOn (79, 1.f);
+	run (1);
+	check (std::fabs (dsp.currentPitch () - mid) < 0.01, "a note struck mid-slide does not jump");
+	run (n / 2 - 1);
+	checkClose (dsp.currentPitch (), (mid + 79.0) / 2.0, 0.01, "and slides from there in a full time");
+	run (n);
+
+	// ---- RELEASING the sounding key slides back to the one held ------
+	dsp.allNotesOff ();
+	dsp.noteOn (50, 1.f);
+	run (n + 1);
+	dsp.noteOn (62, 1.f);
+	run (n + 1);
+	dsp.noteOff (62);
+	check (dsp.currentNote () == 50, "back to the held key");
+	run (n / 2);
+	checkClose (dsp.currentPitch (), 56.0, 0.01, "and the return slides too");
+	run (n);
+	check (dsp.currentPitch () == 50.0, "and arrives");
+
+	// ---- SAMPLE-RATE INDEPENDENT --------------------------------------
+	for (double rate : { 44100.0, 96000.0 })
+	{
+		SimpleSynthDsp d;
+		d.setSampleRate (rate);
+		applyDefaultPatch (d);
+		d.setPortamento (t);
+		d.reset ();
+		d.noteOn (40, 1.f);
+		std::vector<float> a (20000), b (20000);
+		d.render (a.data (), b.data (), 1);
+		d.noteOn (52, 1.f);
+		const int half = static_cast<int> (std::lround (t * rate / 2.0));
+		d.render (a.data (), b.data (), half);
+		checkClose (d.currentPitch (), 46.0, 0.02, "half the time is half the slide at " + std::to_string (static_cast<int> (rate)));
+	}
+
+	// ---- THE VCOs REALLY SLIDE: the sound's period follows the pitch --
+	{
+		SimpleSynthDsp d;
+		d.setSampleRate (fs);
+		applyDefaultPatch (d);
+		d.setVcoLevel (1, 0.0);                 // VCO 1 alone, a sawtooth
+		d.setCutoffHz (20000.0);
+		d.setResonance (0.0);
+		d.setVcfEnvAmount (0.0);
+		d.setPortamento (1.0);                  // a slow one: 1 s
+		d.reset ();
+		d.noteOn (45, 1.f);                     // A2, 110 Hz
+		std::vector<float> a (48000), b (48000);
+		d.render (a.data (), b.data (), 24000);
+		d.noteOn (57, 1.f);                     // A3, 220 Hz
+		d.render (a.data (), b.data (), 48000);
+		// Rising zero crossings (the saw's reset is a falling edge, so
+		// count downward crossings) in 50 ms windows at the start, the
+		// middle and the end of the slide.
+		auto hzAt = [&] (int start) {
+			int crossings = 0;
+			for (int i = start + 1; i < start + 2400; ++i)
+				if (a[i - 1] > 0.f && a[i] <= 0.f) ++crossings;
+			return crossings / 0.05;
+		};
+		const double h0 = hzAt (0), h1 = hzAt (22800), h2 = hzAt (45600);
+		check (h0 < 130.0 && h1 > 140.0 && h1 < 175.0 && h2 > 200.0,
+		       "the audio glides 110 -> ~155 -> 220 Hz (" + std::to_string (h0) + ", " +
+		       std::to_string (h1) + ", " + std::to_string (h2) + ")");
+	}
+}
+
+//------------------------------------------------------------------------
 // 9. Modulation reaches the cutoff, and the VCA
 //------------------------------------------------------------------------
 static void testModulation ()
@@ -1454,6 +1594,89 @@ static void testLfoResonance ()
 }
 
 //------------------------------------------------------------------------
+//------------------------------------------------------------------------
+// The filter display's curve: ladderResponseGain() against a MEASURED
+// ladder, and traceFilterResponse() against process()'s set-up.
+//------------------------------------------------------------------------
+static void testLadderResponse ()
+{
+	std::printf ("ladder response (filter display)\n");
+
+	const double fs = 48000.0;
+	const double cutoffs[] = { 300.0, 1200.0, 6000.0 };
+	const double resonances[] = { 0.0, 0.5, 0.9 };   // loop gain
+
+	for (double cutoff : cutoffs)
+		for (double k : resonances)
+		{
+			double coeff = 0.0, unity = 0.0;
+			ladderTuning ().lookup (cutoff / fs, coeff, unity);
+			const double fb = k * unity;
+
+			for (double ratio : { 0.25, 1.0, 3.0 })
+			{
+				const double hz = cutoff * ratio;
+				const double w = 2.0 * 3.14159265358979323846 * hz / fs;
+
+				// A quiet sine, so limitFeedback() stays linear; settle,
+				// then take the amplitude at w by correlation - a peak
+				// reading misses the crest of a sine near Nyquist.
+				MoogLadder ladder;
+				ladder.reset ();
+				const double amp = 0.01;
+				const int settle = static_cast<int> (fs);
+				const int measure = static_cast<int> (fs / 2);
+				double re = 0.0, im = 0.0;
+				for (int n = 0; n < settle + measure; ++n)
+				{
+					const double y = ladder.tick (amp * std::sin (w * n), coeff, fb);
+					if (n >= settle)
+					{
+						re += y * std::cos (w * n);
+						im += y * std::sin (w * n);
+					}
+				}
+				const double got = 2.0 * std::sqrt (re * re + im * im) / measure;
+				const double measuredDb  = 20.0 * std::log10 (got / amp);
+				const double predictedDb = 20.0 * std::log10 (ladderResponseGain (w, coeff, fb));
+
+				char what[160];
+				std::snprintf (what, sizeof (what),
+				               "response at %.0f Hz, cutoff %.0f Hz, k %.1f: measured %.2f dB, predicted %.2f dB",
+				               hz, cutoff, k, measuredDb, predictedDb);
+				checkClose (measuredDb, predictedDb, 0.25, what);
+			}
+		}
+
+	// The trace: process()'s clamp and scaling, and the shape a
+	// low-pass display has to have.
+	const int n = 64;
+	float db[n];
+	traceFilterResponse (1200.0, 0.0, fs, 20.0, 20000.0, db, n);
+	check (std::fabs (db[0]) < 0.5, "the trace is flat (0 dB) at 20 Hz with no resonance");
+	check (db[n - 1] < -40.f, "the trace is at least 40 dB down at 20 kHz from a 1.2 kHz cutoff");
+	bool falling = true;
+	for (int i = 1; i < n; ++i)
+		if (db[i] > db[i - 1] + 1e-4f)
+			falling = false;
+	check (falling, "with no resonance the trace never rises");
+
+	float peaky[n];
+	traceFilterResponse (1200.0, 0.9, fs, 20.0, 20000.0, peaky, n);
+	int top = 0;
+	for (int i = 1; i < n; ++i)
+		if (peaky[i] > peaky[top])
+			top = i;
+	const double topHz = 20.0 * std::pow (1000.0, static_cast<double> (top) / (n - 1));
+	check (topHz > 900.0 && topHz < 1600.0, "with resonance the peak is at the cutoff (got " +
+	       std::to_string (topHz) + " Hz)");
+	check (peaky[top] > 6.f, "and stands at least 6 dB above the floor of the passband");
+
+	float nyq[4];
+	traceFilterResponse (1200.0, 0.0, 22050.0, 1000.0, 20000.0, nyq, 4);
+	check (nyq[3] == -120.f, "points above Nyquist read -120 dB");
+}
+
 int main ()
 {
 	std::printf ("SimpleSynth DSP tests\n");
@@ -1467,8 +1690,10 @@ int main ()
 	testLfo2 ();
 	testLfoResonance ();
 	testLadder ();
+	testLadderResponse ();
 	testAdsr ();
 	testNotes ();
+	testPortamento ();
 	testModulation ();
 	testTraces ();
 	testDegenerate ();

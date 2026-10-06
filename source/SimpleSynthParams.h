@@ -19,6 +19,8 @@
 //   * LFO Shape is shown -100..+100 % and handed over as -1..+1;
 //   * LFO2 Level is shown 0..100 % and handed over as 0..1 - how far
 //     LFO 2 sweeps the Shape, in units of kMaxLfo2ShapeSweep;
+//   * Portamento is shown in ms and handed over in SECONDS, like the
+//     ADSR times; the bottom of the knob (1 ms) is OFF;
 //   * VCF LFO Res is shown 0..100 % OF THE RESONANCE KNOB and handed
 //     over as loop gain, 0..kMaxResonanceK - the same scale as
 //     Resonance, so 20 % of depth swings exactly 20 % of the knob.
@@ -88,6 +90,11 @@ enum Param : Steinberg::Vst::ParamID
 	// sits in the VCF group next to the cutoff depth; here, at the end.
 	kVcfLfoRes,
 
+	// Portamento, appended on 6 Oct 2026 (branch UpdatedUI). The time a
+	// note slides to the next in, ALWAYS - overlapping or not. Its knob
+	// sits in the Amp section beside Output, in the oscillators' amber.
+	kPortamento,
+
 	kNumParams,
 
 	//--------------------------------------------------------------------
@@ -114,7 +121,18 @@ enum Param : Steinberg::Vst::ParamID
 	    never shows or automates it; NOT in the table and NOT in the
 	    state stream. Same normalisation as kLfoShape (0 = -100 %,
 	    1 = +100 %), so paramDef (kLfoShape).toInternal() reads it. */
-	kLfoShapeLive = 1001
+	kLfoShapeLive = 1001,
+
+	//--------------------------------------------------------------------
+	/** READ-ONLY OUTPUTS: the cutoff and the resonance the FILTER is
+	    running at right now - the knobs moved by the envelope, key
+	    tracking and LFO 1 - published by the processor so the panel's
+	    filter screen can follow the modulation. Added 4 Oct 2026 (branch
+	    UpdatedUI) on exactly kLfoShapeLive's terms: hidden, read-only,
+	    not in the table, not saved. Same normalisation as kCutoff and
+	    kResonance, so their paramDef().toInternal() reads them. */
+	kCutoffLive    = 1002,
+	kResonanceLive = 1003
 };
 
 /** The three VCOs' ids are the same three parameters at a stride of

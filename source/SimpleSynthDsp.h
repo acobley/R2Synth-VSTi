@@ -53,6 +53,12 @@
 //     musicdsp.org), its per-sample arithmetic unchanged - but TUNED:
 //     see MoogLadder and ladderTuning() for the two things that had to
 //     be added to make a delay-line filter a synth filter.
+//   * PORTAMENTO: the pitch the VCOs play SLIDES from the last note to
+//     the new one, in a straight line in semitones taking the knob's time
+//     whatever the interval. ALWAYS, not only legato: a key struck after
+//     the previous one was released glides too, because the pitch is
+//     held between notes the way an analogue keyboard's CV is. See
+//     SimpleSynthDsp::noteOn() and portamentoActive().
 //   * Two ADSRs, one on the cutoff (in octaves, signed) and one on the
 //     VCA. Retriggered on every new note, FROM WHEREVER THEY ARE, so a
 //     retrigger never clicks.
@@ -154,6 +160,15 @@ constexpr double kMaxLfoCutoffOctaves = 4.0;
     self-oscillation on the LFO's peaks. */
 constexpr double kMaxLfoResonanceK = kMaxResonanceK;
 
+/** PORTAMENTO'S RANGE, in seconds: the knob runs logarithmically from
+    kMinPortamentoSeconds to kMaxPortamentoSeconds, and the BOTTOM OF THE
+    KNOB IS OFF - a 1 ms slide is inaudible, and an exact jump is what
+    "off" must mean. Anything up to kPortamentoOffSeconds (a hair above
+    the bottom, so a knob parked at the stop is off) jumps. */
+constexpr double kMinPortamentoSeconds = 0.001;
+constexpr double kMaxPortamentoSeconds = 5.0;
+constexpr double kPortamentoOffSeconds = 0.00105;
+
 /** Envelope calibration: the Decay and Release knobs mean the time to
     fall to -60 dB of the distance remaining, which is what "release time"
     means on every synth that states it. The envelope then runs on to
@@ -249,6 +264,13 @@ inline double lfoResonance (double knobK, double depthK, double lfo)
 		return knobK;
 	const double k = knobK + depthK * lfo;
 	return (k < 0.0) ? 0.0 : (k > kMaxResonanceK) ? kMaxResonanceK : k;
+}
+
+/** Whether a Portamento setting (seconds) glides at all. The DSP and the
+    panel's "off" both read it here. */
+inline bool portamentoActive (double seconds)
+{
+	return seconds > kPortamentoOffSeconds;
 }
 
 /** The lowest and highest resonance lfoResonance() reaches over a
@@ -613,6 +635,28 @@ const LadderTuning& ladderTuning ();
 double ladderLoopPhase (double w, double coefficient);
 double ladderLoopGain (double w, double coefficient, double resonance);
 
+/** THE LADDER'S LINEAR RESPONSE: output / input magnitude at `w`
+    radians/sample, for a SpaceDub coefficient and feedback - the same
+    stage response the two functions above use, closed round the loop:
+
+        H = G / (1 + G fb z^-1),   G = 0.35013 F^4 S(w)^4
+
+    which is MoogLadder::tick with limitFeedback() in its linear region
+    (any signal below the knee). The tests hold it to a measured ladder.
+    At loop gain 1 and over the peak is unbounded - the filter is then an
+    oscillator, and it is limitFeedback() that sets the level. */
+double ladderResponseGain (double w, double coefficient, double resonance);
+
+/** THE FILTER DISPLAY'S DATA, in dB: `count` points log-spaced from
+    minHz to maxHz of the ladder as process() sets it up for a cutoff
+    and a resonance (loop gain) - the same ladderTuning() lookup, the
+    same clamp to the ceiling, the same scaling of resonance to this
+    cutoff's unity feedback. Points at or above Nyquist read -120 dB.
+    Not clamped above: a self-oscillating peak is large, and the panel
+    decides how much of it to draw. */
+void traceFilterResponse (double cutoffHz, double resonanceK, double sampleRate,
+                          double minHz, double maxHz, float* dbOut, int count);
+
 /** The feedback term's soft limiter. Linear up to 1.5 - so a quiet
     signal sees SpaceDub's filter exactly - then bending smoothly to a
     ceiling of 3.0. This is what gives self-oscillation an amplitude; the
@@ -724,6 +768,11 @@ public:
 	void setVcfEnvelope (const AdsrSpec& spec);
 	void setVcaEnvelope (const AdsrSpec& spec);
 
+	/** The glide time, in seconds - see portamentoActive(). A change
+	    applies from the NEXT note; a slide already under way finishes at
+	    the time it started with. */
+	void setPortamento (double seconds);
+
 	//--------------------------------------------------------------------
 	// Notes - MONOPHONIC, LAST-NOTE PRIORITY
 	//
@@ -737,6 +786,12 @@ public:
 
 	/** The note the voice is playing, or -1 before the first one. */
 	int currentNote () const { return mCurrentNote; }
+
+	/** The pitch the VCOs are at, in (fractional) MIDI notes, before
+	    Tune and vibrato - currentNote() itself once a slide has arrived.
+	    For the tests. */
+	double currentPitch () const { return mPitch; }
+	bool gliding () const { return mGlideSamples > 0; }
 	bool gateOpen () const { return mHeldCount > 0; }
 	bool voiceActive () const { return mVcaEnv.active (); }
 
@@ -806,6 +861,19 @@ private:
 	int mHeld[kMaxHeld] = {};
 	int mHeldCount   = 0;
 	int mCurrentNote = -1;
+
+	/** Moves the pitch towards mCurrentNote: a slide when portamento is
+	    on and there was a note before, a jump otherwise. */
+	void startPitchTo (int note);
+
+	// Portamento. mPitch is where the VCOs are; it is held between notes,
+	// and only reset() forgets it (mHavePitch false), so the first note
+	// after a reset starts in tune rather than sliding up from middle C.
+	double mPortamentoSeconds = kMinPortamentoSeconds;
+	double mPitch      = 60.0;
+	double mGlideStep  = 0.0;   // semitones a sample
+	int    mGlideSamples = 0;   // samples left; 0 = arrived
+	bool   mHavePitch  = false;
 };
 
 //------------------------------------------------------------------------

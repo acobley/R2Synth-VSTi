@@ -83,6 +83,13 @@ const ParamDef kParams[kNumParams] = {
 	// gain to the DSP. Smoothed like every depth. 0 by default, so the
 	// default patch is unchanged.
 	{kVcfLfoRes,    "VCF LFO Res",       "%",    ParamType::Float,  0.,      100.,    0.,     0.,      kMaxResonanceK, 0, true },
+
+	// PORTAMENTO: the slide from one note to the next, in ms - always, not
+	// only when the keys overlap. Logarithmic like the envelope times,
+	// 1 ms to 5 s; THE BOTTOM OF THE KNOB IS OFF (portamentoActive()), and
+	// that is the default, so the default patch is unchanged. Not
+	// smoothed: it is read once per note.
+	{kPortamento,   "Portamento",        "ms",   ParamType::Log,    kMinPortamentoSeconds * 1000., kMaxPortamentoSeconds * 1000., kMinPortamentoSeconds * 1000., kMinPortamentoSeconds, kMaxPortamentoSeconds, 0, false},
 };
 
 //------------------------------------------------------------------------

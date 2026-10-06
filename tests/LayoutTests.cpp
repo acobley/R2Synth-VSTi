@@ -5,11 +5,18 @@
 // no host - so what CAN be checked about it is checked here, from the
 // same tables and the same text functions the editor uses:
 //
-//   * every parameter is on the panel exactly once;
-//   * nothing overlaps, everything is inside its box, every box and
-//     display is inside the panel;
-//   * every reading fits its control at both ends of its range and in
-//     the middle.
+//   * every parameter is on the panel exactly once, a switch for every
+//     Enum and a knob for everything else;
+//   * nothing overlaps; every control, screen and caption is inside its
+//     section, every section inside the panel and below the header;
+//   * every reading and label fits its knob at both ends of its range
+//     and in between, and every switch position fits its segment;
+//   * the lines of text that change fit their places at their longest;
+//   * the filter screen's data is the shape a low-pass curve should be.
+//
+// THE "SIGNAL FLOW" PANEL (branch UpdatedUI). The FilterDrum grid's
+// checks - title bands, the common right edge, the readout lines beside
+// LFO 2 - went with the grid.
 //
 // Needs one header-only file from the SDK (pluginterfaces/vst/vsttypes.h,
 // through SimpleSynthParams.h); nothing is linked from it:
@@ -24,8 +31,10 @@
 #include "SimpleSynthDsp.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 using namespace SimpleSynth;
 using namespace SimpleSynth::Layout;
@@ -61,14 +70,32 @@ std::string name (const Control& c)
 	return std::string (paramDef (c.tag).title);
 }
 
-/** A generous estimate of the width of panelFont()'s smallest face: the
-    controls drop a size rather than overflow, so this is the point past
-    which even the smallest face would not fit. */
-constexpr int kTinyCharWidth = 5;
+/** The inside of a section: below its title row, inside its padding. */
+Rect innerOf (const Section& s)
+{
+	return { s.r.left + kSectionPadX, s.r.top + kSectionPadTop + kSectionTitleH,
+	         s.r.right - kSectionPadX, s.r.bottom - 10 };
+}
 
-/** The same for panelFont()'s main face (Arial 11), which the title and
-    the flow line use. */
-constexpr int kMainCharWidth = 6;
+/** The section a rectangle is inside, or -1; -2 if more than one. */
+int sectionOf (const Rect& r)
+{
+	int found = -1;
+	for (int i = 0; i < kNumSections; ++i)
+		if (inside (r, innerOf (kSections[i])))
+			found = (found == -1) ? i : -2;
+	return found;
+}
+
+/** A knob's reading is drawn 4 px wider than the knob each side. */
+constexpr int kTextSlack = 8;
+
+/** The segment names, bold 12: a generous average. */
+constexpr int kSegmentCharWidth = 8;
+
+/** The licence pill's face, bold 13, and its padding round the text. */
+constexpr int kPillCharWidth = 8;
+constexpr int kPillPadding   = 40;
 
 } // anonymous namespace
 
@@ -79,10 +106,10 @@ int main ()
 	std::printf ("------------------------\n");
 
 	const Rect panel { 0, 0, kEditorWidth, kEditorHeight };
-	const Rect lfoView { kDisplayX, kLfoViewTop, kDisplayX + kDisplayWidth, kLfoViewBottom };
-	const Rect envView { kDisplayX, kEnvViewTop, kDisplayX + kDisplayWidth, kEnvViewBottom };
-	const Rect readouts { kReadoutX, kReadout1Y, kReadoutX + kReadoutWidth, kReadout3Y + kLabelHeight };
+	const Rect body  { 0, kHeaderHeight, kEditorWidth, kEditorHeight };
+	const Rect screens[] = { kFilterView, kFilterEnvView, kAmpEnvView, kLfoView };
 
+	// ---- every parameter, once ----------------------------------------
 	std::printf ("every parameter once\n");
 	for (int id = 0; id < kParamCount; ++id)
 	{
@@ -94,99 +121,137 @@ int main ()
 		                   std::to_string (count) + ")");
 	}
 	for (const auto& c : kControls)
-		check ((paramDef (c.tag).type == ParamType::Enum) == (c.kind == Kind::Selector),
-		       name (c) + ": a switch is a selector and a range is a slider");
+	{
+		check ((paramDef (c.tag).type == ParamType::Enum) == (c.kind == Kind::Switch),
+		       name (c) + ": an Enum is a switch and a range is a knob");
+		check ((c.kind == Kind::Knob) == (c.diameter > 0), name (c) + ": a knob has a diameter, a switch none");
+		check (c.kind == Kind::Switch || c.diameter <= c.width, name (c) + ": the knob fits its own width");
+	}
 
+	// ---- nothing overlaps -----------------------------------------------
 	std::printf ("nothing overlaps\n");
 	for (int i = 0; i < kNumControls; ++i)
 		for (int j = i + 1; j < kNumControls; ++j)
 			check (!overlaps (controlRect (kControls[i]), controlRect (kControls[j])),
 			       name (kControls[i]) + " clear of " + name (kControls[j]));
 
-	for (int i = 0; i < kNumGroups; ++i)
-		for (int j = i + 1; j < kNumGroups; ++j)
-			check (!overlaps (groupRect (kGroups[i]), groupRect (kGroups[j])),
-			       std::string (kGroups[i].title) + " box clear of " + kGroups[j].title);
-
-	for (const auto& g : kGroups)
+	for (int i = 0; i < kNumSections; ++i)
 	{
-		check (inside (groupRect (g), panel), std::string (g.title) + " box inside the panel");
-		check (!overlaps (groupRect (g), lfoView) && !overlaps (groupRect (g), envView),
-		       std::string (g.title) + " box clear of the displays");
-		check (!overlaps (groupRect (g), readouts), std::string (g.title) + " box clear of the readout lines");
+		check (inside (kSections[i].r, body), std::string (kSections[i].title) + " inside the panel, below the header");
+		for (int j = i + 1; j < kNumSections; ++j)
+			check (!overlaps (kSections[i].r, kSections[j].r),
+			       std::string (kSections[i].title) + " clear of " + kSections[j].title);
 	}
-	check (inside (lfoView, panel) && inside (envView, panel), "both displays inside the panel");
 
-	// THE TITLE MUST BE INSIDE THE BOX'S VIEW - VSTGUI clips a view to its
-	// own rectangle, and a title drawn above it (FilterDrum's way) is cut
-	// in half. SpyGroupBox draws 11 pixels of lettering from 5.5 above
-	// the frame line, which sits kGroupTitleBand + 0.5 down the view.
-	check (kGroupTitleBand + 0.5 - 5.5 >= 0.0, "every box title starts inside its view");
-	check (kGroupTitleBand + 0.5 - 5.5 + 11.0 <= kGroupPadTop + 1.0,
-	       "and ends above the readings of the sliders in the box");
-	check (!overlaps (lfoView, envView), "the displays do not overlap");
-	check (inside (readouts, panel), "the readout lines inside the panel");
+	for (const auto& s : screens)
+	{
+		check (sectionOf (s) >= 0, "every screen is inside exactly one section");
+		for (const auto& c : kControls)
+			check (!overlaps (s, controlRect (c)), "a screen clear of " + name (c));
+	}
+	for (size_t i = 0; i < 4; ++i)
+		for (size_t j = i + 1; j < 4; ++j)
+			check (!overlaps (screens[i], screens[j]), "the screens do not overlap");
 
-	std::printf ("every control inside its own box\n");
+	for (const auto& c : kControls)
+		check (sectionOf (controlRect (c)) >= 0, name (c) + " is inside exactly one section");
+
+	// THE COLOUR SAYS WHICH SECTION: a control's accent is its section's.
 	for (const auto& c : kControls)
 	{
-		int boxes = 0;
-		for (const auto& g : kGroups)
-			if (g.row == c.row && c.column >= g.firstColumn && c.column < g.firstColumn + g.columns &&
-			    g.slot == c.slot && inside (controlRect (c), groupRect (g)))
-				++boxes;
-		check (boxes == 1, name (c) + " is inside exactly one box");
+		const int s = sectionOf (controlRect (c));
+		if (s >= 0)
+			check (kSections[s].accent == c.accent, name (c) + " wears its section's colour");
 	}
 
-	std::printf ("the displays line up with the boxes\n");
+	for (const auto& cap : kCaptions)
 	{
-		int lfoTop = 1 << 30, envBottom = 0;
-		for (const auto& g : kGroups)
-		{
-			if (g.row == 0) lfoTop = std::min (lfoTop, groupRect (g).top);
-			if (g.row == 3) envBottom = std::max (envBottom, groupRect (g).bottom);
-		}
-		check (lfoTop + kGroupTitleBand == kLfoViewTop, "the LFO display's top is the VCO boxes' frame");
-		check (envBottom == kEnvViewBottom, "the envelope display's bottom is the ENV boxes' bottom");
-		for (const auto& g : kGroups)
-			if (g.stretchToRowRight)
-				check (groupRect (g).right == kRowRight, std::string (g.title) + " box ends on the common right edge");
+		check (sectionOf (cap.r) >= 0, std::string ("caption \"") + cap.text + "\" inside a section");
+		for (const auto& c : kControls)
+			check (!overlaps (cap.r, controlRect (c)), std::string ("caption \"") + cap.text + "\" clear of " + name (c));
+		for (const auto& s : screens)
+			check (!overlaps (cap.r, s), std::string ("caption \"") + cap.text + "\" clear of the screens");
 	}
 
-	std::printf ("every reading fits\n");
+	for (const auto& r : kRules)
+	{
+		for (const auto& c : kControls)
+			check (!overlaps (r, controlRect (c)), "a rule clear of " + name (c));
+		for (const auto& s : screens)
+			check (!overlaps (r, s), "a rule clear of the screens");
+	}
+
+	check (inside (kSelfOscLamp, kFilterRect), "the SELF-OSC lamp is in the filter section");
+	check (kSelfOscLamp.bottom <= kFilterView.top, "and above the filter screen");
+	check (inside (kModInfoLine, innerOf (kSections[3])), "the info line is inside the modulation strip");
+	for (const auto& c : kControls)
+		check (!overlaps (kModInfoLine, controlRect (c)), "the info line clear of " + name (c));
+
+	check (inside (kWordmark, panel) && kWordmark.bottom <= kHeaderHeight, "the wordmark is in the header");
+	check (inside (kEngineLine, panel) && kEngineLine.bottom <= kHeaderHeight, "the engine line is in the header");
+	check (inside (kBadge, panel) && kBadge.bottom <= kHeaderHeight, "the licence pill is in the header");
+	check (kWordmark.right < kEngineLine.left && kEngineLine.right < kBadge.left,
+	       "wordmark, engine line and pill in a row, left to right");
+	check (kBadge.right == kEditorWidth - kMargin, "the pill ends on the right margin");
+
+	// ---- every reading and label fits -------------------------------------
+	std::printf ("readings and labels fit\n");
 	for (const auto& c : kControls)
 	{
-		const ParamDef& def = paramDef (c.tag);
-		if (c.kind == Kind::Selector)
+		const int width = controlRect (c).width ();
+		if (c.kind == Kind::Switch)
 		{
-			for (int p = 0; p <= def.stepCount; ++p)
+			const int positions = paramDef (c.tag).stepCount + 1;
+			const int segment = (width - 4) / positions;
+			for (int p = 0; p < positions; ++p)
 			{
-				const std::string t = selectorText (c.tag, p);
-				check (!std::string (enumName (c.tag, p)).empty (), name (c) + " position " + std::to_string (p) + " has a name");
-				check (static_cast<int> (t.size ()) * kTinyCharWidth <= kColumnWidth,
-				       name (c) + " \"" + t + "\" fits");
+				const std::string t = enumName (c.tag, p);
+				check (!t.empty (), name (c) + " position " + std::to_string (p) + " has a name");
+				check (static_cast<int> (t.size ()) * kSegmentCharWidth <= segment - 6,
+				       name (c) + " \"" + t + "\" fits its segment");
 			}
-			// A compact selector draws its label like a slider does.
-			const std::string l = shortLabel (c.tag);
-			check (static_cast<int> (l.size ()) * kTinyCharWidth <= kColumnWidth, name (c) + " label \"" + l + "\" fits");
 			continue;
 		}
-		for (double n : { 0.0, 0.001, 0.5, 0.999, 1.0 })
+
+		for (double n : { 0.0, 0.001, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0, paramDef (c.tag).defaultNormalized () })
 		{
 			const std::string t = readoutText (c.tag, n);
 			check (!t.empty (), name (c) + " has a reading at " + std::to_string (n));
-			check (static_cast<int> (t.size ()) * kTinyCharWidth <= kColumnWidth,
-			       name (c) + " \"" + t + "\" fits");
+			check (static_cast<int> (t.size ()) * kValueCharWidth <= width + kTextSlack,
+			       name (c) + " reading \"" + t + "\" fits " + std::to_string (width) + " px");
 		}
-		const std::string l = shortLabel (c.tag);
-		check (static_cast<int> (l.size ()) * kTinyCharWidth <= kColumnWidth, name (c) + " label \"" + l + "\" fits");
+		const std::string l = controlLabel (c);
+		check (!l.empty (), name (c) + " has a label");
+		check (static_cast<int> (l.size ()) * kLabelCharWidth <= width + kTextSlack,
+		       name (c) + " label \"" + l + "\" fits");
 	}
 
-	// THE THREE LFO LINES at their longest, over every Output position
-	// and a spread of Shape and Level: the rates at their slowest (most
-	// digits), every depth at full.
-	std::printf ("the readout lines fit\n");
+	for (const auto& cap : kCaptions)
 	{
+		const int cw = (cap.style == CaptionStyle::Note) ? kNoteCharWidth : kLabelCharWidth;
+		if (cap.style != CaptionStyle::Badge)
+			check (static_cast<int> (std::string (cap.text).size ()) * cw <= cap.r.width (),
+			       std::string ("caption \"") + cap.text + "\" fits its place");
+	}
+	for (const auto& s : kSections)
+	{
+		// Title (bold 13) and subtitle (12) side by side on the title row.
+		const int need = kSectionPadX + 16 + static_cast<int> (std::string (s.title).size ()) * 9 + 10 +
+		                 static_cast<int> (std::string (s.subtitle).size ()) * 6;
+		check (need <= s.r.width () - kSectionPadX, std::string (s.title) + "'s title row fits");
+	}
+	{
+		// The filter section's title row also carries the lamp.
+		const int titleEnd = kFilterRect.left + kSectionPadX + 16 + 6 * 9 + 10 + 18 * 6;
+		check (titleEnd <= kSelfOscLamp.left, "the filter's title and subtitle stop short of the lamp");
+	}
+
+	// ---- the lines of text that change -------------------------------------
+	std::printf ("the changing lines fit\n");
+	{
+		// THE INFO LINE at its longest, over every Output position and a
+		// spread of Shape and Level, the rates at their slowest (most
+		// digits).
 		size_t longest = 0;
 		for (double output : { 0.0, 0.5, 1.0 })
 			for (double shape : { 0.0, 0.25, 0.5, 0.75, 1.0 })
@@ -200,48 +265,70 @@ int main ()
 						if (id == kLfo2Level) return d.toInternal (level);
 						return d.toInternal (1.0);
 					};
-					for (const std::string& line : { lfoLineText (at), lfoDepthsLineText (at), lfo2LineText (at) })
-					{
-						longest = std::max (longest, line.size ());
-						if (static_cast<int> (line.size ()) * kTinyCharWidth > kReadoutWidth)
-							check (false, "readout line fits beside the LFO 2 box: " + line);
-					}
+					const std::string line = modInfoLineText (at);
+					longest = std::max (longest, line.size ());
+					if (static_cast<int> (line.size ()) * kValueCharWidth > kModInfoLine.width ())
+						check (false, "info line fits the modulation strip: " + line);
 				}
-		std::printf ("  longest LFO line: %d chars in %d px\n", static_cast<int> (longest), kReadoutWidth);
-		check (static_cast<int> (longest) * kTinyCharWidth <= kReadoutWidth, "every LFO line fits beside the LFO 2 box");
+		std::printf ("  longest info line: %d chars in %d px\n", static_cast<int> (longest), kModInfoLine.width ());
+		check (static_cast<int> (longest) * kValueCharWidth <= kModInfoLine.width (), "every info line fits");
 
 		const std::string eng = engineLineText (192000.0, 10.0);
-		check (static_cast<int> (eng.size ()) * kTinyCharWidth <= kEngineLineWidth,
-		       "the engine line fits on the title row: " + eng);
-		const std::string title = panelTitleText ();
-		check (static_cast<int> (title.size ()) * kMainCharWidth <= kTitleWidth,
-		       "the title stops short of the engine line (" + std::to_string (title.size ()) + " chars)");
-		const std::string flow = panelFlowText ();
-		check (static_cast<int> (flow.size ()) * kMainCharWidth <= kFlowWidth,
-		       "the flow line fits the panel (" + std::to_string (flow.size ()) + " chars)");
-		check (kEngineLineX + kEngineLineWidth <= kEditorWidth - kMargin, "the engine line ends inside the margin");
-		// The licence badge: 40 characters (R2Licence::kBadgeMaxChars,
-		// tested in LicenceTests) at the tiny font, below everything.
-		check (40 * kTinyCharWidth <= kBadgeWidth, "the licence badge's longest line fits");
-		check (kBadgeY >= kEnvViewBottom && kBadgeY + kBadgeHeight <= kEditorHeight &&
-		           kBadgeX + kBadgeWidth <= kEditorWidth - kMargin,
-		       "the licence badge sits in the bottom margin, clear of the envelope display");
-		check (kTitleY + kLabelHeight <= kFlowY && kFlowY + kLabelHeight <= kLfoViewTop,
-		       "the title row and the flow line are above every box");
+		check (static_cast<int> (eng.size ()) * kNoteCharWidth <= kEngineLine.width (),
+		       "the engine line fits the header: " + eng);
 
-		// LFO 2's line from the SAME clamp the DSP runs: knob +60 %, full
-		// Level, reaches -40 % and parks at the rising saw.
+		// The licence pill: 40 characters (R2Licence::kBadgeMaxChars,
+		// tested in LicenceTests) in the pill's face, plus its padding.
+		check (40 * kPillCharWidth + kPillPadding <= kBadge.width () + 24,
+		       "the licence pill's longest line fits");
+
+		// LFO 2's part of the line from the SAME clamp the DSP runs: knob
+		// +60 %, full Level, reaches -40 % and parks at the rising saw.
 		auto clamped = [] (Steinberg::Vst::ParamID id) {
 			if (id == kLfoShape)  return 0.6;
 			if (id == kLfo2Level) return 1.0;
 			if (id == kLfo2Rate)  return 0.5;
 			return paramDef (id).toInternal (paramDef (id).defaultNormalized ());
 		};
-		const std::string l2 = lfo2LineText (clamped);
-		check (l2.find ("-40..+100") != std::string::npos, "LFO 2's line prints the clamped range: " + l2);
-		check (lfo2LineText ([] (Steinberg::Vst::ParamID id) {
+		const std::string l2 = modInfoLineText (clamped);
+		check (l2.find ("-40..+100") != std::string::npos, "the info line prints LFO 2's clamped range: " + l2);
+		check (modInfoLineText ([] (Steinberg::Vst::ParamID id) {
 		           return paramDef (id).toInternal (paramDef (id).defaultNormalized ()); }).find ("off") != std::string::npos,
-		       "at its default Level LFO 2's line says it is off");
+		       "at its default Level the info line says LFO 2 is off");
+	}
+
+	// ---- the filter screen's data -----------------------------------------
+	std::printf ("the filter screen\n");
+	{
+		float curve[kDisplayPoints];
+		double mx = 0.0, my = 0.0;
+		filterDisplayData (1200.0, 0.0, 48000.0, curve, kDisplayPoints, mx, my);
+		const double zeroDb = (0.0 - kFilterBottomDb) / (kFilterTopDb - kFilterBottomDb);
+		check (std::fabs (curve[0] - zeroDb) < 0.01, "flat at 0 dB at the left edge with no resonance");
+		check (curve[kDisplayPoints - 1] < 0.05f, "at the floor at 20 kHz from a 1.2 kHz cutoff");
+		for (float v : curve)
+			if (!(v >= 0.f && v <= 1.f))
+			{
+				check (false, "every point is inside the screen");
+				break;
+			}
+		const double wantX = std::log (1200.0 / kFilterMinHz) / std::log (kFilterMaxHz / kFilterMinHz);
+		check (std::fabs (mx - wantX) < 1e-9, "the dot is at the cutoff");
+		check (my < zeroDb && my > 0.0, "and on the curve, below 0 dB, at no resonance");
+
+		// Resonance lifts the dot; self-oscillation pins it to the top.
+		double my2 = 0.0;
+		filterDisplayData (1200.0, 0.9, 48000.0, curve, kDisplayPoints, mx, my2);
+		check (my2 > my + 0.1, "resonance lifts the curve at the cutoff");
+		double my3 = 0.0;
+		filterDisplayData (1200.0, kMaxResonanceK, 48000.0, curve, kDisplayPoints, mx, my3);
+		check (my3 >= 0.99, "a self-oscillating peak is drawn at the top of the screen");
+
+		// The ceiling: a 20 kHz knob at 44.1 k is drawn where the filter
+		// really is - cutoffCeilingHz() - not at the knob.
+		filterDisplayData (20000.0, 0.0, 44100.0, curve, kDisplayPoints, mx, my);
+		const double ceilingX = std::log (cutoffCeilingHz (44100.0) / kFilterMinHz) / std::log (kFilterMaxHz / kFilterMinHz);
+		check (std::fabs (mx - ceilingX) < 1e-9, "the dot stops at the cutoff ceiling");
 	}
 
 	std::printf ("------------------------\n");

@@ -5,6 +5,7 @@
 #include "SimpleSynthController.h"
 #include "SimpleSynthEditor.h"
 #include "SimpleSynthIDs.h"
+#include "SimpleSynthDsp.h"
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/base/ustring.h"
@@ -92,6 +93,11 @@ public:
 		{
 			std::snprintf (text, sizeof (text), (plain < 10.0) ? "%.2f" : "%.1f", plain);
 		}
+		else if (mDef.id == kPortamento && !portamentoActive (mDef.toInternal (normalized)))
+		{
+			// The bottom of the knob is off - the panel's word.
+			std::snprintf (text, sizeof (text), "Off");
+		}
 		else if (mDef.type == ParamType::Log && std::strcmp (mDef.units, "ms") == 0)
 		{
 			// Four decades: the decimals follow the magnitude.
@@ -147,6 +153,13 @@ public:
 			}
 		}
 
+		// "Off" round-trips on the Portamento, whose toString says it.
+		if (mDef.id == kPortamento && (std::strcmp (text, "Off") == 0 || std::strcmp (text, "off") == 0))
+		{
+			normalized = 0.0;
+			return true;
+		}
+
 		double plain = 0.0;
 		if (std::sscanf (text, "%lf", &plain) != 1)
 			return false;
@@ -192,6 +205,15 @@ tresult PLUGIN_API SimpleSynthController::initialize (FUnknown* context)
 	// saved. See kLfoShapeLive.
 	parameters.addParameter (STR16 ("LFO Shape (live)"), STR16 (""), 0, 0.5,
 	                         ParameterInfo::kIsReadOnly | ParameterInfo::kIsHidden, kLfoShapeLive);
+
+	// The live cutoff and resonance, for the filter screen - the same
+	// terms. See kCutoffLive.
+	parameters.addParameter (STR16 ("VCF Cutoff (live)"), STR16 (""), 0,
+	                         paramDef (kCutoff).defaultNormalized (),
+	                         ParameterInfo::kIsReadOnly | ParameterInfo::kIsHidden, kCutoffLive);
+	parameters.addParameter (STR16 ("VCF Resonance (live)"), STR16 (""), 0,
+	                         paramDef (kResonance).defaultNormalized (),
+	                         ParameterInfo::kIsReadOnly | ParameterInfo::kIsHidden, kResonanceLive);
 
 	return kResultOk;
 }
