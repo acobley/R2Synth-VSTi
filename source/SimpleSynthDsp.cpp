@@ -43,7 +43,15 @@ inline double scrub (double v)
 }
 
 /** The polyBLEP residual: the difference between a naive step and a
-    band-limited one, over one sample either side of the discontinuity. */
+    band-limited one, over one sample either side of the discontinuity.
+
+    CREDIT. This is the standard two-sample polynomial BLEP, not original
+    to this project. The technique is from V. Valimaki and A. Huovilainen,
+    "Antialiasing Oscillators in Subtractive Synthesis", IEEE Signal
+    Processing Magazine 24(2), 2007; this form of it is the widely shared
+    snippet from the KVR Audio DSP forum ("PolyBLEP oscillators",
+    https://www.kvraudio.com/forum/viewtopic.php?p=5269992), used in many
+    tutorials and synths since. */
 inline double polyBlep (double t, double dt)
 {
 	if (t < dt)
