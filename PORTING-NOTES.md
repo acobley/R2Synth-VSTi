@@ -47,21 +47,21 @@ of it). Redraw it when a route or a depth range changes.
 
 ```
 VCO 1 --\                                          LFO (MS-20 MG)
-VCO 2 ---+-- mixer --> Moog ladder VCF --> VCA --> Output Level
+VCO 2 ---+-- mixer --> VCF (Moog | MS-20 I | MS-20 II) --> VCA --> Output Level
 VCO 3 --/               ^  ^  ^            ^  ^
                         |  |  key track    |  LFO (tremolo)
                         |  LFO             VCA ENV (ADSR)
                         VCF ENV (ADSR)
 ```
 
-30 parameters plus bypass, all automatable:
+32 parameters plus bypass, all automatable (Portamento, 6 Oct, and VCF Type, 7 Oct, were appended after the original 30):
 
 | Section | Controls |
 |---|---|
 | VCO 1, 2, 3 | Wave (Saw / Square), Tune (±12 st), Level (0–100 %) — one implementation, addressed by stride (`vcoParam()`) |
 | LFO (1) | Rate (0.1–20 Hz, log), Shape (−100 falling saw … 0 triangle … +100 rising saw), Output (Shape / Square / Sine), Pitch depth (0–12 st) |
 | LFO 2 → SHAPE | Rate (0.02–20 Hz, log, default 0.5), Level (0–100 %, default 0) — ids `kLfo2Rate`, `kLfo2Level`, appended after `kVcaRelease` |
-| VCF | Cutoff (20 Hz–20 kHz, log), Resonance (0–100 % → loop gain 0–1.1), Key Track (0–100 %), LFO depth (0–4 oct) |
+| VCF | **Type (Moog / MS-20 I / MS-20 II, default Moog)**, Cutoff (20 Hz–20 kHz, log), Resonance (0–100 % → loop gain 0–1.1), Key Track (0–100 %), LFO depth (0–4 oct) |
 | VCF ENV | Attack, Decay, Sustain, Release, Env Amount (±6 oct) |
 | VCA / OUTPUT | LFO depth (tremolo, 0–100 %), Output Level (−48…+6 dB) |
 | VCA ENV | Attack, Decay, Sustain, Release |
@@ -165,6 +165,61 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
   too): a digital filter started from exact zero never sings, so with every
   VCO off full resonance was silent. The Moog's bass loss at high resonance
   (DC gain 1/(1+fb)) is kept — it is the sound.
+- **VCF Type: Moog / MS-20 I / MS-20 II** (branch `MS20Filter`, 7 Oct 2026;
+  param `kVcfType`, id 32, Enum Moog = 0 / MS-20 I = 1 / MS-20 II = 2,
+  appended — Moog by default so older projects are unchanged; `FilterType`
+  in SimpleSynthDsp.h, values permanent). The two MS-20s follow **Tim
+  Stinchcombe, "A Study of the Korg MS10 & MS20 Filters"**, which settles the
+  question the first version of this got wrong — where each revision puts
+  its diodes:
+  - **MS-20 I = the early Korg35 filter** (`Ms20Filter`): a true
+    Sallen-Key, `H = 1/(s² + (7/3 − k)s + 1)` (the 7/3 is the first stage
+    loaded by the second, `kKorg35Damping`), self-oscillating at k = 7/3, and
+    **one back-to-back diode pair in the FORWARD path**, inside the gain
+    element whose output is both the filter output and the feedback source.
+    Everything heard passes the diodes: the sound gets richer as the input
+    gets louder, resonance or not (tested: a 250 Hz sine with no resonance is
+    0.00 % THD at 0.1, 12 % at 1.5).
+  - **MS-20 II = the later OTA (LM13600) filter** (`Ms20LateFilter`): two
+    buffered first-order sections, `H = 1/(s² + (2 − k)s + 1)`, and **strings
+    of three back-to-back diodes in the FEEDBACK path**. Only what is fed
+    back is bent: the same loud 250 Hz sine passes at 0.5 % THD, while a loud
+    sine at the resonant peak gets 0.2 dB of gain against 20 dB linear.
+    The input OTA (`otaSaturate`, `kOtaDrive` 0.2) is the only other
+    non-linearity modelled.
+  - **The diode law**, both filters: a resistor into back-to-back diodes,
+    `x = v + eps·sinh(v/Vd)` — off below the knee, a sharp knee, then a
+    logarithmic climb with no flat ceiling (unlike tanh).
+    `kMs20DiodeSharpness` = 12.8 = 0.6 V / (1.8 × 26 mV); a string of three
+    has the SAME sharpness (three times both), only a higher knee. Knees
+    `kMs20DiodeKnee` 1.0 (I) and `kMs20LateDiodeKnee` 1.8 (II) were SET BY
+    MEASUREMENT, not derived (engine units are not volts).
+  - **Solved exactly, zero-delay**: three trapezoidal one-poles (Zavalishin);
+    the diodes sit inside the loop, so each sample the diode voltage is the
+    root of `(1 − B)v + eps·sinh(v/Vd) = A` (`ms20DiodeSolve()`, B < 1 always;
+    Newton started above the root at min(A/(1−B), Vd·asinh(A/eps)),
+    monotone, ≤ 16 iterations). For MS-20 I, `A, B` are divided by
+    `1 + G(1−G)c`, c = 1/3 (the loading term). Cost ≈ 0.1–0.25 µs a sample.
+  - **Same knobs, same meaning**: k = damping × loop gain, so Resonance, the
+    LFO's resonance depth, the SELF-OSC lamp and the live outputs mean the
+    same on all three filters; tested 0.97 dies / 1.03 sustains at 100 Hz,
+    1 kHz, 8 kHz on both MS-20s, singing at the cutoff (±3 %). Corner exactly
+    on the knob (prewarped): −6 dB (II) / −7.36 dB (I) at the cutoff with no
+    resonance. No bass loss: unity at DC whatever the resonance.
+  - **Not modelled**: the Korg35's resonance asymmetry (stronger on the
+    negative half-cycle, from its transistors); the OTAs inside MS-20 II's
+    loop are taken as linear. Self-oscillation at full resonance: 7.3 % THD
+    (I), 4.1 % (II).
+  - **Level trims** `kMs20OutputGain` = `kMs20LateOutputGain` = 0.56 (−5 dB),
+    measured: each default patch within 0.1 dB RMS of the ladder.
+  **Switching** cross-fades linearly over 10 ms (`kFilterCrossfadeSeconds`):
+  one weight per filter, each moved in a straight line to its target in the
+  same number of samples, so they sum to 1 even when a switch arrives
+  mid-fade; filters at weight 0 do not run and are reset; a settled Moog is
+  bit-identical to the ladder before the switch existed (tested).
+  The filter screen draws `ms20ResponseGain()` with each filter's damping
+  (held to both measured filters within 0.25 dB at 27 points each) and its
+  caption gives the slope.
 - **The cutoff ceiling is 0.40 × fs** (17.6 kHz at 44.1 k, 19.2 kHz at 48 k),
   where the ladder's tuning is still honest; the panel prints it beside the
   engine rate.
@@ -237,6 +292,12 @@ Parameters, controller and processor unchanged.
   when LFO 1 swings the filter into self-oscillation; knob-only until the
   first live value and briefly after the knob moves. Sampled at <= 60/s, so
   a very fast LFO can cross 1.0 between samples.
+- **VCF Type switch** (7 Oct; third position 7 Oct): a short segmented switch, Moog | MS-20 I | MS-20 II (228 px), in the
+  Filter section's title row where the subtitle "Moog ladder, 24 dB" was
+  (`Control::height` = `kTitleSwitchHeight` 24; the layout tests hold it
+  between the title and the lamp, above the screen). The screen's caption
+  now ends with the slope, "24 dB/oct" or "12 dB/oct", and redraws on a
+  switch.
 - **Envelope screens**: the filter and amp envelopes now have a screen
   each, but both come from one `traceEnvelopes()` run, so they **share one
   time axis** as the single display did; the amp screen prints the span,
@@ -363,6 +424,12 @@ From `tests/DspTests.cpp`, printed on every run:
 | Default patch, notes C2–C6, at 44.1 / 48 / 96 k | **−6.9 dBFS** |
 | Worst case — three squares in unison, full resonance — at 0 dB Output Level | +0.1 dBFS (+6.1 at the +6 dB maximum) |
 | Self-oscillation alone, all VCOs off | −5.7 dBFS |
+| MS-20 I: default patch | −8.6 dBFS peak; RMS −16.7 dB (ladder −16.6) |
+| MS-20 I: worst case at 0 dB Output Level | −7.0 dBFS |
+| MS-20 I: self-oscillation alone | −9.3 dBFS |
+| MS-20 II: default patch | −7.9 dBFS peak; RMS −16.5 dB (ladder −16.6) |
+| MS-20 II: worst case at 0 dB Output Level | −5.2 dBFS |
+| MS-20 II: self-oscillation alone | −9.6 dBFS |
 
 `kMixerGain` (0.5) and `kVoiceGain` (0.9) were set from these numbers.
 

@@ -90,6 +90,15 @@ const ParamDef kParams[kNumParams] = {
 	// that is the default, so the default patch is unchanged. Not
 	// smoothed: it is read once per note.
 	{kPortamento,   "Portamento",        "ms",   ParamType::Log,    kMinPortamentoSeconds * 1000., kMaxPortamentoSeconds * 1000., kMinPortamentoSeconds * 1000., kMinPortamentoSeconds, kMaxPortamentoSeconds, 0, false},
+
+	// THE VCF TYPE: 0 = Moog ladder (24 dB), 1 = MS-20 I, the early
+	// Korg35 filter (12 dB), 2 = MS-20 II, the later OTA filter (12 dB) -
+	// FilterType's values, as permanent as the ids. Moog by default, so
+	// the default patch and every older project are unchanged. Not
+	// smoothed here: the DSP cross-fades the filters itself. (MS-20 II
+	// was added on 7 Oct 2026, before any build was released with the
+	// switch, so moving MS-20 I from normalised 1.0 to 0.5 broke nothing.)
+	{kVcfType,      "VCF Type",          "",     ParamType::Enum,   0.,      2.,      0.,     0.,      2.,      2,    false},
 };
 
 //------------------------------------------------------------------------
@@ -101,6 +110,10 @@ const char* enumName (Steinberg::Vst::ParamID id, int position)
 		case kVco2Wave:
 		case kVco3Wave:
 			return (position == 0) ? "Saw" : (position == 1) ? "Square" : "";
+
+		case kVcfType:
+			// I = the early MS-20 (Korg35 chip), II = the later (OTA).
+			return (position == 0) ? "Moog" : (position == 1) ? "MS-20 I" : (position == 2) ? "MS-20 II" : "";
 
 		case kLfoOutput:
 			// "Shape", not "Triangle": the output is whatever the Shape

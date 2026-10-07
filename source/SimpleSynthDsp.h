@@ -49,10 +49,26 @@
 //     breathing between the two sawtooths, a square whose duty sweeps
 //     (PWM of the LFO), or a sine rocking between its two rectified
 //     halves. See sweptLfoShape().
-//   * The filter is SpaceDub's Moog ladder ("Moog VCF, variation 2",
-//     musicdsp.org), its per-sample arithmetic unchanged - but TUNED:
-//     see MoogLadder and ladderTuning() for the two things that had to
-//     be added to make a delay-line filter a synth filter.
+//   * The filter is SWITCHABLE (VCF Type, 7 Oct 2026):
+//       MOOG  - SpaceDub's Moog ladder ("Moog VCF, variation 2",
+//               musicdsp.org), its per-sample arithmetic unchanged - but
+//               TUNED: see MoogLadder and ladderTuning() for the two
+//               things that had to be added to make a delay-line filter
+//               a synth filter. 4-pole, 24 dB/oct, bass loss with
+//               resonance.
+//       MS-20 I  - the EARLY MS-20's filter (the Korg35 chip): a 2-pole,
+//               12 dB/oct Sallen-Key low-pass with a diode pair in its
+//               FORWARD path - everything heard is bent, more as it gets
+//               louder. No bass loss. See Ms20Filter.
+//       MS-20 II - the LATER MS-20's filter (LM13600 OTAs): the same
+//               slope, buffered stages, and strings of three diodes in
+//               the FEEDBACK path - only the resonance is bent. See
+//               Ms20LateFilter. (Diode placements from T. Stinchcombe's
+//               study of the two filters.)
+//     All three take the same Cutoff and the same Resonance in loop gain
+//     (1.0 = self-oscillation at every cutoff, for all), so the knobs,
+//     the lamp and the modulation mean the same thing whichever is
+//     chosen. A switch cross-fades over kFilterCrossfadeSeconds.
 //   * PORTAMENTO: the pitch the VCOs play SLIDES from the last note to
 //     the new one, in a straight line in semitones taking the knob's time
 //     whatever the interval. ALWAYS, not only legato: a key struck after
@@ -114,6 +130,20 @@ constexpr double kMixerGain = 0.5;
 /** The voice's gain after the VCA, before the Output Level. */
 constexpr double kVoiceGain = 0.9;
 
+/** THE MS-20 FILTERS' LEVEL TRIMS, -5 dB each, applied to their outputs
+    in the voice (not part of their responses - the screen draws the
+    filters themselves).
+
+    MEASURED (7 Oct 2026, tests/DspTests.cpp prints it), together with
+    the diode knees: the MS-20s have no bass loss, so untrimmed they
+    played the default patch about 5 dB louder than the ladder. At 0.56
+    each one's default-patch RMS is within 0.1 dB of the ladder's, so
+    flipping the switch compares character, not loudness; the worst
+    cases are -7 dBFS (I) and -5 dBFS (II), self-oscillation alone about
+    -9.5 dBFS for both. */
+constexpr double kMs20OutputGain     = 0.56;   // MS-20 I
+constexpr double kMs20LateOutputGain = 0.56;   // MS-20 II
+
 /** THE FILTER'S NOISE FLOOR, -100 dBFS of white noise into the ladder.
 
     A digital filter started from exact zero stays at exact zero however
@@ -148,6 +178,90 @@ constexpr double kMaxCutoffFraction = 0.40;
     threshold at EVERY cutoff - see ladderTuning() - so the top tenth of
     the knob self-oscillates and the lamp on the panel says so. */
 constexpr double kMaxResonanceK = 1.1;
+
+/** WHICH FILTER. The values are the VCF Type switch's positions and
+    are stored in projects, so they are APPEND-ONLY, like parameter ids.
+    Moog is 0, so every project saved before the switch existed opens
+    with the filter it was made with. Ms20 is the EARLY (Korg35) filter,
+    Ms20Late the later OTA one. */
+enum class FilterType { Moog = 0, Ms20 = 1, Ms20Late = 2 };
+constexpr int kNumFilterTypes = 3;
+
+/** The VCF Type parameter's internal value (0, 1, 2) as a FilterType -
+    rounded and clamped. ONE COPY, for the processor and the panel. */
+inline FilterType filterTypeFromInternal (double v)
+{
+	const int i = static_cast<int> (std::lround (v));
+	return (i <= 0) ? FilterType::Moog : (i == 1) ? FilterType::Ms20 : FilterType::Ms20Late;
+}
+
+/** How long a change of VCF Type takes: the filters involved run and the
+    output cross-fades linearly from one to the other. Long enough that a
+    switch mid-note is a quick blend rather than a click; short enough to
+    sound like a switch. */
+constexpr double kFilterCrossfadeSeconds = 0.010;
+
+/** THE MS-20 DIODES (7 Oct 2026) - after T. Stinchcombe, "A Study of the
+    Korg MS10 & MS20 Filters" (2006), which settles where each revision
+    puts them:
+
+      * EARLY (Korg35, MS-20 I): ONE back-to-back pair, in the FORWARD
+        path, inside the gain element whose output is both the filter's
+        output and the source of its feedback. Every frequency passes
+        through them: the sound gets richer as the input gets louder,
+        resonance or not.
+      * LATER (LM13600 OTA, MS-20 II): STRINGS OF THREE back-to-back
+        diodes in the gain element of the FEEDBACK path. Only what is fed
+        back - frequencies near the cutoff - is bent; a loud note well
+        below the cutoff passes almost clean.
+
+    THE DIODE LAW. A diode's current is exponential in its voltage, so a
+    resistor feeding a back-to-back pair (or pair of strings) obeys
+
+        x = v + eps * sinh (v / Vd)      (x driven in, v across the diodes)
+
+    - effectively linear while they are off, then a SHARP knee, then v
+    still rising, but only logarithmically: no flat ceiling, unlike a
+    tanh. The knee is where conduction sets in, in this engine's signal
+    units; the SHARPNESS is knee / Vd in thermal voltages: a silicon
+    diode's 0.6 V over n Vt = 1.8 x 26 mV is 12.8 - and a string of three
+    is three times both, so the SAME 12.8; only the knee moves. From the
+    two, Vd = knee / sharpness and eps = knee / sinh (sharpness): at the
+    knee the diodes carry as much as the resistor alone would, and below
+    it almost nothing (small-signal gain 1 - 1.5e-4, so the responses the
+    screen draws and the self-oscillation thresholds are unmoved).
+
+    THE KNEES were SET BY MEASUREMENT with the output trims, not derived:
+    this engine's signal units are not volts, and the gains round each
+    circuit's diodes are not modelled. MS-20 I's 1.0 leaves a single VCO
+    at the default patch clean (0.7 % THD for a 0.75 sine) and bites
+    hard on three VCOs (12 % at 1.5); MS-20 II's 1.8 puts its
+    self-oscillation at the same level as MS-20 I's. (Not 3 x 1.0: the
+    string has three drops, but the gain in front of it is not the gain
+    in front of the early pair, and neither is modelled.) */
+constexpr double kMs20DiodeSharpness = 12.8;
+constexpr double kMs20DiodeKnee      = 1.0;   // early: one pair, forward path
+constexpr double kMs20LateDiodeKnee  = 1.8;   // later: strings of three, feedback
+
+/** THE KORG35'S DAMPING: Stinchcombe's analysis gives the early filter as
+    a true Sallen-Key,
+
+        H(s) = 1 / (s^2 + (7/3 - k) s + 1)
+
+    - the 7/3 rather than 2 is the first stage loaded by the second - so
+    it self-oscillates at k = 7/3, and at no resonance it is a little more
+    damped than the OTA version (-7.4 dB at the cutoff, not -6). The OTA
+    revision buffers its stages, so its constant is exactly 2. */
+constexpr double kKorg35Damping = 7.0 / 3.0;
+constexpr double kOtaDamping    = 2.0;
+
+/** THE LATE MS-20'S INPUT OTA: the signal into the first pole passes an
+    OTA, whose transfer is tanh; scaled by this before the tanh and back
+    after, so a quiet signal sees the linear filter and a full-level one
+    is rounded only slightly - the real circuit attenuates into its OTAs
+    to keep them nearly linear. SET BY MEASUREMENT (7 Oct 2026) with the
+    diode knee and the trim. */
+constexpr double kOtaDrive = 0.2;
 
 /** The LFO's reach on the VCOs, in semitones. */
 constexpr double kMaxLfoPitchSemis = 12.0;
@@ -706,6 +820,154 @@ private:
 };
 
 //------------------------------------------------------------------------
+/** THE DIODES IN A LOOP: solves  (1 - b) v + eps sinh (v / Vd) = a
+    for v - the voltage across the diodes when the drive into them is
+    itself a function of v (a + b v, b < 1), as it is inside a
+    zero-delay loop. b = 0 is the plain clipper, ms20DiodeClip(). `knee`
+    picks the diodes (kMs20DiodeKnee or kMs20LateDiodeKnee); the
+    sharpness is kMs20DiodeSharpness for both.
+
+    The left side is odd, increasing and convex for v > 0, so the root is
+    unique, and Newton started ABOVE it - at the smaller of the
+    diodes-off answer a / (1 - b) and the diodes-only answer Vd asinh
+    (a / eps), both of which are - falls monotonically onto it. A few
+    iterations; never more than 16, no allocation. */
+double ms20DiodeSolve (double a, double b, double knee);
+
+/** The back-to-back diode clipper on its own: the v for a drive x. */
+inline double ms20DiodeClip (double x, double knee) { return ms20DiodeSolve (x, 0.0, knee); }
+
+/** THE MS-20 FILTER'S PREWARPED GAIN for a cutoff: g = tan (pi fc / fs).
+    The structure is topology-preserving (zero-delay feedback), i.e. the
+    bilinear transform of the analogue circuit with the cutoff prewarped,
+    so the corner lands EXACTLY on the knob at every rate and the
+    self-oscillation threshold is exactly k = 2 at every cutoff - no
+    tuning table needed, unlike the ladder. */
+inline double ms20Prewarp (double cutoffHz, double sampleRate)
+{
+	constexpr double kPiLocal = 3.14159265358979323846;
+	return std::tan (kPiLocal * cutoffHz / sampleRate);
+}
+
+/** The MS-20 filters' feedback k for a resonance in LOOP GAIN: each
+    self-oscillates when k reaches its damping constant, so k = damping x
+    loop gain - and 1.0 on the shared scale is the threshold for both, as
+    for the ladder. ms20Feedback() is the OTA (MS-20 II) one;
+    korg35Feedback() the early one. */
+inline double ms20Feedback (double resonanceK)
+{
+	return kOtaDamping * resonanceK;
+}
+
+inline double korg35Feedback (double resonanceK)
+{
+	return kKorg35Damping * resonanceK;
+}
+
+/** THE MS-20 FILTERS' LINEAR RESPONSE: |H| at `w` radians/sample. The
+    analogue prototype, normalised to the cutoff, is
+
+        H(s) = 1 / (s^2 + (damping - k) s + 1)
+
+    with damping kOtaDamping (2, MS-20 II) or kKorg35Damping (7/3,
+    MS-20 I), and the digital filters are exactly its bilinear transform
+    with s = j tan (w / 2) / g. Unity at DC whatever the resonance - no
+    bass loss. The tests hold it to both measured filters. At k >=
+    damping the peak is unbounded: the filter is an oscillator and its
+    diodes set the level. */
+double ms20ResponseGain (double w, double g, double k, double damping = kOtaDamping);
+
+/** THE EARLY MS-20 FILTER (Korg35): a Sallen-Key low-pass with its
+    diode pair in the FORWARD path - see the MS-20 DIODES note above.
+
+        x -> LP1 -> (+) -> LP2 --p--> diodes --v--+--> out
+                     ^                             |
+                     +---- HP <-- (k v - c p) <----+
+
+    Three trapezoidal one-poles with zero-delay feedback (Zavalishin, "The
+    Art of VA Filter Design"). p is LP2's output, the drive into the gain
+    element; v is the gain element's output across its diodes - the
+    filter's output AND the source of the feedback, so the clipping is in
+    everything heard and in the resonance alike. The term c p, c = 7/3 - 2,
+    is the Sallen-Key's first stage loaded by the second: it makes the
+    damping kKorg35Damping and the threshold k = 7/3.
+
+    Each sample is solved EXACTLY. With G = g/(1+g), a = 1 - G, LP1's
+    output y1 and the states s2 (LP2), s3 (the HP's):
+
+        p (1 + G a c) = A + B v,   A = G y1 - G a s3 + a s2,  B = G a k
+        p = v + eps sinh (v / Vd)                         (the diodes)
+
+    so  (1 - B') v + eps sinh (v / Vd) = A'  with A' = A / (1 + G a c),
+    B' = B / (1 + G a c) <= 7/3 x 1/4 < 1 - ms20DiodeSolve()'s equation.
+    Then u = y1 + a (k v - c p - s3) and the states advance. With the
+    diodes off this is the linear filter ms20ResponseGain (..,
+    kKorg35Damping) describes; the output is normalised to unity at DC.
+
+    NOT MODELLED: the Korg35's transistors also make its resonance
+    asymmetric (stronger on the negative half-cycle); this model is
+    symmetric. */
+class Ms20Filter
+{
+public:
+	void reset () { mS1 = mS2 = mS3 = 0.0; }
+
+	/** `g` from ms20Prewarp(), `k` from korg35Feedback(). */
+	double tick (double input, double g, double k);
+
+private:
+	double mS1 = 0.0, mS2 = 0.0, mS3 = 0.0;
+};
+
+/** The input OTA's transfer, scaled - see kOtaDrive. Slope 1 at 0. */
+inline double otaSaturate (double x)
+{
+	return std::tanh (kOtaDrive * x) / kOtaDrive;
+}
+
+/** THE LATE MS-20 FILTER (LM13600 OTA revision): two buffered
+    first-order sections with positive feedback, and STRINGS OF THREE
+    back-to-back diodes in the FEEDBACK path's gain element - see the
+    MS-20 DIODES note above.
+
+        x -> OTA -> LP1 -> (+) -> LP2 -----------------> out
+                            ^              |
+                            +-- HP <-- diodes <-- k <--+
+
+    The diodes sit inside the zero-delay loop and are solved EXACTLY each
+    sample: the drive into them is
+
+        k LP2 = A + B v,  A = k (G y1 - G a s3 + a s2),  B = k G a
+
+    which ms20DiodeSolve() solves (B <= 2.2 / 4 < 1); then u = y1 +
+    a (v - s3), the HP is driven by v, and the states advance. The output
+    is LP2, before the diodes, so only the RESONANCE is bent: a loud note
+    well below the cutoff passes nearly clean (tested), one at the cutoff
+    does not. Damping kOtaDamping (2): self-oscillation at k = 2.
+
+    The input OTA (otaSaturate) is the one other non-linearity modelled;
+    the OTAs inside the loop are taken as linear. */
+class Ms20LateFilter
+{
+public:
+	void reset () { mS1 = mS2 = mS3 = 0.0; }
+
+	/** `g` from ms20Prewarp(), `k` from ms20Feedback(). */
+	double tick (double input, double g, double k);
+
+private:
+	double mS1 = 0.0, mS2 = 0.0, mS3 = 0.0;
+};
+
+/** traceFilterResponse() for ANY filter: the Moog branch is the function
+    above; the two MS-20 branches the same clamp, through
+    ms20ResponseGain() with each one's own damping and feedback scaling
+    - korg35Feedback / kKorg35Damping for MS-20 I, ms20Feedback /
+    kOtaDamping for MS-20 II. */
+void traceFilterResponse (FilterType type, double cutoffHz, double resonanceK, double sampleRate,
+                          double minHz, double maxHz, float* dbOut, int count);
+
+//------------------------------------------------------------------------
 /** The envelope display's data: both ADSRs through one simulated note,
     ON A SHARED TIME AXIS, key held and then released at the same moment
     for both - which is how they are heard.
@@ -767,6 +1029,17 @@ public:
 	void setVcfEnvAmount (double octaves);             // signed
 	void setVcfEnvelope (const AdsrSpec& spec);
 	void setVcaEnvelope (const AdsrSpec& spec);
+
+	/** Moog ladder, MS-20 I or MS-20 II - see FilterType. A change
+	    cross-fades over kFilterCrossfadeSeconds; reset() lands on it at
+	    once. */
+	void setFilterType (FilterType type);
+	FilterType filterType () const { return mFilterType; }
+
+	/** How much of a filter is in the output: 1 for the chosen one once
+	    settled, 0 for the others; in between while cross-fading. The
+	    three always sum to 1. */
+	double filterWeight (FilterType type) const;
 
 	/** The glide time, in seconds - see portamentoActive(). A change
 	    applies from the NEXT note; a slide already under way finishes at
@@ -830,6 +1103,8 @@ private:
 	MsLfo mLfo;
 	SineLfo mLfo2;
 	MoogLadder mFilter;
+	Ms20Filter mMs20;
+	Ms20LateFilter mMs20Late;
 	Adsr  mVcfEnv;
 	Adsr  mVcaEnv;
 
@@ -854,6 +1129,22 @@ private:
 	double mLastResonance = 0.0;
 	std::uint32_t mNoiseState = 0x12345678u;
 	double mLastCutoffHz = 1000.0;
+
+	// The VCF Type and its cross-fade: one WEIGHT per filter, indexed by
+	// FilterType. A change moves every weight in a straight line from
+	// where it is to its target (1 for the chosen filter, 0 for the
+	// others) in the same number of samples, so the three always sum to
+	// 1 - even when a switch arrives mid-fade - and the last step lands
+	// EXACTLY. Settled, one weight is exactly 1: that filter alone runs,
+	// and a settled Moog is the ladder to the bit. A filter whose weight
+	// reaches 0 is reset, so a later switch fades it in from silence
+	// rather than from stale state.
+	void settleFilterWeights ();
+
+	FilterType mFilterType = FilterType::Moog;
+	double mFilterWeight[kNumFilterTypes]     = { 1.0, 0.0, 0.0 };
+	double mFilterWeightStep[kNumFilterTypes] = { 0.0, 0.0, 0.0 };
+	int    mFilterFadeSamples = 0;
 
 	// The held-note stack, oldest first. Fixed size: sixteen held keys is
 	// more than two hands, and a seventeenth drops the OLDEST.

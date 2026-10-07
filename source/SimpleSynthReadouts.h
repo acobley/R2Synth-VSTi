@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include "SimpleSynthDsp.h"
 #include "SimpleSynthLayout.h"
 #include "SimpleSynthParams.h"
 
@@ -80,13 +81,23 @@ std::string controlLabel (const Layout::Control& control);
     kFilterMaxHz. `markerX` / `markerY` (0..1, y up) are where the cutoff
     sits on that curve, for the dot. */
 void filterDisplayData (double cutoffHz, double resonanceK, double sampleRate,
-                        float* curve, int count, double& markerX, double& markerY);
+                        float* curve, int count, double& markerX, double& markerY,
+                        FilterType type = FilterType::Moog);
 
 /** What the filter display shows, in words: "live" when it is drawing
     the cutoff and resonance the processor reports (the knobs moved by
     the envelope, key tracking and LFO 1), "at the knobs" when it has
-    none - no audio running, or a knob has just moved. */
-const char* filterDisplayCaption (bool live = false);
+    none - no audio running, or a knob has just moved - followed by the
+    chosen filter's slope, "24 dB/oct" (Moog) or "12 dB/oct" (either MS-20),
+    since the switch's names alone do not say it. */
+std::string filterDisplayCaption (bool live = false, FilterType type = FilterType::Moog);
+
+/** The VCF Type, as the DSP's enum, from its parameter's internal
+    value - filterTypeFromInternal(), the processor's own copy. */
+inline FilterType filterTypeOf (double internal)
+{
+	return filterTypeFromInternal (internal);
+}
 
 /** A screen's time span as printed: "929 ms", "2.40 s". */
 std::string spanText (double seconds);

@@ -424,6 +424,143 @@ void LadderTuning::lookup (double normFreq, double& coeff, double& feedbackAtUni
 }
 
 //------------------------------------------------------------------------
+// The MS-20 filter
+//------------------------------------------------------------------------
+double ms20ResponseGain (double w, double g, double k, double damping)
+{
+	// The bilinear map, prewarped: the digital filter at w IS the
+	// analogue one at this normalised frequency.
+	const double omega = std::tan (0.5 * w) / g;
+	const double re = 1.0 - omega * omega;
+	const double im = (damping - k) * omega;
+	const double den = std::sqrt (re * re + im * im);
+	return (den > 1.0e-12) ? 1.0 / den : 1.0e12;
+}
+
+double ms20DiodeSolve (double a, double b, double knee)
+{
+	constexpr int kMaxIterations = 16;
+	if (!(knee > 0.0))
+		return 0.0;
+	const double vd  = knee / kMs20DiodeSharpness;
+	const double eps = knee / std::sinh (kMs20DiodeSharpness);
+
+	if (!std::isfinite (a))
+		return 0.0;
+	const double drive = std::fabs (a);
+	const double c = 1.0 - b;
+	if (drive == 0.0 || !(c > 0.0))
+		return 0.0;
+
+	// Start ABOVE the root: both of these are.
+	double v = std::min (drive / c, vd * std::asinh (drive / eps));
+	for (int i = 0; i < kMaxIterations; ++i)
+	{
+		const double x  = v / vd;
+		const double f  = c * v + eps * std::sinh (x) - drive;
+		const double fp = c + (eps / vd) * std::cosh (x);
+		const double step = f / fp;
+		v -= step;
+		if (std::fabs (step) <= 1.0e-12 * (1.0 + v))
+			break;
+	}
+	return (a < 0.0) ? -v : v;
+}
+
+double Ms20Filter::tick (double input, double g, double k)
+{
+	// Trapezoidal one-pole: lp = G x + (1 - G) s, then s = 2 lp - s.
+	const double G = g / (1.0 + g);
+	const double a = 1.0 - G;
+	constexpr double c = kKorg35Damping - 2.0;   // the Sallen-Key's loading
+
+	// LP1 - the input pole, outside the loop.
+	const double y1 = G * input + a * mS1;
+	mS1 = scrub (2.0 * y1 - mS1);
+
+	// THE ZERO-DELAY SOLVE, through the forward-path diodes - see the
+	// class comment. v is the gain element's output (the filter's
+	// output); p, LP2's output, is what drives it.
+	const double scale = 1.0 / (1.0 + G * a * c);
+	const double A = (G * y1 - G * a * mS3 + a * mS2) * scale;
+	const double B = G * a * k * scale;
+	const double v = ms20DiodeSolve (A, B, kMs20DiodeKnee);
+	const double p = A + B * v;
+
+	// LP2 and the feedback high-pass advance. (u, the summing point, is
+	// never needed on its own: p already folds it in.)
+	mS2 = scrub (2.0 * p - mS2);
+	const double fb  = k * v - c * p;
+	const double lp3 = G * fb + a * mS3;
+	mS3 = scrub (2.0 * lp3 - mS3);
+
+	return v;
+}
+
+double Ms20LateFilter::tick (double input, double g, double k)
+{
+	const double G = g / (1.0 + g);
+	const double a = 1.0 - G;
+
+	// LP1, behind the input OTA.
+	const double y1 = G * otaSaturate (input) + a * mS1;
+	mS1 = scrub (2.0 * y1 - mS1);
+
+	// THE ZERO-DELAY SOLVE through the feedback diodes - see the class
+	// comment. v is the feedback after the diode strings.
+	const double A = k * (G * y1 - G * a * mS3 + a * mS2);
+	const double B = k * G * a;
+	const double v = ms20DiodeSolve (A, B, kMs20LateDiodeKnee);
+	const double u = y1 + a * (v - mS3);
+
+	// LP2 - the output, ahead of the diodes.
+	const double lp2 = G * u + a * mS2;
+	mS2 = scrub (2.0 * lp2 - mS2);
+
+	// The feedback high-pass, driven by the clipped feedback.
+	const double lp3 = G * v + a * mS3;
+	mS3 = scrub (2.0 * lp3 - mS3);
+
+	return lp2;
+}
+
+void traceFilterResponse (FilterType type, double cutoffHz, double resonanceK, double sampleRate,
+                          double minHz, double maxHz, float* dbOut, int count)
+{
+	if (type == FilterType::Moog)
+	{
+		traceFilterResponse (cutoffHz, resonanceK, sampleRate, minHz, maxHz, dbOut, count);
+		return;
+	}
+
+	if (dbOut == nullptr || count <= 0)
+		return;
+	if (sampleRate < 1000.0)
+		sampleRate = 44100.0;
+
+	// EXACTLY process()'s set-up: the same clamp, the same prewarp, the
+	// same scaling of the resonance.
+	const double cutoff = std::clamp (cutoffHz, kMinCutoffHz, cutoffCeilingHz (sampleRate));
+	const double g = ms20Prewarp (cutoff, sampleRate);
+	const bool early = (type == FilterType::Ms20);
+	const double k = early ? korg35Feedback (resonanceK) : ms20Feedback (resonanceK);
+	const double damping = early ? kKorg35Damping : kOtaDamping;
+
+	for (int i = 0; i < count; ++i)
+	{
+		const double t  = (count > 1) ? static_cast<double> (i) / (count - 1) : 0.0;
+		const double hz = minHz * std::pow (maxHz / minHz, t);
+		if (hz >= 0.5 * sampleRate)
+		{
+			dbOut[i] = -120.f;
+			continue;
+		}
+		const double gain = ms20ResponseGain (2.0 * kPi * hz / sampleRate, g, k, damping);
+		dbOut[i] = static_cast<float> (20.0 * std::log10 (std::max (gain, 1.0e-6)));
+	}
+}
+
+//------------------------------------------------------------------------
 // MoogLadder
 //------------------------------------------------------------------------
 void MoogLadder::reset ()
@@ -637,6 +774,10 @@ void SimpleSynthDsp::reset ()
 	mLastLfoShape = mLfoShapeKnob;
 	mLfo.reset ();
 	mFilter.reset ();
+	mMs20.reset ();
+	mMs20Late.reset ();
+	mFilterFadeSamples = 0;
+	settleFilterWeights ();
 	mVcfEnv.reset ();
 	mVcaEnv.reset ();
 
@@ -732,6 +873,47 @@ void SimpleSynthDsp::setVcfEnvAmount (double octaves)
 
 void SimpleSynthDsp::setVcfEnvelope (const AdsrSpec& spec) { mVcfEnv.setSpec (spec); }
 void SimpleSynthDsp::setVcaEnvelope (const AdsrSpec& spec) { mVcaEnv.setSpec (spec); }
+
+void SimpleSynthDsp::setFilterType (FilterType type)
+{
+	const int t = static_cast<int> (type);
+	if (t < 0 || t >= kNumFilterTypes)
+		type = FilterType::Moog;
+	if (type == mFilterType)
+		return;
+
+	mFilterType = type;
+
+	// FROM WHEREVER THE FADE IS: every weight heads in a straight line
+	// for its target in the same number of samples, so the sum stays 1
+	// even when a switch turns a fade round half way.
+	mFilterFadeSamples = std::max (1, static_cast<int> (std::lround (kFilterCrossfadeSeconds * mSampleRate)));
+	for (int i = 0; i < kNumFilterTypes; ++i)
+	{
+		const double target = (i == static_cast<int> (type)) ? 1.0 : 0.0;
+		mFilterWeightStep[i] = (target - mFilterWeight[i]) / mFilterFadeSamples;
+	}
+}
+
+double SimpleSynthDsp::filterWeight (FilterType type) const
+{
+	const int t = static_cast<int> (type);
+	return (t >= 0 && t < kNumFilterTypes) ? mFilterWeight[t] : 0.0;
+}
+
+void SimpleSynthDsp::settleFilterWeights ()
+{
+	// EXACT targets, and the filters now out of the output cleared.
+	for (int i = 0; i < kNumFilterTypes; ++i)
+	{
+		const bool chosen = (i == static_cast<int> (mFilterType));
+		mFilterWeight[i] = chosen ? 1.0 : 0.0;
+		mFilterWeightStep[i] = 0.0;
+	}
+	if (mFilterType != FilterType::Moog)     mFilter.reset ();
+	if (mFilterType != FilterType::Ms20)     mMs20.reset ();
+	if (mFilterType != FilterType::Ms20Late) mMs20Late.reset ();
+}
 
 void SimpleSynthDsp::setPortamento (double seconds)
 {
@@ -899,9 +1081,6 @@ float SimpleSynthDsp::renderSample ()
 	cutoff = std::clamp (cutoff, kMinCutoffHz, cutoffCeilingHz (mSampleRate));
 	mLastCutoffHz = cutoff;
 
-	double coeff = 0.0, unityFeedback = 0.0;
-	ladderTuning ().lookup (cutoff / mSampleRate, coeff, unityFeedback);
-
 	// The noise floor - see kFilterNoiseLevel. A 32-bit LCG: cheap,
 	// deterministic, so the tests are repeatable.
 	mNoiseState = mNoiseState * 1664525u + 1013904223u;
@@ -911,7 +1090,46 @@ float SimpleSynthDsp::renderSample ()
 	// this cutoff's unity feedback exactly as the knob alone is - so a
 	// swing through 1.0 crosses self-oscillation at every cutoff.
 	mLastResonance = lfoResonance (mResonance.next (), mLfoRes.next (), lfo);
-	const double filtered = mFilter.tick (mix + noise, coeff, mLastResonance * unityFeedback);
+
+	// THE VCF TYPE. Settled, only the chosen filter runs - and a settled
+	// Moog is the ladder exactly as it was before the switch existed.
+	// While a change cross-fades, every filter with any weight runs and
+	// the output is their weighted sum.
+	const double in = mix + noise;
+	const double* w = mFilterWeight;
+	const int moogI = static_cast<int> (FilterType::Moog);
+	const int ms20I = static_cast<int> (FilterType::Ms20);
+	const int lateI = static_cast<int> (FilterType::Ms20Late);
+
+	double moog = 0.0, ms20 = 0.0, late = 0.0;
+	if (w[moogI] > 0.0)
+	{
+		double coeff = 0.0, unityFeedback = 0.0;
+		ladderTuning ().lookup (cutoff / mSampleRate, coeff, unityFeedback);
+		moog = mFilter.tick (in, coeff, mLastResonance * unityFeedback);
+	}
+	if (w[ms20I] > 0.0 || w[lateI] > 0.0)
+	{
+		const double g = ms20Prewarp (cutoff, mSampleRate);
+		if (w[ms20I] > 0.0)
+			ms20 = kMs20OutputGain * mMs20.tick (in, g, korg35Feedback (mLastResonance));
+		if (w[lateI] > 0.0)
+			late = kMs20LateOutputGain * mMs20Late.tick (in, g, ms20Feedback (mLastResonance));
+	}
+
+	const double filtered = (mFilterFadeSamples == 0)
+	                      ? ((mFilterType == FilterType::Moog) ? moog
+	                         : (mFilterType == FilterType::Ms20) ? ms20 : late)
+	                      : w[moogI] * moog + w[ms20I] * ms20 + w[lateI] * late;
+
+	if (mFilterFadeSamples > 0)
+	{
+		if (--mFilterFadeSamples == 0)
+			settleFilterWeights ();   // lands EXACTLY; clears the rest
+		else
+			for (int i = 0; i < kNumFilterTypes; ++i)
+				mFilterWeight[i] += mFilterWeightStep[i];
+	}
 
 	// ---- VCA -----------------------------------------------------------
 	// The LFO's VCA depth is TREMOLO DOWNWARDS from the envelope: at

@@ -16,7 +16,8 @@
 // design Designs/SimpleSynth-ConceptA-SignalFlow.png. It replaces the
 // FilterDrum grid of bar sliders: the same 30 parameters, laid out the
 // way the sound travels. (Portamento, 6 Oct, joined Output in the Amp
-// section: the 31st.)
+// section: the 31st. The VCF Type switch, 7 Oct, took the Filter
+// section's subtitle place: the 32nd.)
 //
 //   +--------------------------------------------------------------+
 //   | SIMPLESYNTH | engine line                     [licence pill] |  header
@@ -82,8 +83,10 @@ constexpr int kKnobValueH    = 13;
 constexpr int kKnobLabelH    = 12;
 constexpr int kKnobTextBand  = kKnobGap + kKnobValueH + kKnobLabelH;
 
-/** A segmented switch's height. */
+/** A segmented switch's height - and the shorter one that fits a
+    section's title row (the VCF Type switch). */
 constexpr int kSwitchHeight = 30;
+constexpr int kTitleSwitchHeight = 24;
 
 /** CHARACTER WIDTHS for the fit tests - generous averages for the faces
     the editor asks for (Menlo 10 for readings, Helvetica Neue bold 10
@@ -119,7 +122,8 @@ constexpr Rect kModRect    { 16,  448, 1184, 624 };
 
 constexpr Section kSections[] = {
 	{ "OSCILLATORS", "mixed equally into the filter", Accent::Osc,    kOscRect    },
-	{ "FILTER",      "Moog ladder, 24 dB",            Accent::Filter, kFilterRect },
+	// No subtitle: the VCF Type switch sits where it would be.
+	{ "FILTER",      "",                              Accent::Filter, kFilterRect },
 	{ "AMP",         "envelope + output",             Accent::Amp,    kAmpRect    },
 	{ "MODULATION",  "",                              Accent::Mod,    kModRect    },
 };
@@ -162,12 +166,14 @@ struct Control
 	int    diameter;    // knobs only; 0 for a switch
 	bool   bipolar;     // the arc grows from the top, not from the left end
 	const char* label;  // nullptr: shortLabel() - the title less its section
+	int    height = 0;  // switches only: 0 = kSwitchHeight
 };
 
 constexpr Rect controlRect (const Control& c)
 {
 	return { c.x, c.y, c.x + c.width,
-	         c.y + ((c.kind == Kind::Knob) ? c.diameter + kKnobTextBand : kSwitchHeight) };
+	         c.y + ((c.kind == Kind::Knob) ? c.diameter + kKnobTextBand
+	                                       : (c.height > 0 ? c.height : kSwitchHeight)) };
 }
 
 /** EVERY PARAMETER ON THE PANEL, once each - the tests hold it to that. */
@@ -182,6 +188,12 @@ constexpr Control kControls[] = {
 	{ kVco3Wave,  Kind::Switch, Accent::Osc, 64,  oscRowTop (2) + 31, 122, 0,  false, nullptr },
 	{ kVco3Tune,  Kind::Knob,   Accent::Osc, 210, oscRowTop (2) + 6,  64,  52, true,  nullptr },
 	{ kVco3Level, Kind::Knob,   Accent::Osc, 278, oscRowTop (2) + 6,  64,  52, false, nullptr },
+
+	// ---- the filter's type, in its title row where the subtitle was:
+	// the first thing to choose about a filter, and it reads as one
+	// ("FILTER  [Moog | MS-20 I | MS-20 II]"). Shorter than the other
+	// switches so it fits the row above the screen.
+	{ kVcfType,       Kind::Switch, Accent::Filter, 478, 81, 228, 0, false, nullptr, kTitleSwitchHeight },
 
 	// ---- the filter: the two big ones, then key track and the amount --
 	{ kCutoff,        Kind::Knob, Accent::Filter, 412, 218, 80, 66, false, nullptr },

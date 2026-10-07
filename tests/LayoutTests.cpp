@@ -87,6 +87,24 @@ int sectionOf (const Rect& r)
 	return found;
 }
 
+/** The section a CONTROL is inside. A title-row switch (the VCF Type)
+    lives in its section's title row, which innerOf() leaves out; it is
+    held to the section's padded outline instead. */
+int sectionOfControl (const Control& c)
+{
+	if (c.kind != Kind::Switch || c.height != kTitleSwitchHeight)
+		return sectionOf (controlRect (c));
+	int found = -1;
+	for (int i = 0; i < kNumSections; ++i)
+	{
+		const Rect& sr = kSections[i].r;
+		const Rect padded { sr.left + kSectionPadX, sr.top + 6, sr.right - kSectionPadX, sr.bottom - 10 };
+		if (inside (controlRect (c), padded))
+			found = (found == -1) ? i : -2;
+	}
+	return found;
+}
+
 /** A knob's reading is drawn 4 px wider than the knob each side. */
 constexpr int kTextSlack = 8;
 
@@ -154,12 +172,12 @@ int main ()
 			check (!overlaps (screens[i], screens[j]), "the screens do not overlap");
 
 	for (const auto& c : kControls)
-		check (sectionOf (controlRect (c)) >= 0, name (c) + " is inside exactly one section");
+		check (sectionOfControl (c) >= 0, name (c) + " is inside exactly one section");
 
 	// THE COLOUR SAYS WHICH SECTION: a control's accent is its section's.
 	for (const auto& c : kControls)
 	{
-		const int s = sectionOf (controlRect (c));
+		const int s = sectionOfControl (c);
 		if (s >= 0)
 			check (kSections[s].accent == c.accent, name (c) + " wears its section's colour");
 	}
@@ -241,9 +259,24 @@ int main ()
 		check (need <= s.r.width () - kSectionPadX, std::string (s.title) + "'s title row fits");
 	}
 	{
-		// The filter section's title row also carries the lamp.
-		const int titleEnd = kFilterRect.left + kSectionPadX + 16 + 6 * 9 + 10 + 18 * 6;
-		check (titleEnd <= kSelfOscLamp.left, "the filter's title and subtitle stop short of the lamp");
+		// The filter section's title row carries the VCF Type switch and
+		// the lamp: title, switch, lamp, left to right, clear of each
+		// other, and the switch above the screen.
+		const int titleEnd = kFilterRect.left + kSectionPadX + 16 + 6 * 9;
+		const Control* type = nullptr;
+		for (const auto& c : kControls)
+			if (c.tag == kVcfType)
+				type = &c;
+		check (type != nullptr, "the VCF Type switch is on the panel");
+		if (type)
+		{
+			const Rect r = controlRect (*type);
+			check (r.height () == kTitleSwitchHeight, "the VCF Type switch is the title-row height");
+			check (titleEnd + 8 <= r.left, "the VCF Type switch starts after the FILTER title");
+			check (r.right + 8 <= kSelfOscLamp.left, "and stops short of the lamp");
+			check (r.bottom <= kFilterView.top, "and is above the filter screen");
+			check (r.top >= kFilterRect.top + 6, "and inside the section's top edge");
+		}
 	}
 
 	// ---- the lines of text that change -------------------------------------
@@ -323,6 +356,48 @@ int main ()
 		double my3 = 0.0;
 		filterDisplayData (1200.0, kMaxResonanceK, 48000.0, curve, kDisplayPoints, mx, my3);
 		check (my3 >= 0.99, "a self-oscillating peak is drawn at the top of the screen");
+
+		// THE MS-20 CURVE: the same screen, its own filter. No bass loss
+		// with resonance (the ladder's passband drops), the dot -6 dB at
+		// the cutoff with none, and self-oscillation pinned to the top.
+		float ms20[kDisplayPoints], moog[kDisplayPoints];
+		double sx = 0.0, sy = 0.0;
+		filterDisplayData (1200.0, 0.0, 48000.0, ms20, kDisplayPoints, sx, sy, FilterType::Ms20);
+		check (std::fabs (ms20[0] - zeroDb) < 0.01, "MS-20: flat at 0 dB at the left edge");
+		check (std::fabs (sy - (-7.3595 - kFilterBottomDb) / (kFilterTopDb - kFilterBottomDb)) < 0.005,
+		       "MS-20 I: the dot sits -7.36 dB at the cutoff with no resonance (the Korg35's 7/3 damping)");
+		{
+			float late[kDisplayPoints];
+			double lx = 0.0, ly = 0.0;
+			filterDisplayData (1200.0, 0.0, 48000.0, late, kDisplayPoints, lx, ly, FilterType::Ms20Late);
+			check (std::fabs (ly - (-6.0206 - kFilterBottomDb) / (kFilterTopDb - kFilterBottomDb)) < 0.005,
+			       "MS-20 II: the dot sits -6 dB at the cutoff with no resonance");
+		}
+		{
+			// Two octaves above the cutoff (~5 kHz): 12 dB/oct against 24.
+			const int i5k = static_cast<int> (std::lround (std::log (5000.0 / kFilterMinHz) /
+			                std::log (kFilterMaxHz / kFilterMinHz) * (kDisplayPoints - 1)));
+			check (ms20[i5k] > curve[i5k] + 0.1f, "MS-20: shallower than the ladder two octaves up");
+		}
+		filterDisplayData (1200.0, 0.9, 48000.0, ms20, kDisplayPoints, sx, sy, FilterType::Ms20);
+		filterDisplayData (1200.0, 0.9, 48000.0, moog, kDisplayPoints, mx, my2, FilterType::Moog);
+		check (std::fabs (ms20[0] - zeroDb) < 0.01 && moog[0] < zeroDb - 0.05f,
+		       "MS-20 keeps its bass at resonance 0.9; the ladder loses it");
+		filterDisplayData (1200.0, kMaxResonanceK, 48000.0, ms20, kDisplayPoints, sx, sy, FilterType::Ms20);
+		check (sy >= 0.99, "MS-20: a self-oscillating peak is drawn at the top of the screen");
+
+		check (filterDisplayCaption (false, FilterType::Moog) == "at the knobs   24 dB/oct" &&
+		       filterDisplayCaption (true, FilterType::Ms20) == "live   12 dB/oct",
+		       "the screen's caption names the slope of the chosen filter");
+		check (static_cast<int> (filterDisplayCaption (false).size ()) * kValueCharWidth <= kFilterView.width () / 2,
+		       "the caption fits the left half of the screen");
+		check (filterDisplayCaption (false, FilterType::Ms20Late) == "at the knobs   12 dB/oct",
+		       "the MS-20 II is 12 dB/oct too");
+		check (filterTypeOf (paramDef (kVcfType).toInternal (0.0)) == FilterType::Moog &&
+		       filterTypeOf (paramDef (kVcfType).toInternal (0.5)) == FilterType::Ms20 &&
+		       filterTypeOf (paramDef (kVcfType).toInternal (1.0)) == FilterType::Ms20Late &&
+		       filterTypeOf (paramDef (kVcfType).toInternal (paramDef (kVcfType).defaultNormalized ())) == FilterType::Moog,
+		       "the VCF Type parameter maps to the DSP's FilterType, Moog by default");
 
 		// The ceiling: a 20 kHz knob at 44.1 k is drawn where the filter
 		// really is - cutoffCeilingHz() - not at the knob.

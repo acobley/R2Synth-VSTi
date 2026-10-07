@@ -244,12 +244,12 @@ const char* lfoDisplayCaption (double lfo2Level)
 //------------------------------------------------------------------------
 const char* panelTitleText ()
 {
-	return "SimpleSynth   -   three VCOs, an MS-20 LFO swept by a sine, a Moog ladder and two ADSRs";
+	return "SimpleSynth   -   three VCOs, an MS-20 LFO swept by a sine, a Moog or MS-20 filter and two ADSRs";
 }
 
 const char* panelFlowText ()
 {
-	return "VCO 1-3 -> mixer -> Moog ladder VCF -> VCA -> output      "
+	return "VCO 1-3 -> mixer -> VCF (Moog ladder or MS-20) -> VCA -> output      "
 	       "(mono, last note wins; every new note retriggers both envelopes; lamp = self-oscillating)";
 }
 
@@ -304,7 +304,8 @@ std::string controlLabel (const Layout::Control& control)
 
 //------------------------------------------------------------------------
 void filterDisplayData (double cutoffHz, double resonanceK, double sampleRate,
-                        float* curve, int count, double& markerX, double& markerY)
+                        float* curve, int count, double& markerX, double& markerY,
+                        FilterType type)
 {
 	using namespace Layout;
 	auto toY = [] (double db) {
@@ -322,7 +323,7 @@ void filterDisplayData (double cutoffHz, double resonanceK, double sampleRate,
 
 	if (curve != nullptr && count > 0)
 	{
-		traceFilterResponse (cutoffHz, resonanceK, sampleRate, kFilterMinHz, kFilterMaxHz, curve, count);
+		traceFilterResponse (type, cutoffHz, resonanceK, sampleRate, kFilterMinHz, kFilterMaxHz, curve, count);
 		for (int i = 0; i < count; ++i)
 			curve[i] = static_cast<float> (toY (curve[i]));
 	}
@@ -335,14 +336,15 @@ void filterDisplayData (double cutoffHz, double resonanceK, double sampleRate,
 	if (hz < kMinCutoffHz) hz = kMinCutoffHz;
 	if (hz > cutoffCeilingHz (sampleRate)) hz = cutoffCeilingHz (sampleRate);
 	float db = 0.f;
-	traceFilterResponse (cutoffHz, resonanceK, sampleRate, hz, hz, &db, 1);
+	traceFilterResponse (type, cutoffHz, resonanceK, sampleRate, hz, hz, &db, 1);
 	markerX = std::log (hz / kFilterMinHz) / std::log (kFilterMaxHz / kFilterMinHz);
 	markerY = toY (db);
 }
 
-const char* filterDisplayCaption (bool live)
+std::string filterDisplayCaption (bool live, FilterType type)
 {
-	return live ? "live" : "at the knobs";
+	return std::string (live ? "live" : "at the knobs") +
+	       ((type == FilterType::Moog) ? "   24 dB/oct" : "   12 dB/oct");
 }
 
 //------------------------------------------------------------------------

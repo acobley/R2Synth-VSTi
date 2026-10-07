@@ -21,6 +21,7 @@
 //     LFO 2 sweeps the Shape, in units of kMaxLfo2ShapeSweep;
 //   * Portamento is shown in ms and handed over in SECONDS, like the
 //     ADSR times; the bottom of the knob (1 ms) is OFF;
+//   * VCF Type is a switch, Moog / MS-20 I / MS-20 II - FilterType's values;
 //   * VCF LFO Res is shown 0..100 % OF THE RESONANCE KNOB and handed
 //     over as loop gain, 0..kMaxResonanceK - the same scale as
 //     Resonance, so 20 % of depth swings exactly 20 % of the knob.
@@ -94,6 +95,12 @@ enum Param : Steinberg::Vst::ParamID
 	// note slides to the next in, ALWAYS - overlapping or not. Its knob
 	// sits in the Amp section beside Output, in the oscillators' amber.
 	kPortamento,
+
+	// VCF Type, appended on 7 Oct 2026 (branch MS20Filter): Moog ladder
+	// or MS-20 low-pass. Moog = 0 is the default, so every project saved
+	// before it opens with the filter it was made with. Its switch sits in
+	// the Filter section's title row.
+	kVcfType,
 
 	kNumParams,
 

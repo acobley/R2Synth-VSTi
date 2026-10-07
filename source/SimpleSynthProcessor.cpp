@@ -226,6 +226,7 @@ void SimpleSynthProcessor::applyParam (ParamID id, double normalized)
 		case kVcfEnvAmount:  mDsp.setVcfEnvAmount (v); break;
 
 		case kPortamento:    mDsp.setPortamento (v); break;
+		case kVcfType:       mDsp.setFilterType (filterTypeFromInternal (v)); break;
 
 		case kVcfAttack: case kVcfDecay: case kVcfSustain: case kVcfRelease:
 			applyEnvelope (true);

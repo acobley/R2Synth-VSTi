@@ -905,6 +905,477 @@ static void testLadder ()
 }
 
 //------------------------------------------------------------------------
+// 6b. The two MS-20 filters (VCF Type, 7 Oct 2026)
+//
+// MS-20 I is the early Korg35 filter (diode pair in the FORWARD path,
+// damping 7/3); MS-20 II the later OTA filter (strings of three diodes in
+// the FEEDBACK path, damping 2) - after Stinchcombe's study of the two.
+//------------------------------------------------------------------------
+namespace {
+
+/** One MS-20 for the tests: which filter, its feedback scaling and
+    damping, and its diode knee. */
+struct Ms20Kind
+{
+	const char* name;
+	bool   early;
+	double damping;
+	double knee;
+
+	double feedback (double res) const { return early ? korg35Feedback (res) : ms20Feedback (res); }
+};
+
+const Ms20Kind kMs20Kinds[] = {
+	{ "MS-20 I",  true,  kKorg35Damping, kMs20DiodeKnee },
+	{ "MS-20 II", false, kOtaDamping,    kMs20LateDiodeKnee },
+};
+
+/** A fresh filter of the kind, run as a function of (input, g, k). */
+struct AnyMs20
+{
+	bool early;
+	Ms20Filter i;
+	Ms20LateFilter ii;
+	double tick (double x, double g, double k) { return early ? i.tick (x, g, k) : ii.tick (x, g, k); }
+};
+
+/** Steady-state amplitude and THD (harmonics 2..9) of the filter's
+    response to a sine, over a whole second after a second's settling. */
+void sineThrough (const Ms20Kind& kind, double amp, double hz, double res, double cutoff,
+                  double& gainDb, double& thdPercent)
+{
+	const double kTwoPi = 2.0 * 3.14159265358979323846;
+	const double fs = 48000.0;
+	AnyMs20 f { kind.early, {}, {} };
+	const double g = ms20Prewarp (cutoff, fs);
+	const double k = kind.feedback (res);
+	const int n = 48000;
+	std::vector<double> y;
+	y.reserve (n);
+	for (int i = 0; i < 2 * n; ++i)
+	{
+		const double v = f.tick (amp * std::sin (kTwoPi * hz * i / fs), g, k);
+		if (i >= n) y.push_back (v);
+	}
+	double fund = 0.0, harm = 0.0;
+	for (int h = 1; h <= 9 && h * hz < 0.5 * fs; ++h)
+	{
+		double re = 0.0, im = 0.0;
+		for (int i = 0; i < n; ++i)
+		{
+			re += y[i] * std::cos (kTwoPi * h * hz * (i + n) / fs);
+			im += y[i] * std::sin (kTwoPi * h * hz * (i + n) / fs);
+		}
+		(h == 1 ? fund : harm) += re * re + im * im;
+	}
+	gainDb = 20.0 * std::log10 (2.0 * std::sqrt (fund) / n / amp);
+	thdPercent = 100.0 * std::sqrt (harm / fund);
+}
+
+/** Self-oscillation at full resonance, 1 kHz: peak and THD. */
+void selfOscillation (const Ms20Kind& kind, double& peak, double& thdPercent)
+{
+	const double kTwoPi = 2.0 * 3.14159265358979323846;
+	const double fs = 48000.0;
+	AnyMs20 f { kind.early, {}, {} };
+	const double g = ms20Prewarp (1000.0, fs);
+	const double k = kind.feedback (kMaxResonanceK);
+	f.tick (1e-3, g, k);
+	std::vector<double> y;
+	for (int i = 0; i < 480000; ++i)
+	{
+		const double v = f.tick (0.0, g, k);
+		if (i >= 432000) y.push_back (v);
+	}
+	int first = -1, last = -1, cycles = 0;
+	for (size_t i = 1; i < y.size (); ++i)
+		if (y[i - 1] < 0.0 && y[i] >= 0.0)
+		{
+			if (first < 0) first = static_cast<int> (i); else ++cycles;
+			last = static_cast<int> (i);
+		}
+	peak = 0.0;
+	thdPercent = 100.0;
+	if (cycles < 1)
+		return;
+	const double f0 = cycles * fs / (last - first);
+	double fund = 0.0, harm = 0.0;
+	for (int h = 1; h <= 9; ++h)
+	{
+		double re = 0.0, im = 0.0;
+		for (int i = first; i < last; ++i)
+		{
+			re += y[i] * std::cos (kTwoPi * h * f0 * (i - first) / fs);
+			im += y[i] * std::sin (kTwoPi * h * f0 * (i - first) / fs);
+			if (h == 1) peak = std::max (peak, std::fabs (y[i]));
+		}
+		(h == 1 ? fund : harm) += re * re + im * im;
+	}
+	thdPercent = 100.0 * std::sqrt (harm / fund);
+}
+
+} // anonymous namespace
+
+static void testMs20 ()
+{
+	std::printf ("MS-20 filters\n");
+	const double kTwoPi = 2.0 * 3.14159265358979323846;
+	const double fs = 48000.0;
+
+	for (const Ms20Kind& kind : kMs20Kinds)
+	{
+		const std::string nm = kind.name;
+
+		// THE SCREEN'S CURVE AGAINST THE MEASURED FILTER: a quiet sine
+		// (the diodes stay off), amplitude by correlation.
+		for (double cutoff : { 300.0, 1200.0, 6000.0 })
+			for (double res : { 0.0, 0.5, 0.9 })
+				for (double ratio : { 0.25, 1.0, 3.0 })
+				{
+					const double hz = cutoff * ratio;
+					double gainDb = 0.0, thd = 0.0;
+					sineThrough (kind, 0.001, hz, res, cutoff, gainDb, thd);
+					const double predictedDb = 20.0 * std::log10 (ms20ResponseGain (
+						kTwoPi * hz / fs, ms20Prewarp (cutoff, fs), kind.feedback (res), kind.damping));
+					char what[160];
+					std::snprintf (what, sizeof (what),
+					               "%s response at %.0f Hz, cutoff %.0f Hz, res %.1f: measured %.2f dB, predicted %.2f dB",
+					               kind.name, hz, cutoff, res, gainDb, predictedDb);
+					checkClose (gainDb, predictedDb, 0.25, what);
+				}
+
+		// NO BASS LOSS: unity at DC whatever the resonance. (MS-20 I's
+		// diodes, though off, take 1.5e-4 of it.)
+		for (double res : { 0.0, 0.5, 0.9 })
+		{
+			AnyMs20 f { kind.early, {}, {} };
+			double y = 0.0;
+			for (int i = 0; i < 48000; ++i)
+				y = f.tick (0.001, ms20Prewarp (1000.0, fs), kind.feedback (res));
+			checkClose (y / 0.001, 1.0, 1e-3, nm + " DC gain is unity at resonance " + num (res));
+		}
+
+		// THE THRESHOLD, ON THE SHARED SCALE: loop gain 0.97 dies, 1.03
+		// sustains - at every cutoff - and it sings AT THE CUTOFF.
+		for (double hz : { 100.0, 1000.0, 8000.0 })
+		{
+			const double g = ms20Prewarp (hz, fs);
+			auto ring = [&] (double res, double& early, double& late, std::vector<double>* tail) {
+				AnyMs20 f { kind.early, {}, {} };
+				f.tick (1e-3, g, kind.feedback (res));
+				early = late = 0.0;
+				for (int i = 0; i < 192000; ++i)
+				{
+					const double y = f.tick (0.0, g, kind.feedback (res));
+					// Short early window: at 8 kHz a 0.97 ring is gone in a
+					// tenth of a second.
+					if (i > 48 && i < 960) early = std::max (early, std::fabs (y));
+					if (i > 182000) late = std::max (late, std::fabs (y));
+					if (tail && i >= 144000) tail->push_back (y);
+				}
+			};
+			double e = 0.0, l = 0.0;
+			ring (0.97, e, l, nullptr);
+			check (l < 0.01 * e, nm + " loop gain 0.97 dies away at " + num (hz) + " Hz");
+			std::vector<double> tail;
+			ring (1.03, e, l, &tail);
+			check (l >= 0.99 * e && l > 0.01, nm + " loop gain 1.03 sustains at " + num (hz) + " Hz (" + num (l, "%.3f") + ")");
+			const double f0 = measureFrequency (tail, fs);
+			check (std::fabs (f0 / hz - 1.0) < 0.03, nm + " sings at its cutoff: " + num (f0, "%.1f") + " Hz for " + num (hz));
+		}
+
+		// SELF-OSCILLATION IS BOUNDED by the diodes.
+		double peak = 0.0, thd = 0.0;
+		selfOscillation (kind, peak, thd);
+		std::printf ("  %s self-oscillation at full resonance, 1 kHz: peak %.3f, %.2f %% THD (before the trim)\n",
+		             kind.name, peak, thd);
+		check (peak > 0.1 && peak < 2.0 * kind.knee, nm + " self-oscillation settles at a bounded amplitude");
+
+		// And a huge input cannot blow it up.
+		{
+			AnyMs20 loud { kind.early, {}, {} };
+			bool finite = true;
+			double worst = 0.0;
+			for (int i = 0; i < 48000; ++i)
+			{
+				const double y = loud.tick ((i % 50 < 25) ? 100.0 : -100.0, ms20Prewarp (19000.0, fs),
+				                            kind.feedback (kMaxResonanceK));
+				finite = finite && std::isfinite (y);
+				worst = std::max (worst, std::fabs (y));
+			}
+			check (finite && worst < 20.0, nm + " stays finite and bounded under a +40 dB square (" + num (worst, "%.2f") + ")");
+		}
+	}
+
+	// THE CORNER: prewarped, so exactly on the knob at every rate. With
+	// no resonance the OTA filter's coincident poles are -6 dB there; the
+	// Korg35's extra damping (7/3) makes it 20 log (3/7) = -7.36 dB.
+	for (double rate : kRates)
+		for (double hz : { 100.0, 1000.0, 10000.0 })
+		{
+			const double w = kTwoPi * hz / rate, g = ms20Prewarp (hz, rate);
+			checkClose (20.0 * std::log10 (ms20ResponseGain (w, g, 0.0, kOtaDamping)), -6.0206, 1e-6,
+			            "MS-20 II is -6 dB at its cutoff, " + num (hz) + " Hz at " + num (rate));
+			checkClose (20.0 * std::log10 (ms20ResponseGain (w, g, 0.0, kKorg35Damping)), 20.0 * std::log10 (3.0 / 7.0), 1e-6,
+			            "MS-20 I is -7.36 dB at its cutoff, " + num (hz) + " Hz at " + num (rate));
+		}
+
+	// 12 dB AN OCTAVE, not the ladder's 24.
+	{
+		const double g = ms20Prewarp (500.0, 96000.0);
+		const double a = ms20ResponseGain (kTwoPi * 4000.0 / 96000.0, g, 0.0);
+		const double b = ms20ResponseGain (kTwoPi * 8000.0 / 96000.0, g, 0.0);
+		const double slope = 20.0 * std::log10 (b / a);
+		check (slope < -11.0 && slope > -13.5, "MS-20 falls 12 dB an octave (" + num (slope, "%.2f") + " dB)");
+	}
+
+	// WHERE THE DIODES ARE - Stinchcombe's listening test, measured. With
+	// no resonance, MS-20 I (forward-path diodes) gets RICHER AS THE INPUT
+	// GETS LOUDER; MS-20 II (feedback-path diodes) STAYS LARGELY THE SAME.
+	{
+		double gq = 0.0, tq = 0.0, gl = 0.0, tl = 0.0, g2 = 0.0, t2 = 0.0;
+		sineThrough (kMs20Kinds[0], 0.1, 250.0, 0.0, 1000.0, gq, tq);
+		sineThrough (kMs20Kinds[0], 1.5, 250.0, 0.0, 1000.0, gl, tl);
+		sineThrough (kMs20Kinds[1], 1.5, 250.0, 0.0, 1000.0, g2, t2);
+		std::printf ("  250 Hz sine, no resonance: MS-20 I %.2f %% THD quiet, %.2f %% loud; MS-20 II %.2f %% loud\n",
+		             tq, tl, t2);
+		check (tq < 0.1, "MS-20 I is clean for a quiet signal");
+		check (tl > 5.0 && gl < gq - 0.5, "MS-20 I distorts and compresses a loud one, with no resonance");
+		check (t2 < 1.0, "MS-20 II passes the same loud signal nearly clean");
+	}
+
+	// MS-20 II's diodes TAME ITS PEAK: a loud sine at the resonant peak
+	// gets far less than the linear gain.
+	{
+		const Ms20Kind& ii = kMs20Kinds[1];
+		double gainDb = 0.0, thd = 0.0;
+		sineThrough (ii, 2.0, 1000.0, 0.95, 1000.0, gainDb, thd);
+		const double linearDb = 20.0 * std::log10 (ms20ResponseGain (kTwoPi * 1000.0 / fs, ms20Prewarp (1000.0, fs),
+		                                                              ii.feedback (0.95), ii.damping));
+		std::printf ("  MS-20 II, loud sine at the resonant peak (res 0.95): %.1f dB, linear %.1f dB\n", gainDb, linearDb);
+		check (gainDb < linearDb - 6.0, "MS-20 II's feedback diodes tame a loud resonant peak");
+	}
+
+	// THE DIODE LAW: off below the knee, a sharp knee, then a slow
+	// LOGARITHMIC climb with no ceiling - the shape a tanh does not have.
+	for (double knee : { kMs20DiodeKnee, kMs20LateDiodeKnee })
+	{
+		const std::string at = " (knee " + num (knee) + ")";
+		checkClose (ms20DiodeClip (1e-3 * knee, knee) / (1e-3 * knee), 1.0, 2e-4,
+		            "the diodes are off for a quiet signal" + at);
+		checkClose (ms20DiodeClip (0.5 * knee, knee) / (0.5 * knee), 1.0, 5e-3,
+		            "and still nearly off at half the knee (within 0.5 %)" + at);
+		// By construction, at the knee the diodes take as much as the
+		// resistor: twice the knee in gives the knee out.
+		checkClose (ms20DiodeClip (2.0 * knee, knee) / knee, 1.0, 1e-9, "twice the knee in gives the knee out" + at);
+		const double at10 = ms20DiodeClip (10.0 * knee, knee);
+		const double at100 = ms20DiodeClip (100.0 * knee, knee);
+		const double at1000 = ms20DiodeClip (1000.0 * knee, knee);
+		check (at100 > at10 && at10 > knee && at100 < 1.5 * knee,
+		       "beyond it the voltage still climbs, slowly: 10x " + num (at10 / knee, "%.3f") +
+		       ", 100x " + num (at100 / knee, "%.3f") + " knees" + at);
+		check (std::fabs ((at100 - at10) - (at1000 - at100)) < 0.02 * knee,
+		       "each further decade of drive adds the same voltage (the exponential diode law)" + at);
+		check (ms20DiodeClip (-3.7, knee) == -ms20DiodeClip (3.7, knee) && ms20DiodeClip (0.0, knee) == 0.0,
+		       "the diodes are symmetric" + at);
+
+		// THE LOOP SOLVE: the residual is nil wherever a filter can ask.
+		const double vd  = knee / kMs20DiodeSharpness;
+		const double eps = knee / std::sinh (kMs20DiodeSharpness);
+		double worstResidual = 0.0;
+		for (double a : { -1e6, -50.0, -3.1, -0.2, 1e-9, 0.7, 2.9, 3.3, 40.0, 1e6 })
+			for (double b : { 0.0, 0.1, 0.3, 0.55 })
+			{
+				const double v = ms20DiodeSolve (a, b, knee);
+				const double residual = std::fabs ((1.0 - b) * v + eps * std::sinh (v / vd) - a) / (1.0 + std::fabs (a));
+				worstResidual = std::max (worstResidual, std::isfinite (v) ? residual : 1.0);
+			}
+		check (worstResidual < 1e-9, "ms20DiodeSolve solves the loop equation (worst residual " + num (worstResidual) + ")" + at);
+		check (ms20DiodeSolve (std::numeric_limits<double>::quiet_NaN (), 0.2, knee) == 0.0, "and survives a NaN" + at);
+	}
+
+	// THE INPUT OTA (MS-20 II): slope 1 at rest, odd, bounded.
+	checkClose (otaSaturate (1e-6) / 1e-6, 1.0, 1e-9, "otaSaturate has slope 1 at zero");
+	check (otaSaturate (-2.0) == -otaSaturate (2.0) && std::fabs (otaSaturate (1e9)) <= 1.0 / kOtaDrive + 1e-12,
+	       "otaSaturate is odd and bounded");
+
+	// THE TRACES: the same clamp as process(), flat passband with
+	// resonance (no bass loss), the peak at the cutoff - and MS-20 I's
+	// extra damping shows at the cutoff with no resonance.
+	{
+		const int n = 64;
+		for (FilterType type : { FilterType::Ms20, FilterType::Ms20Late })
+		{
+			float db[n];
+			traceFilterResponse (type, 1200.0, 0.9, fs, 20.0, 20000.0, db, n);
+			const std::string nm = (type == FilterType::Ms20) ? "MS-20 I" : "MS-20 II";
+			check (std::fabs (db[0]) < 0.1, nm + " trace is 0 dB at 20 Hz even at resonance 0.9");
+			int top = 0;
+			for (int i = 1; i < n; ++i)
+				if (db[i] > db[top])
+					top = i;
+			const double topHz = 20.0 * std::pow (1000.0, static_cast<double> (top) / (n - 1));
+			check (topHz > 900.0 && topHz < 1600.0, nm + " trace peaks at the cutoff (" + num (topHz, "%.0f") + " Hz)");
+			check (db[top] > 6.f, "and stands 6 dB proud");
+		}
+
+		float one, two;
+		traceFilterResponse (FilterType::Ms20, 1200.0, 0.0, fs, 1200.0, 1200.0, &one, 1);
+		traceFilterResponse (FilterType::Ms20Late, 1200.0, 0.0, fs, 1200.0, 1200.0, &two, 1);
+		checkClose (two - one, 7.3595 - 6.0206, 0.01, "with no resonance MS-20 I is 1.34 dB more damped at the cutoff");
+
+		float moog[n], viaType[n];
+		traceFilterResponse (1200.0, 0.5, fs, 20.0, 20000.0, moog, n);
+		traceFilterResponse (FilterType::Moog, 1200.0, 0.5, fs, 20.0, 20000.0, viaType, n);
+		check (std::equal (moog, moog + n, viaType), "traceFilterResponse(Moog, ...) IS the ladder's trace");
+
+		float nyq[4];
+		traceFilterResponse (FilterType::Ms20, 1200.0, 0.0, 22050.0, 1000.0, 20000.0, nyq, 4);
+		check (nyq[3] == -120.f, "MS-20 points above Nyquist read -120 dB");
+	}
+}
+
+//------------------------------------------------------------------------
+// 6c. The VCF Type switch in the voice
+//------------------------------------------------------------------------
+static void testFilterSwitch ()
+{
+	std::printf ("VCF Type switch\n");
+
+	auto render = [] (SimpleSynthDsp& d, int samples) {
+		std::vector<float> l (static_cast<size_t> (samples)), r (l.size ());
+		d.render (l.data (), r.data (), samples);
+		return l;
+	};
+
+	// MOOG IS THE DEFAULT and a Moog voice is the voice as it was: one
+	// that never heard of the switch and one switched away and back
+	// (and settled, and reset) render the same samples.
+	{
+		SimpleSynthDsp a, b;
+		a.setSampleRate (48000.0);
+		b.setSampleRate (48000.0);
+		applyDefaultPatch (a);
+		applyDefaultPatch (b);
+		check (a.filterType () == FilterType::Moog && a.filterWeight (FilterType::Moog) == 1.0 &&
+		       a.filterWeight (FilterType::Ms20) == 0.0 && a.filterWeight (FilterType::Ms20Late) == 0.0,
+		       "a new voice is on the Moog ladder");
+		b.setFilterType (FilterType::Ms20);
+		render (b, 4800);
+		b.setFilterType (FilterType::Ms20Late);
+		render (b, 4800);
+		b.setFilterType (FilterType::Moog);
+		render (b, 4800);
+		render (a, 14400);   // the same number of samples: the noise floor's LCG runs on
+		a.reset ();
+		b.reset ();
+		a.noteOn (48, 1.f);
+		b.noteOn (48, 1.f);
+		check (render (a, 24000) == render (b, 24000), "Moog after a round trip through both MS-20s is bit-identical");
+	}
+
+	// THE CROSS-FADE: monotonic, kFilterCrossfadeSeconds long, landing
+	// EXACTLY; a reset lands at once.
+	for (double rate : kRates)
+	{
+		SimpleSynthDsp d;
+		d.setSampleRate (rate);
+		applyDefaultPatch (d);
+		d.reset ();
+		d.noteOn (60, 1.f);
+		d.setFilterType (FilterType::Ms20);
+		const int expect = static_cast<int> (std::lround (kFilterCrossfadeSeconds * rate));
+		int steps = 0;
+		bool monotonic = true;
+		double last = d.filterWeight (FilterType::Ms20);
+		std::vector<float> l (1), r (1);
+		while (d.filterWeight (FilterType::Ms20) < 1.0 && steps < 10 * expect)
+		{
+			d.render (l.data (), r.data (), 1);
+			monotonic = monotonic && d.filterWeight (FilterType::Ms20) >= last;
+			last = d.filterWeight (FilterType::Ms20);
+			++steps;
+		}
+		check (monotonic && d.filterWeight (FilterType::Ms20) == 1.0 && d.filterWeight (FilterType::Moog) == 0.0 &&
+		       steps == expect,
+		       "the switch fades in " + std::to_string (steps) + " samples (want " + std::to_string (expect) + ") at " + num (rate));
+
+		// A SWITCH MID-FADE to the third filter: the weights still sum to
+		// 1 on every sample, and all land exactly.
+		d.setFilterType (FilterType::Moog);
+		for (int i = 0; i < expect / 3; ++i)
+			d.render (l.data (), r.data (), 1);
+		d.setFilterType (FilterType::Ms20Late);
+		bool sumsToOne = true;
+		for (int i = 0; i < expect + 2; ++i)
+		{
+			const double sum = d.filterWeight (FilterType::Moog) + d.filterWeight (FilterType::Ms20) +
+			                   d.filterWeight (FilterType::Ms20Late);
+			sumsToOne = sumsToOne && std::fabs (sum - 1.0) < 1e-12;
+			d.render (l.data (), r.data (), 1);
+		}
+		check (sumsToOne && d.filterWeight (FilterType::Ms20Late) == 1.0 &&
+		       d.filterWeight (FilterType::Moog) == 0.0 && d.filterWeight (FilterType::Ms20) == 0.0,
+		       "a switch mid-fade keeps the three weights summing to 1 and lands exactly at " + num (rate));
+
+		d.setFilterType (FilterType::Moog);
+		d.render (l.data (), r.data (), 1);
+		d.setFilterType (FilterType::Ms20);   // turned round mid-fade
+		d.reset ();
+		check (d.filterWeight (FilterType::Ms20) == 1.0 && d.filterWeight (FilterType::Moog) == 0.0,
+		       "reset() lands on the chosen filter at once");
+
+		check (filterTypeFromInternal (0.0) == FilterType::Moog && filterTypeFromInternal (1.0) == FilterType::Ms20 &&
+		       filterTypeFromInternal (2.0) == FilterType::Ms20Late && filterTypeFromInternal (7.0) == FilterType::Ms20Late &&
+		       filterTypeFromInternal (-1.0) == FilterType::Moog, "filterTypeFromInternal rounds and clamps");
+	}
+
+	// NO CLICK: switching mid-note, the biggest sample-to-sample step
+	// in the fade is no bigger than the sawtooth's own steps either side.
+	{
+		SimpleSynthDsp d;
+		d.setSampleRate (48000.0);
+		applyDefaultPatch (d);
+		d.setVcfEnvAmount (0.0);
+		d.reset ();
+		d.noteOn (45, 1.f);
+		const auto before = render (d, 24000);
+		d.setFilterType (FilterType::Ms20);
+		const auto during = render (d, 960);
+		const auto after = render (d, 24000);
+		auto maxStep = [] (const std::vector<float>& v, size_t from) {
+			double m = 0.0;
+			for (size_t i = from + 1; i < v.size (); ++i)
+				m = std::max (m, static_cast<double> (std::fabs (v[i] - v[i - 1])));
+			return m;
+		};
+		const double around = std::max (maxStep (before, 12000), maxStep (after, 12000));
+		const double fade = std::max (maxStep (during, 0),
+		                              static_cast<double> (std::fabs (during[0] - before.back ())));
+		check (fade <= 1.1 * around, "switching mid-note does not click (step " + num (fade, "%.4f") +
+		       " vs " + num (around, "%.4f") + ")");
+	}
+
+	// THE MS-20 VOICE SOUNDS DIFFERENT - brighter for the same knobs.
+	{
+		SimpleSynthDsp m, s;
+		for (SimpleSynthDsp* d : { &m, &s })
+		{
+			d->setSampleRate (48000.0);
+			applyDefaultPatch (*d);
+			d->setVcfEnvAmount (0.0);
+		}
+		s.setFilterType (FilterType::Ms20);
+		m.reset ();
+		s.reset ();
+		m.noteOn (48, 1.f);
+		s.noteOn (48, 1.f);
+		const auto a = render (m, 24000), b = render (s, 24000);
+		check (a != b, "NEGATIVE CONTROL: the MS-20 voice is not the Moog voice");
+	}
+}
+
+//------------------------------------------------------------------------
 // 7. The ADSRs
 //------------------------------------------------------------------------
 static void testAdsr ()
@@ -1425,6 +1896,37 @@ static void measureDefaultLevel ()
 	check (loudest < -3.0, "the default patch peaks below -3 dBFS");
 	check (loudest > -12.0, "and above -12 dBFS");
 
+	// THE MS-20s AT THE SAME PATCH: under full scale like the ladder, and
+	// within 1.5 dB RMS of it - kMs20OutputGain's and kMs20LateOutputGain's
+	// measurement.
+	{
+		double peak[3] = { -1e9, -1e9, -1e9 }, rms[3] = { 0.0, 0.0, 0.0 };
+		for (int t = 0; t < 3; ++t)
+			for (int note : { 36, 48, 60, 72, 84 })
+			{
+				SimpleSynthDsp dsp;
+				dsp.setSampleRate (48000.0);
+				applyDefaultPatch (dsp);
+				dsp.setFilterType (static_cast<FilterType> (t));
+				dsp.reset ();
+				dsp.noteOn (note, 1.f);
+				std::vector<float> l (48000), r (48000);
+				dsp.render (l.data (), r.data (), 48000);
+				double sum = 0.0;
+				for (float x : l) sum += static_cast<double> (x) * x;
+				rms[t] += 10.0 * std::log10 (sum / l.size ()) / 5.0;
+				peak[t] = std::max (peak[t], peakDbFS (l));
+			}
+		for (int t = 1; t < 3; ++t)
+		{
+			const std::string name = (t == 1) ? "MS-20 I" : "MS-20 II";
+			std::printf ("  %s, default patch: peak %.2f dBFS, RMS %.2f dB (ladder %.2f dB)\n",
+			             name.c_str (), peak[t], rms[t], rms[0]);
+			check (peak[t] < -3.0 && peak[t] > -12.0, "the " + name + " default patch peaks between -12 and -3 dBFS");
+			check (std::fabs (rms[t] - rms[0]) < 1.5, "and within 1.5 dB RMS of the ladder");
+		}
+	}
+
 	// The worst case a user can dial in: three full squares in unison,
 	// full resonance, +6 dB of Output Level.
 	{
@@ -1442,14 +1944,16 @@ static void measureDefaultLevel ()
 		dsp.setVcfEnvAmount (kMaxEnvOctaves);
 		dsp.setOutputLevelDb (6.0);
 		double worst = -1e9;
-		for (int note : { 24, 48, 72 })
-		{
-			dsp.reset ();
-			dsp.noteOn (note, 1.f);
-			std::vector<float> l (96000), r (96000);
-			dsp.render (l.data (), r.data (), 96000);
-			worst = std::max (worst, peakDbFS (l));
-		}
+		for (FilterType type : { FilterType::Moog, FilterType::Ms20, FilterType::Ms20Late })
+			for (int note : { 24, 48, 72 })
+			{
+				dsp.setFilterType (type);
+				dsp.reset ();
+				dsp.noteOn (note, 1.f);
+				std::vector<float> l (96000), r (96000);
+				dsp.render (l.data (), r.data (), 96000);
+				worst = std::max (worst, peakDbFS (l));
+			}
 		std::printf ("  worst case (3 squares, full resonance, +6 dB out): %.2f dBFS  -> %.2f dBFS at 0 dB out\n",
 		             worst, worst - 6.0);
 		check (worst - 6.0 < 1.0, "even the worst case is within 1 dB of full scale at 0 dB Output Level");
@@ -1470,6 +1974,21 @@ static void measureDefaultLevel ()
 		dsp.render (l.data (), r.data (), 96000);
 		std::printf ("  self-oscillation alone, VCOs off: %.2f dBFS\n", peakDbFS (l, 48000));
 		check (peakDbFS (l, 48000) > -20.0, "full resonance sings with every VCO off");
+
+		dsp.setFilterType (FilterType::Ms20);
+		dsp.reset ();
+		dsp.noteOn (60, 1.f);
+		dsp.render (l.data (), r.data (), 96000);
+		std::printf ("  MS-20 self-oscillation alone, VCOs off: %.2f dBFS\n", peakDbFS (l, 48000));
+		check (peakDbFS (l, 48000) > -20.0, "the MS-20 at full resonance sings with every VCO off");
+
+		dsp.setFilterType (FilterType::Ms20Late);
+		dsp.reset ();
+		dsp.noteOn (60, 1.f);
+		dsp.render (l.data (), r.data (), 96000);
+		std::printf ("  MS-20 II self-oscillation alone, VCOs off: %.2f dBFS\n", peakDbFS (l, 48000));
+		check (peakDbFS (l, 48000) > -20.0, "the MS-20 II at full resonance sings with every VCO off");
+		dsp.setFilterType (FilterType::Moog);
 
 		dsp.setResonance (0.0);
 		dsp.reset ();
@@ -1691,6 +2210,8 @@ int main ()
 	testLfoResonance ();
 	testLadder ();
 	testLadderResponse ();
+	testMs20 ();
+	testFilterSwitch ();
 	testAdsr ();
 	testNotes ();
 	testPortamento ();

@@ -318,6 +318,12 @@ void SimpleSynthEditor::refreshDependents (ParamID tag)
 			refreshFilterDisplay ();
 			break;
 
+		case kVcfType:
+			// The other filter's curve and slope - the live pair keeps
+			// coming, so the screen follows it on the new filter at once.
+			refreshFilterDisplay ();
+			break;
+
 		case kCutoffLive:
 			// ONLY the screen: these arrive up to 60 times a second.
 			mLiveCutoffHz = paramDef (kCutoff).toInternal (normalizedOf (kCutoffLive));
@@ -425,8 +431,9 @@ void SimpleSynthEditor::refreshFilterDisplay ()
 	// the modulation shows as the distance between the two.
 	float knobs[Layout::kDisplayPoints];
 	double knobX = 0.0, knobY = 0.0;
+	const FilterType type = filterTypeOf (internalOf (kVcfType));
 	filterDisplayData (internalOf (kCutoff), internalOf (kResonance), sampleRate (),
-	                   knobs, Layout::kDisplayPoints, knobX, knobY);
+	                   knobs, Layout::kDisplayPoints, knobX, knobY, type);
 
 	mFilterView->setLegend ("20 Hz", "20 kHz");
 	if (mHaveLiveFilter)
@@ -434,9 +441,9 @@ void SimpleSynthEditor::refreshFilterDisplay ()
 		float live[Layout::kDisplayPoints];
 		double liveX = 0.0, liveY = 0.0;
 		filterDisplayData (mLiveCutoffHz, mLiveResonance, sampleRate (),
-		                   live, Layout::kDisplayPoints, liveX, liveY);
+		                   live, Layout::kDisplayPoints, liveX, liveY, type);
 
-		mFilterView->setCaption (filterDisplayCaption (true));
+		mFilterView->setCaption (filterDisplayCaption (true, type));
 		mFilterView->setAnnotation (filterDisplayAnnotation (normalizedOf (kCutoffLive),
 		                                                     normalizedOf (kResonanceLive)));
 		mFilterView->setMarker (liveX, liveY);
@@ -444,7 +451,7 @@ void SimpleSynthEditor::refreshFilterDisplay ()
 		return;
 	}
 
-	mFilterView->setCaption (filterDisplayCaption (false));
+	mFilterView->setCaption (filterDisplayCaption (false, type));
 	mFilterView->setAnnotation (filterDisplayAnnotation (normalizedOf (kCutoff), normalizedOf (kResonance)));
 	mFilterView->setMarker (knobX, knobY);
 	mFilterView->setCurves (knobs, nullptr, Layout::kDisplayPoints);
