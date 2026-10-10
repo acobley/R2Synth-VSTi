@@ -20,7 +20,7 @@
 # NOT the build that ships. The Mac build is ../../CMakeLists.txt.
 #-----------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.25)
-project(R2SynthLinuxValidate VERSION 1.0.0.1)
+project(R2SynthLinuxValidate VERSION 1.0.0.0)
 
 set(VST3_SDK_ROOT "" CACHE PATH "Path to a VST3 SDK checkout")
 if(NOT EXISTS "${VST3_SDK_ROOT}/CMakeLists.txt")

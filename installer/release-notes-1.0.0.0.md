@@ -1,4 +1,4 @@
-# R2Synth 1.0.0.1
+# R2Synth 1.0.0.0
 
 A monophonic analogue-style synthesiser for macOS, as a **VST3** and an
 **Audio Unit**. Free software under the GNU GPL, version 3 or later.
@@ -21,7 +21,7 @@ A monophonic analogue-style synthesiser for macOS, as a **VST3** and an
 
 ## Installing
 
-Download `R2Synth-1.0.0.1.pkg` and open it. The installer offers each format
+Download `R2Synth-1.0.0.0.pkg` and open it. The installer offers each format
 separately:
 
     /Library/Audio/Plug-Ins/VST3/R2Synth.vst3
@@ -72,7 +72,7 @@ R2Project plug-ins; leave it if you might reinstall.
 ## Checksum
 
 ```
-SHA-256: <paste from: shasum -a 256 installer/R2Synth-1.0.0.1.pkg>
+SHA-256: <paste from: shasum -a 256 installer/R2Synth-1.0.0.0.pkg>
 ```
 
 ---
