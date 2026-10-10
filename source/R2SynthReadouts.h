@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleSynth - the panel's text
+// R2Synth - the panel's text
 //
 // EVERY STRING THE PANEL SHOWS THAT DEPENDS ON A VALUE is made here, with
 // no VSTGUI in sight, for the same reason the layout is in its own
@@ -9,19 +9,19 @@
 // host.
 //
 // The numbers come from the parameter table and from the shared
-// functions in SimpleSynthDsp.h - never from arithmetic written here.
+// functions in R2SynthDsp.h - never from arithmetic written here.
 //------------------------------------------------------------------------
 
 #pragma once
 
-#include "SimpleSynthDsp.h"
-#include "SimpleSynthLayout.h"
-#include "SimpleSynthParams.h"
+#include "R2SynthDsp.h"
+#include "R2SynthLayout.h"
+#include "R2SynthParams.h"
 
 #include <functional>
 #include <string>
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 /** The reading drawn across the top of a slider. */
 std::string readoutText (Steinberg::Vst::ParamID tag, double normalized);
@@ -114,4 +114,4 @@ std::string filterDisplayAnnotation (double cutoffNormalized, double resonanceNo
     LFO 2's, side by side. */
 std::string modInfoLineText (const std::function<double (Steinberg::Vst::ParamID)>& internalOf);
 
-} // namespace SimpleSynth
+} // namespace R2Synth

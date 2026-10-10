@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------
-// SimpleSynth - editor
+// R2Synth - editor
 //
 // THE "SIGNAL FLOW" PANEL (branch UpdatedUI): oscillators, filter and amp
 // left to right in the order the sound goes through them, the modulation
-// underneath, a header across the top. SimpleSynthLayout.h has the
-// picture and the numbers; SimpleSynthPanelViews.h has the knobs,
+// underneath, a header across the top. R2SynthLayout.h has the
+// picture and the numbers; R2SynthPanelViews.h has the knobs,
 // switches and screens. It replaced the FilterDrum grid of bar sliders -
 // the parameters, the controller and the processor are unchanged.
 //
@@ -12,7 +12,7 @@
 // first:
 //
 //   1. Every number shown comes from the parameter table or from a
-//      function in SimpleSynthDsp.h that the AUDIO PATH also calls -
+//      function in R2SynthDsp.h that the AUDIO PATH also calls -
 //      never from arithmetic written a second time here. The
 //      self-oscillation lamp lights from selfOscillating(); the filter
 //      curve is traceFilterResponse(), the ladder's own transfer function
@@ -20,7 +20,7 @@
 //      traceLfo() through lfoDisplayData(); the envelope screens drive
 //      real Adsr objects through traceEnvelopes().
 //
-//   2. The layout is DATA, in SimpleSynthLayout.h, not positions typed
+//   2. The layout is DATA, in R2SynthLayout.h, not positions typed
 //      into the middle of open().
 //
 // NO BITMAPS. Everything is drawn with paths and text, so the panel is
@@ -34,25 +34,25 @@
 #pragma once
 
 #include "LicenceStore.h"
-#include "SimpleSynthLayout.h"
-#include "SimpleSynthPanelViews.h"
-#include "SimpleSynthParams.h"
+#include "R2SynthLayout.h"
+#include "R2SynthPanelViews.h"
+#include "R2SynthParams.h"
 
 #include "public.sdk/source/vst/vstguieditor.h"
 
 #include <map>
 #include <string>
 
-namespace SimpleSynth {
+namespace R2Synth {
 
-class SimpleSynthController;
+class R2SynthController;
 class LicenceBadge;
 
 //------------------------------------------------------------------------
-class SimpleSynthEditor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener
+class R2SynthEditor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener
 {
 public:
-	explicit SimpleSynthEditor (SimpleSynthController* controller);
+	explicit R2SynthEditor (R2SynthController* controller);
 
 	bool PLUGIN_API open (void* parent, const VSTGUI::PlatformType& platformType) SMTG_OVERRIDE;
 	void PLUGIN_API close () SMTG_OVERRIDE;
@@ -69,7 +69,7 @@ public:
 	void refreshAllReadouts ();
 
 	/** The text drawn on one control - readoutText() in
-	    SimpleSynthReadouts.h, with this panel's current value. */
+	    R2SynthReadouts.h, with this panel's current value. */
 	std::string readoutFor (Steinberg::Vst::ParamID tag) const;
 
 	/** The line along the foot of the modulation strip, and the engine
@@ -103,7 +103,7 @@ private:
 	void refreshEnvelopeDisplays ();
 	void refreshInfoLines ();
 
-	SimpleSynthController* mController = nullptr;
+	R2SynthController* mController = nullptr;
 
 	std::map<Steinberg::Vst::ParamID, VSTGUI::CControl*> mControls;
 
@@ -162,4 +162,4 @@ private:
 };
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

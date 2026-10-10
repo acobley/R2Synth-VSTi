@@ -45,9 +45,9 @@ constexpr int kEpochYear = 2026;  // issue day 0 = 2026-01-01
 // Product codes (the `product` table). A build accepts a key only if its
 // code is in that build's accepted list - see LicenceConfig.h.
 constexpr uint16_t kProductBundleV1 = 0x0001;
-// Free registration for SimpleSynth (the website's activate.jsp). Only
-// SimpleSynth accepts it; any other plug-in needs its own code.
-constexpr uint16_t kProductSimpleSynthFree = 0x0101;
+// Free registration for R2Synth (the website's activate.jsp). Only
+// R2Synth accepts it; any other plug-in needs its own code.
+constexpr uint16_t kProductR2SynthFree = 0x0101;
 
 //------------------------------------------------------------------------
 struct Payload

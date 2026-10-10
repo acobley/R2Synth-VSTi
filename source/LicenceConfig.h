@@ -7,8 +7,8 @@
 //                       reminder starts (day 0..kEvaluationDays: no nag).
 //                       Change the number and rebuild; nothing else.
 //   kAcceptedProducts   product codes this build treats as licensed
-//                       (Version policy). SimpleSynth v1.x: the paid
-//                       bundle and SimpleSynth's free registration.
+//                       (Version policy). R2Synth v1.x: the paid
+//                       bundle and R2Synth's free registration.
 //   kActivationUrl      where the reminder's "Get activation code" button
 //                       goes. Empty: no button.
 //   kRevokedLicenceIds  licence IDs refunded or leaked - exported from
@@ -30,7 +30,7 @@ namespace R2Licence {
 
 constexpr int kEvaluationDays = 7;
 
-constexpr std::array<uint16_t, 2> kAcceptedProducts = {kProductBundleV1, kProductSimpleSynthFree};
+constexpr std::array<uint16_t, 2> kAcceptedProducts = {kProductBundleV1, kProductR2SynthFree};
 
 // THE REAL SITE (6 Oct 2026). It pointed at the test server,
 // http://34.7.233.43/activate.jsp, while the activation flow was tried

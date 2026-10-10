@@ -1,4 +1,4 @@
-# SimpleSynth
+# R2Synth
 
 A monophonic analogue-style synthesiser. VST3 and Audio Unit, for macOS.
 

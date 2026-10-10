@@ -1,11 +1,11 @@
 //------------------------------------------------------------------------
-// SimpleSynth - the panel's layout, as data
+// R2Synth - the panel's layout, as data
 //
 // THE LAYOUT IS DATA, not positions typed into the middle of open(). It
 // lives in this header, which includes NO VSTGUI, so that three things
 // can read the same numbers:
 //
-//   * SimpleSynthEditor::open(), which builds the panel from the tables;
+//   * R2SynthEditor::open(), which builds the panel from the tables;
 //   * tests/LayoutTests.cpp, which checks that nothing overlaps and
 //     everything fits - the only way to test a layout from a session
 //     that cannot run a host;
@@ -13,14 +13,14 @@
 //     docs/panel.png from these tables.
 //
 // THE "SIGNAL FLOW" PANEL (branch UpdatedUI, 4 Oct 2026), from the
-// design Designs/SimpleSynth-ConceptA-SignalFlow.png. It replaces the
+// design Designs/R2Synth-ConceptA-SignalFlow.png. It replaces the
 // FilterDrum grid of bar sliders: the same 30 parameters, laid out the
 // way the sound travels. (Portamento, 6 Oct, joined Output in the Amp
 // section: the 31st. The VCF Type switch, 7 Oct, took the Filter
 // section's subtitle place: the 32nd.)
 //
 //   +--------------------------------------------------------------+
-//   | SIMPLESYNTH | engine line                     [licence pill] |  header
+//   | R2SYNTH | engine line                     [licence pill] |  header
 //   +--------------------------------------------------------------+
 //   | OSCILLATORS  >  FILTER (curve, 4 knobs,   >  AMP (envelope,  |
 //   | 3 rows: wave,    filter env + ADSR)           ADSR, output)   |
@@ -47,9 +47,9 @@
 
 #pragma once
 
-#include "SimpleSynthParams.h"
+#include "R2SynthParams.h"
 
-namespace SimpleSynth {
+namespace R2Synth {
 namespace Layout {
 
 //------------------------------------------------------------------------
@@ -334,4 +334,4 @@ static_assert (kEditorWidth == 1200 && kEditorHeight == 640,
 
 //------------------------------------------------------------------------
 } // namespace Layout
-} // namespace SimpleSynth
+} // namespace R2Synth

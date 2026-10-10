@@ -1,16 +1,16 @@
 //------------------------------------------------------------------------
-// SimpleSynth - the "signal flow" panel's views
+// R2Synth - the "signal flow" panel's views
 //
 // WRITTEN FOR THE UPDATED PANEL (branch UpdatedUI, 4 Oct 2026), from the
-// design in Designs/SimpleSynth-ConceptA-SignalFlow.png. They replace
-// the FilterDrum controls in SimpleSynthControls.h on the panel itself;
+// design in Designs/R2Synth-ConceptA-SignalFlow.png. They replace
+// the FilterDrum controls in R2SynthControls.h on the panel itself;
 // that file stays, unchanged, because the licence dialog still uses its
 // push button and fonts.
 //
 //   Backdrop       everything that never changes: the ground, the
 //                  header band, the four sections with their titles,
 //                  the chevrons, the rules and the fixed captions - all
-//                  read from SimpleSynthLayout.h. One view, behind the
+//                  read from R2SynthLayout.h. One view, behind the
 //                  rest, mouse-disabled.
 //   Knob           a rotary control with a value arc in its section's
 //                  colour, its reading and its label underneath.
@@ -22,13 +22,13 @@
 // THE SAME TWO RULES AS EVER. No bitmaps - everything is paths and text,
 // so the panel is resolution-independent and resource/ needs no artwork.
 // And no numbers made here: every reading comes in through a formatter
-// the editor hands over (readoutText() in SimpleSynthReadouts.cpp), and
+// the editor hands over (readoutText() in R2SynthReadouts.cpp), and
 // every curve through setCurves() from the shared trace functions.
 //------------------------------------------------------------------------
 
 #pragma once
 
-#include "SimpleSynthLayout.h"
+#include "R2SynthLayout.h"
 
 #include "vstgui/vstgui.h"
 
@@ -36,7 +36,7 @@
 #include <string>
 #include <vector>
 
-namespace SimpleSynth {
+namespace R2Synth {
 namespace Panel {
 
 //------------------------------------------------------------------------
@@ -260,4 +260,4 @@ private:
 
 //------------------------------------------------------------------------
 } // namespace Panel
-} // namespace SimpleSynth
+} // namespace R2Synth

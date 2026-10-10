@@ -40,12 +40,12 @@ run () {   # run <label> <output> <extra flags> <source...>
 # in the Mac's Linux VM. Contraction changes the last bit, not the sound;
 # this makes the comparison about the arithmetic rather than the codegen.
 run "DSP" dsptests "-ffp-contract=off" \
-    "$ROOT/tests/DspTests.cpp" "$ROOT/source/SimpleSynthDsp.cpp"
+    "$ROOT/tests/DspTests.cpp" "$ROOT/source/R2SynthDsp.cpp"
 
 if [ -f "$SDK/pluginterfaces/vst/vsttypes.h" ]; then
     run "Layout" layouttests "-I$SDK" \
-        "$ROOT/tests/LayoutTests.cpp" "$ROOT/source/SimpleSynthReadouts.cpp" \
-        "$ROOT/source/SimpleSynthParams.cpp" "$ROOT/source/SimpleSynthDsp.cpp"
+        "$ROOT/tests/LayoutTests.cpp" "$ROOT/source/R2SynthReadouts.cpp" \
+        "$ROOT/source/R2SynthParams.cpp" "$ROOT/source/R2SynthDsp.cpp"
 else
     printf '\n=== Layout ===\n  SKIPPED: no VST3 SDK at %s (run ./setup-xcode.sh once, or set VST3_SDK_ROOT)\n' "$SDK"
 fi

@@ -4,12 +4,12 @@
 // real source.
 #pragma once
 #include "public.sdk/source/vst/vsteditcontroller.h"
-namespace SimpleSynth {
-class SimpleSynthController;
-class SimpleSynthEditor : public Steinberg::Vst::EditorView
+namespace R2Synth {
+class R2SynthController;
+class R2SynthEditor : public Steinberg::Vst::EditorView
 {
 public:
-	explicit SimpleSynthEditor (SimpleSynthController* c)
+	explicit R2SynthEditor (R2SynthController* c)
 	: EditorView (reinterpret_cast<Steinberg::Vst::EditController*> (c)) {}
 	void updateControl (Steinberg::Vst::ParamID, Steinberg::Vst::ParamValue) {}
 	void refreshAllReadouts () {}

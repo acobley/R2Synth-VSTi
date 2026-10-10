@@ -337,11 +337,11 @@ std::string activationMessage (Status status)
 	switch (status)
 	{
 		case Status::Valid:
-			return "Thank you - SimpleSynth is activated.";
+			return "Thank you - R2Synth is activated.";
 		case Status::Malformed:
 			return "That isn't a complete code. Paste the whole BNDL1-... code.";
 		case Status::UnknownVersion:
-			return "That code needs a newer version of SimpleSynth.";
+			return "That code needs a newer version of R2Synth.";
 		case Status::BadSignature:
 			return "That code isn't valid. Check it was copied in full, exactly as shown.";
 		case Status::WrongName:
@@ -349,7 +349,7 @@ std::string activationMessage (Status status)
 		case Status::Revoked:
 			return "That code has been withdrawn. Please get in touch.";
 		case Status::WrongProduct:
-			return "That code is genuine but doesn't cover this version of SimpleSynth.";
+			return "That code is genuine but doesn't cover this version of R2Synth.";
 	}
 	return "";
 }

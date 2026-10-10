@@ -1,12 +1,12 @@
 //------------------------------------------------------------------------
-// SimpleSynth - editor implementation
+// R2Synth - editor implementation
 //------------------------------------------------------------------------
 
-#include "SimpleSynthEditor.h"
+#include "R2SynthEditor.h"
 #include "LicenceViews.h"
-#include "SimpleSynthController.h"
-#include "SimpleSynthDsp.h"
-#include "SimpleSynthReadouts.h"
+#include "R2SynthController.h"
+#include "R2SynthDsp.h"
+#include "R2SynthReadouts.h"
 
 #include <cmath>
 #include <cstdio>
@@ -17,7 +17,7 @@ using namespace VSTGUI;
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
 namespace {
@@ -36,7 +36,7 @@ CRect toCRect (const Layout::Rect& r)
 } // anonymous namespace
 
 //------------------------------------------------------------------------
-SimpleSynthEditor::SimpleSynthEditor (SimpleSynthController* controller)
+R2SynthEditor::R2SynthEditor (R2SynthController* controller)
 : VSTGUIEditor (controller)
 , mController (controller)
 {
@@ -45,7 +45,7 @@ SimpleSynthEditor::SimpleSynthEditor (SimpleSynthController* controller)
 }
 
 //------------------------------------------------------------------------
-CTextLabel* SimpleSynthEditor::addTextLine (const Layout::Rect& r, CFontRef font,
+CTextLabel* R2SynthEditor::addTextLine (const Layout::Rect& r, CFontRef font,
                                             const CColor& colour, CHoriTxtAlign align)
 {
 	auto* label = new CTextLabel (toCRect (r), "");
@@ -60,7 +60,7 @@ CTextLabel* SimpleSynthEditor::addTextLine (const Layout::Rect& r, CFontRef font
 }
 
 //------------------------------------------------------------------------
-bool PLUGIN_API SimpleSynthEditor::open (void* parent, const PlatformType& platformType)
+bool PLUGIN_API R2SynthEditor::open (void* parent, const PlatformType& platformType)
 {
 	if (frame)
 		return false;
@@ -104,7 +104,7 @@ bool PLUGIN_API SimpleSynthEditor::open (void* parent, const PlatformType& platf
 	// OPENING THE EDITOR is the only thing that starts the evaluation
 	// clock or shows the reminder: a host scanning plug-ins, or auval,
 	// never opens an editor, so never sees either. Nothing here touches
-	// the audio path; an unlicensed SimpleSynth sounds exactly the same.
+	// the audio path; an unlicensed R2Synth sounds exactly the same.
 	{
 		const auto decision = mLicence.editorOpened (R2Licence::LicenceStore::today ());
 		mLicenceBadge = new LicenceBadge (toCRect (Layout::kBadge));
@@ -122,7 +122,7 @@ bool PLUGIN_API SimpleSynthEditor::open (void* parent, const PlatformType& platf
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::openLicenceDialog ()
+void R2SynthEditor::openLicenceDialog ()
 {
 	if (!frame || mHaveLicenceSession)
 		return;
@@ -142,7 +142,7 @@ void SimpleSynthEditor::openLicenceDialog ()
 		dialog->forget ();
 }
 
-void SimpleSynthEditor::requestCloseLicenceDialog ()
+void R2SynthEditor::requestCloseLicenceDialog ()
 {
 	// Called from a button INSIDE the dialog: removing the dialog now
 	// would free the button while its mouse-up is still running. So the
@@ -151,7 +151,7 @@ void SimpleSynthEditor::requestCloseLicenceDialog ()
 		closeLicenceDialog ();
 }
 
-void SimpleSynthEditor::closeLicenceDialog ()
+void R2SynthEditor::closeLicenceDialog ()
 {
 	if (frame && mHaveLicenceSession)
 		frame->endModalViewSession (mLicenceSession);
@@ -162,11 +162,11 @@ void SimpleSynthEditor::closeLicenceDialog ()
 }
 
 //------------------------------------------------------------------------
-void PLUGIN_API SimpleSynthEditor::close ()
+void PLUGIN_API R2SynthEditor::close ()
 {
 	// The map holds RAW pointers to views the FRAME owns. Clearing it
 	// before forgetting the frame, and never dereferencing it after, is
-	// what keeps that safe - see SimpleSynthController::editorDestroyed
+	// what keeps that safe - see R2SynthController::editorDestroyed
 	// for the other half.
 	if (frame && mHaveLicenceSession)
 		frame->endModalViewSession (mLicenceSession);
@@ -190,7 +190,7 @@ void PLUGIN_API SimpleSynthEditor::close ()
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::addControl (const Layout::Control& c)
+void R2SynthEditor::addControl (const Layout::Control& c)
 {
 	const CRect r = toCRect (Layout::controlRect (c));
 	const ParamID tag = c.tag;
@@ -220,7 +220,7 @@ void SimpleSynthEditor::addControl (const Layout::Control& c)
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::registerControl (ParamID tag, CControl* control)
+void R2SynthEditor::registerControl (ParamID tag, CControl* control)
 {
 	mControls[tag] = control;
 
@@ -242,7 +242,7 @@ void SimpleSynthEditor::registerControl (ParamID tag, CControl* control)
 }
 
 //------------------------------------------------------------------------
-double SimpleSynthEditor::normalizedOf (ParamID tag) const
+double R2SynthEditor::normalizedOf (ParamID tag) const
 {
 	auto it = mControls.find (tag);
 	if (it != mControls.end () && it->second != nullptr)
@@ -254,18 +254,18 @@ double SimpleSynthEditor::normalizedOf (ParamID tag) const
 	return paramDef (tag).defaultNormalized ();
 }
 
-double SimpleSynthEditor::internalOf (ParamID tag) const
+double R2SynthEditor::internalOf (ParamID tag) const
 {
 	return paramDef (tag).toInternal (normalizedOf (tag));
 }
 
-double SimpleSynthEditor::sampleRate () const
+double R2SynthEditor::sampleRate () const
 {
 	return mController ? mController->getHostSampleRate () : 44100.0;
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::valueChanged (CControl* control)
+void R2SynthEditor::valueChanged (CControl* control)
 {
 	if (!control || !mController || mUpdating)
 		return;
@@ -285,7 +285,7 @@ void SimpleSynthEditor::valueChanged (CControl* control)
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::updateControl (ParamID tag, ParamValue normalized)
+void R2SynthEditor::updateControl (ParamID tag, ParamValue normalized)
 {
 	auto it = mControls.find (tag);
 	if (it != mControls.end () && it->second != nullptr)
@@ -300,7 +300,7 @@ void SimpleSynthEditor::updateControl (ParamID tag, ParamValue normalized)
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::refreshDependents (ParamID tag)
+void R2SynthEditor::refreshDependents (ParamID tag)
 {
 	switch (tag)
 	{
@@ -382,25 +382,25 @@ void SimpleSynthEditor::refreshDependents (ParamID tag)
 }
 
 //------------------------------------------------------------------------
-std::string SimpleSynthEditor::readoutFor (ParamID tag) const
+std::string R2SynthEditor::readoutFor (ParamID tag) const
 {
-	// ONE COPY OF THE FORMATTING, in SimpleSynthReadouts.cpp, which the
+	// ONE COPY OF THE FORMATTING, in R2SynthReadouts.cpp, which the
 	// panel picture's tool calls too.
 	return readoutText (tag, normalizedOf (tag));
 }
 
-std::string SimpleSynthEditor::modInfoLine () const
+std::string R2SynthEditor::modInfoLine () const
 {
 	return modInfoLineText ([this] (ParamID id) { return internalOf (id); });
 }
 
-std::string SimpleSynthEditor::engineLine () const
+std::string R2SynthEditor::engineLine () const
 {
 	return engineLineText (sampleRate (), internalOf (kVcaRelease));
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::refreshInfoLines ()
+void R2SynthEditor::refreshInfoLines ()
 {
 	auto set = [] (CTextLabel* label, const std::string& text) {
 		if (label)
@@ -414,13 +414,13 @@ void SimpleSynthEditor::refreshInfoLines ()
 }
 
 //------------------------------------------------------------------------
-double SimpleSynthEditor::displayShape () const
+double R2SynthEditor::displayShape () const
 {
 	return mHaveLiveShape ? mLiveShape : internalOf (kLfoShape);
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::refreshFilterDisplay ()
+void R2SynthEditor::refreshFilterDisplay ()
 {
 	if (!mFilterView)
 		return;
@@ -458,7 +458,7 @@ void SimpleSynthEditor::refreshFilterDisplay ()
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::refreshLfoDisplay ()
+void R2SynthEditor::refreshLfoDisplay ()
 {
 	if (!mLfoView)
 		return;
@@ -480,7 +480,7 @@ void SimpleSynthEditor::refreshLfoDisplay ()
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::refreshEnvelopeDisplays ()
+void R2SynthEditor::refreshEnvelopeDisplays ()
 {
 	if (!mFilterEnvView || !mAmpEnvView)
 		return;
@@ -522,7 +522,7 @@ void SimpleSynthEditor::refreshEnvelopeDisplays ()
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::refreshResonanceLamp ()
+void R2SynthEditor::refreshResonanceLamp ()
 {
 	// selfOscillating() ON THE INTERNAL VALUE - loop gain, not per cent -
 	// the predicate the DSP's own table is built around.
@@ -542,7 +542,7 @@ void SimpleSynthEditor::refreshResonanceLamp ()
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthEditor::refreshAllReadouts ()
+void R2SynthEditor::refreshAllReadouts ()
 {
 	for (auto& entry : mControls)
 		if (entry.second != nullptr)
@@ -556,4 +556,4 @@ void SimpleSynthEditor::refreshAllReadouts ()
 }
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

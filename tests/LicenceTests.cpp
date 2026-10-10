@@ -288,10 +288,10 @@ void testThisBuild ()
 	publicKeyFromSeed (hex (kTestSeed).data (), testPub);
 	Result fr = verifyKey (kGoldenName, freeKey, testPub, kAcceptedProducts.data (), kAcceptedProducts.size (),
 	                       kRevokedLicenceIds.data (), kRevokedLicenceIds.size ());
-	check (fr.status == Status::Valid && fr.payload.product == kProductSimpleSynthFree && fr.payload.licenceId == 1 &&
+	check (fr.status == Status::Valid && fr.payload.product == kProductR2SynthFree && fr.payload.licenceId == 1 &&
 	           fr.payload.issueDay == daysFromCivil (2026, 9, 30),
 	       "this build accepts a free registration code made by the Java server");
-	check (issueKey (kGoldenName, kProductSimpleSynthFree, 1, uint16_t (daysFromCivil (2026, 9, 30)),
+	check (issueKey (kGoldenName, kProductR2SynthFree, 1, uint16_t (daysFromCivil (2026, 9, 30)),
 	                 hex (kTestSeed).data ()) == freeKey,
 	       "C++ makes the identical free code");
 	const uint16_t bundleOnly[] = {kProductBundleV1};

@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleSynth - parameter definitions
+// R2Synth - parameter definitions
 //
 // THREE RANGES PER PARAMETER. The shape is inherited from the DXi ports
 // in this folder and is kept on purpose:
@@ -10,7 +10,7 @@
 //   internal     what the DSP is handed, via toInternal()
 //
 // MOSTLY INTERNAL == PLAIN, and where it is not it is for a reason the
-// row in SimpleSynthParams.cpp gives:
+// row in R2SynthParams.cpp gives:
 //
 //   * the per-cent levels and depths are handed over as 0..1;
 //   * the ADSR times are shown in ms and handed over in SECONDS;
@@ -28,7 +28,7 @@
 //
 // Note what is NOT a range mapping: dB to linear gain, and Hz to the
 // ladder's coefficient. Those are the DSP's arithmetic and live in
-// SimpleSynthDsp.h, where the editor can call the same copy of them.
+// R2SynthDsp.h, where the editor can call the same copy of them.
 //------------------------------------------------------------------------
 
 #pragma once
@@ -37,7 +37,7 @@
 
 #include <cmath>
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
 /** THE IDS. APPEND, NEVER INSERT - see below.
@@ -116,7 +116,7 @@ enum Param : Steinberg::Vst::ParamID
 	    IDs 1001 upwards are the space for READ-ONLY OUTPUT parameters -
 	    the mechanism for a value the DSP computes per block that the
 	    panel needs. A sendMessage from process() is silently discarded
-	    by the host's connection proxy (see SimpleSynthIDs.h), whereas
+	    by the host's connection proxy (see R2SynthIDs.h), whereas
 	    data.outputParameterChanges is delivered. kLfoShapeLive is the
 	    first. */
 	kBypass = 1000,
@@ -286,4 +286,4 @@ inline const ParamDef& paramDef (Steinberg::Vst::ParamID id)
 const char* enumName (Steinberg::Vst::ParamID id, int position);
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

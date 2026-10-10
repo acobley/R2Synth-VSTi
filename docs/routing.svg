@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="705" viewBox="0 0 1200 705" font-family="Helvetica, Arial, sans-serif">
-  <title>SimpleSynth - signal and modulation routing</title>
+  <title>R2Synth - signal and modulation routing</title>
   <defs>
     <marker id="aA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#222"/></marker>
     <marker id="aM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563a8"/></marker>
@@ -29,7 +29,7 @@
   </defs>
 
   <rect width="1200" height="705" fill="#fbfaf7"/>
-  <text x="30" y="32" font-size="19" font-weight="bold" fill="#111">SimpleSynth — signal and modulation routing</text>
+  <text x="30" y="32" font-size="19" font-weight="bold" fill="#111">R2Synth — signal and modulation routing</text>
   <text x="30" y="52" class="s">Mono, last-note priority. Every modulation depth is a panel knob; each is exactly off at 0.</text>
 
   <!-- legend -->

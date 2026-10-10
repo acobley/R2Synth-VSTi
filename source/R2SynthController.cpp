@@ -1,11 +1,11 @@
 //------------------------------------------------------------------------
-// SimpleSynth - edit controller implementation
+// R2Synth - edit controller implementation
 //------------------------------------------------------------------------
 
-#include "SimpleSynthController.h"
-#include "SimpleSynthEditor.h"
-#include "SimpleSynthIDs.h"
-#include "SimpleSynthDsp.h"
+#include "R2SynthController.h"
+#include "R2SynthEditor.h"
+#include "R2SynthIDs.h"
+#include "R2SynthDsp.h"
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/base/ustring.h"
@@ -18,17 +18,17 @@
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
 namespace {
 
 /** A RangeParameter that formats its own text, so the host's generic
     editor and automation lanes show the same numbers the panel does. */
-class SimpleSynthParameter : public RangeParameter
+class R2SynthParameter : public RangeParameter
 {
 public:
-	SimpleSynthParameter (const ParamDef& def)
+	R2SynthParameter (const ParamDef& def)
 	// TITLE AND UNITS MUST NOT BE NULL. RangeParameter passes them
 	// straight to UString::assign, which dereferences both without a
 	// null check. The symptom is not a crash in the plug-in: it is the
@@ -179,14 +179,14 @@ private:
 } // anonymous namespace
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthController::initialize (FUnknown* context)
+tresult PLUGIN_API R2SynthController::initialize (FUnknown* context)
 {
 	const tresult result = EditControllerEx1::initialize (context);
 	if (result != kResultOk)
 		return result;
 
 	for (int i = 0; i < kParamCount; ++i)
-		parameters.addParameter (new SimpleSynthParameter (kParams[i]));
+		parameters.addParameter (new R2SynthParameter (kParams[i]));
 
 	// Standard VST3 bypass, id 1000 and not part of the table.
 	//
@@ -219,14 +219,14 @@ tresult PLUGIN_API SimpleSynthController::initialize (FUnknown* context)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthController::terminate ()
+tresult PLUGIN_API R2SynthController::terminate ()
 {
 	mEditors.clear ();
 	return EditControllerEx1::terminate ();
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthController::setComponentState (IBStream* state)
+tresult PLUGIN_API R2SynthController::setComponentState (IBStream* state)
 {
 	if (!state)
 		return kResultFalse;
@@ -266,18 +266,18 @@ tresult PLUGIN_API SimpleSynthController::setComponentState (IBStream* state)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthController::setState (IBStream* /*state*/)
+tresult PLUGIN_API R2SynthController::setState (IBStream* /*state*/)
 {
 	return kResultOk;
 }
 
-tresult PLUGIN_API SimpleSynthController::getState (IBStream* /*state*/)
+tresult PLUGIN_API R2SynthController::getState (IBStream* /*state*/)
 {
 	return kResultOk;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthController::setParamNormalized (ParamID tag, ParamValue value)
+tresult PLUGIN_API R2SynthController::setParamNormalized (ParamID tag, ParamValue value)
 {
 	const tresult result = EditControllerEx1::setParamNormalized (tag, value);
 	if (result != kResultOk)
@@ -290,20 +290,20 @@ tresult PLUGIN_API SimpleSynthController::setParamNormalized (ParamID tag, Param
 }
 
 //------------------------------------------------------------------------
-IPlugView* PLUGIN_API SimpleSynthController::createView (FIDString name)
+IPlugView* PLUGIN_API R2SynthController::createView (FIDString name)
 {
 	if (name && FIDStringsEqual (name, ViewType::kEditor))
-		return new SimpleSynthEditor (this);
+		return new R2SynthEditor (this);
 	return nullptr;
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthController::notify (IMessage* message)
+tresult PLUGIN_API R2SynthController::notify (IMessage* message)
 {
-	if (message && FIDStringsEqual (message->getMessageID (), kSimpleSynthSampleRateMessage))
+	if (message && FIDStringsEqual (message->getMessageID (), kR2SynthSampleRateMessage))
 	{
 		double sampleRate = 0.0;
-		if (message->getAttributes ()->getFloat (kSimpleSynthSampleRateAttribute, sampleRate) == kResultOk &&
+		if (message->getAttributes ()->getFloat (kR2SynthSampleRateAttribute, sampleRate) == kResultOk &&
 		    sampleRate > 1000.0 && sampleRate != mHostSampleRate)
 		{
 			mHostSampleRate = sampleRate;
@@ -316,9 +316,9 @@ tresult PLUGIN_API SimpleSynthController::notify (IMessage* message)
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthController::editorAttached (EditorView* editor)
+void R2SynthController::editorAttached (EditorView* editor)
 {
-	if (auto* e = dynamic_cast<SimpleSynthEditor*> (editor))
+	if (auto* e = dynamic_cast<R2SynthEditor*> (editor))
 	{
 		if (std::find (mEditors.begin (), mEditors.end (), e) == mEditors.end ())
 			mEditors.push_back (e);
@@ -326,18 +326,18 @@ void SimpleSynthController::editorAttached (EditorView* editor)
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthController::editorRemoved (EditorView* editor)
+void R2SynthController::editorRemoved (EditorView* editor)
 {
 	editorDestroyed (editor);
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthController::editorDestroyed (EditorView* editor)
+void R2SynthController::editorDestroyed (EditorView* editor)
 {
 	// DO NOT dynamic_cast HERE. EditorView::~EditorView() calls this,
-	// and by then the SimpleSynthEditor sub-object has already been
+	// and by then the R2SynthEditor sub-object has already been
 	// destroyed: the object's dynamic type is plain EditorView, so
-	// dynamic_cast<SimpleSynthEditor*> yields NULL and the entry would
+	// dynamic_cast<R2SynthEditor*> yields NULL and the entry would
 	// silently survive in mEditors as a dangling pointer. The next
 	// setParamNormalized - which walks that list unconditionally -
 	// follows it.
@@ -345,11 +345,11 @@ void SimpleSynthController::editorDestroyed (EditorView* editor)
 	// Comparing the UPCAST pointer is well defined at every point in the
 	// destruction sequence, so it works on both paths.
 	mEditors.erase (std::remove_if (mEditors.begin (), mEditors.end (),
-	                                [editor] (SimpleSynthEditor* e) {
+	                                [editor] (R2SynthEditor* e) {
 		                                return static_cast<EditorView*> (e) == editor;
 	                                }),
 	                mEditors.end ());
 }
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

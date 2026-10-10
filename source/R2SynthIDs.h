@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleSynth - class UIDs and message identifiers
+// R2Synth - class UIDs and message identifiers
 //
 // These UIDs were generated fresh for this plug-in from os.urandom.
 // NEVER CHANGE THEM once a build has been shipped: hosts store them in
@@ -14,12 +14,12 @@
 #include "pluginterfaces/base/funknown.h"
 #include "pluginterfaces/vst/vsttypes.h"
 
-namespace SimpleSynth {
+namespace R2Synth {
 
-static const Steinberg::FUID kSimpleSynthProcessorUID  (0x6D69A51B, 0xD84BE44A, 0x4927F783, 0x18477FAD);
-static const Steinberg::FUID kSimpleSynthControllerUID (0x935E5313, 0x9EF72A9E, 0xA1A91CCB, 0x968140F1);
+static const Steinberg::FUID kR2SynthProcessorUID  (0x6D69A51B, 0xD84BE44A, 0x4927F783, 0x18477FAD);
+static const Steinberg::FUID kR2SynthControllerUID (0x935E5313, 0x9EF72A9E, 0xA1A91CCB, 0x968140F1);
 
-// The plug-in category is declared once, in SimpleSynthEntry.cpp, using the
+// The plug-in category is declared once, in R2SynthEntry.cpp, using the
 // SDK's own PlugType::kInstrumentSynth - not repeated as a string here.
 
 //------------------------------------------------------------------------
@@ -32,7 +32,7 @@ static const Steinberg::FUID kSimpleSynthControllerUID (0x935E5313, 0x9EF72A9E, 
 // block can never come out this way. Anything the DSP computes per block
 // that the panel needs goes out through data.outputParameterChanges
 // instead, as a hidden read-only parameter; see the note beside kBypass
-// in SimpleSynthParams.h.
+// in R2SynthParams.h.
 //
 // Messages ARE legitimate from setActive, setState and notify, which is
 // where the one below is sent from. Add new ones here, each with a
@@ -50,12 +50,12 @@ static const Steinberg::FUID kSimpleSynthControllerUID (0x935E5313, 0x9EF72A9E, 
     actually running at.
 
     The panel needs it because the cutoff CEILING is a fraction of it
-    (cutoffCeilingHz in SimpleSynthDsp.h): the top of the Cutoff knob is
+    (cutoffCeilingHz in R2SynthDsp.h): the top of the Cutoff knob is
     20 kHz, and at 44.1 k the filter stops at 17.6 k. A readout that
     assumed one rate while the DSP ran at another would be quoting a
     ceiling nobody is hearing. */
-static const char* const kSimpleSynthSampleRateMessage   = "SimpleSynthSampleRate";
-static const char* const kSimpleSynthSampleRateAttribute = "SampleRate";
+static const char* const kR2SynthSampleRateMessage   = "R2SynthSampleRate";
+static const char* const kR2SynthSampleRateAttribute = "SampleRate";
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

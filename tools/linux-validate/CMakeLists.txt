@@ -1,5 +1,5 @@
 #-----------------------------------------------------------------------------
-# tools/linux-validate - build SimpleSynth on LINUX and run the SDK validator
+# tools/linux-validate - build R2Synth on LINUX and run the SDK validator
 # and tests/ProcessorTests.cpp against it.
 #
 # WHY. The session that writes this plug-in reaches the Mac through a
@@ -8,7 +8,7 @@
 # so the processor, controller, factory and state can be validated
 # without the Mac. The only thing left out is the editor: VSTGUI's Linux
 # dependencies (xcb-util, xkbcommon-x11, gtkmm) were not installable in
-# the container, so SimpleSynthEditor.h is replaced by editor-stub.h,
+# the container, so R2SynthEditor.h is replaced by editor-stub.h,
 # an EditorView that draws nothing. Every other file is the real source,
 # copied unchanged at configure time.
 #
@@ -20,7 +20,7 @@
 # NOT the build that ships. The Mac build is ../../CMakeLists.txt.
 #-----------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.25)
-project(SimpleSynthLinuxValidate VERSION 1.0.0.1)
+project(R2SynthLinuxValidate VERSION 1.0.0.1)
 
 set(VST3_SDK_ROOT "" CACHE PATH "Path to a VST3 SDK checkout")
 if(NOT EXISTS "${VST3_SDK_ROOT}/CMakeLists.txt")
@@ -42,31 +42,31 @@ file(REMOVE_RECURSE "${_copy}")
 file(GLOB _all "${_src}/*.h" "${_src}/*.cpp")
 foreach(_f ${_all})
     get_filename_component(_n "${_f}" NAME)
-    if(NOT _n MATCHES "^(SimpleSynth(Editor|Controls|PanelViews|Layout|Readouts)|LicenceViews)\\.")
+    if(NOT _n MATCHES "^(R2Synth(Editor|Controls|PanelViews|Layout|Readouts)|LicenceViews)\\.")
         configure_file("${_f}" "${_copy}/${_n}" COPYONLY)
     endif()
 endforeach()
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/editor-stub.h" "${_copy}/SimpleSynthEditor.h" COPYONLY)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/editor-stub.h" "${_copy}/R2SynthEditor.h" COPYONLY)
 
 file(GLOB plugin_sources "${_copy}/*.cpp" "${_copy}/*.h")
-smtg_add_vst3plugin(SimpleSynth ${plugin_sources})
-smtg_target_configure_version_file(SimpleSynth)
-target_compile_features(SimpleSynth PUBLIC cxx_std_17)
-target_include_directories(SimpleSynth PRIVATE "${_copy}")
-target_link_libraries(SimpleSynth PRIVATE sdk)
+smtg_add_vst3plugin(R2Synth ${plugin_sources})
+smtg_target_configure_version_file(R2Synth)
+target_compile_features(R2Synth PUBLIC cxx_std_17)
+target_include_directories(R2Synth PRIVATE "${_copy}")
+target_link_libraries(R2Synth PRIVATE sdk)
 
 # The licence files are copied with the rest; they need Monocypher.
 set(_mono "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/monocypher")
-target_sources(SimpleSynth PRIVATE "${_mono}/monocypher.c" "${_mono}/monocypher-ed25519.c")
-target_include_directories(SimpleSynth PRIVATE "${_mono}")
+target_sources(R2Synth PRIVATE "${_mono}/monocypher.c" "${_mono}/monocypher-ed25519.c")
+target_include_directories(R2Synth PRIVATE "${_mono}")
 
 # The processor tests: the processor's own sources, no controller, no
 # module - the processor is driven directly.
 add_executable(processortests
     "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/ProcessorTests.cpp"
-    "${_copy}/SimpleSynthProcessor.cpp"
-    "${_copy}/SimpleSynthParams.cpp"
-    "${_copy}/SimpleSynthDsp.cpp"
+    "${_copy}/R2SynthProcessor.cpp"
+    "${_copy}/R2SynthParams.cpp"
+    "${_copy}/R2SynthDsp.cpp"
     # MemoryStream is in the SDK's source tree but not in its libraries.
     "${VST3_SDK_ROOT}/public.sdk/source/common/memorystream.cpp")
 target_include_directories(processortests PRIVATE "${_copy}")

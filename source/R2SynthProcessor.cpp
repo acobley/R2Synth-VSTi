@@ -1,9 +1,9 @@
 //------------------------------------------------------------------------
-// SimpleSynth - audio processor implementation
+// R2Synth - audio processor implementation
 //------------------------------------------------------------------------
 
-#include "SimpleSynthProcessor.h"
-#include "SimpleSynthIDs.h"
+#include "R2SynthProcessor.h"
+#include "R2SynthIDs.h"
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
@@ -14,7 +14,7 @@
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
 /** Bumped whenever the layout of the state stream changes. setState
@@ -29,16 +29,16 @@ namespace SimpleSynth {
 static const int32 kStateVersion = 1;
 
 //------------------------------------------------------------------------
-SimpleSynthProcessor::SimpleSynthProcessor ()
+R2SynthProcessor::R2SynthProcessor ()
 {
-	setControllerClass (kSimpleSynthControllerUID);
+	setControllerClass (kR2SynthControllerUID);
 
 	for (int i = 0; i < kParamCount; ++i)
 		mNormalized[i] = kParams[i].defaultNormalized ();
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthProcessor::initialize (FUnknown* context)
+tresult PLUGIN_API R2SynthProcessor::initialize (FUnknown* context)
 {
 	const tresult result = AudioEffect::initialize (context);
 	if (result != kResultOk)
@@ -65,13 +65,13 @@ tresult PLUGIN_API SimpleSynthProcessor::initialize (FUnknown* context)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthProcessor::terminate ()
+tresult PLUGIN_API R2SynthProcessor::terminate ()
 {
 	return AudioEffect::terminate ();
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthProcessor::setBusArrangements (SpeakerArrangement* inputs, int32 numIns,
+tresult PLUGIN_API R2SynthProcessor::setBusArrangements (SpeakerArrangement* inputs, int32 numIns,
                                                              SpeakerArrangement* outputs, int32 numOuts)
 {
 	// Stereo out, nothing in, and nothing else accepted. This must agree
@@ -87,7 +87,7 @@ tresult PLUGIN_API SimpleSynthProcessor::setBusArrangements (SpeakerArrangement*
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthProcessor::canProcessSampleSize (int32 symbolicSampleSize)
+tresult PLUGIN_API R2SynthProcessor::canProcessSampleSize (int32 symbolicSampleSize)
 {
 	// BOTH, because hosts offer 64-bit buffers and one that is refused
 	// silently gets a plug-in the host will not load.
@@ -97,7 +97,7 @@ tresult PLUGIN_API SimpleSynthProcessor::canProcessSampleSize (int32 symbolicSam
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthProcessor::setupProcessing (ProcessSetup& setup)
+tresult PLUGIN_API R2SynthProcessor::setupProcessing (ProcessSetup& setup)
 {
 	mSampleRate = setup.sampleRate;
 
@@ -112,7 +112,7 @@ tresult PLUGIN_API SimpleSynthProcessor::setupProcessing (ProcessSetup& setup)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthProcessor::setActive (TBool state)
+tresult PLUGIN_API R2SynthProcessor::setActive (TBool state)
 {
 	if (state)
 	{
@@ -130,19 +130,19 @@ tresult PLUGIN_API SimpleSynthProcessor::setActive (TBool state)
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthProcessor::sendSampleRateToController ()
+void R2SynthProcessor::sendSampleRateToController ()
 {
 	if (auto* message = allocateMessage ())
 	{
 		FReleaser releaser (message);
-		message->setMessageID (kSimpleSynthSampleRateMessage);
-		message->getAttributes ()->setFloat (kSimpleSynthSampleRateAttribute, mSampleRate);
+		message->setMessageID (kR2SynthSampleRateMessage);
+		message->getAttributes ()->setFloat (kR2SynthSampleRateAttribute, mSampleRate);
 		sendMessage (message);
 	}
 }
 
 //------------------------------------------------------------------------
-uint32 PLUGIN_API SimpleSynthProcessor::getTailSamples ()
+uint32 PLUGIN_API R2SynthProcessor::getTailSamples ()
 {
 	// The VCA release CONVERTED TO THE TIME THE ENVELOPE REALLY RUNS FOR
 	// (5/3 of the knob - see releaseTailSeconds), plus half a second for
@@ -157,7 +157,7 @@ uint32 PLUGIN_API SimpleSynthProcessor::getTailSamples ()
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthProcessor::applyEnvelope (bool vcf)
+void R2SynthProcessor::applyEnvelope (bool vcf)
 {
 	const int base = vcf ? kVcfAttack : kVcaAttack;
 	auto internal = [this] (int id) { return kParams[id].toInternal (mNormalized[id]); };
@@ -175,7 +175,7 @@ void SimpleSynthProcessor::applyEnvelope (bool vcf)
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthProcessor::applyParam (ParamID id, double normalized)
+void R2SynthProcessor::applyParam (ParamID id, double normalized)
 {
 	// kBypass FIRST, because it is 1000 and is not in the table. Every
 	// id is checked before anything indexes kParams.
@@ -199,7 +199,7 @@ void SimpleSynthProcessor::applyParam (ParamID id, double normalized)
 		case kOutputLevel:   mDsp.setOutputLevelDb (v); break;
 
 		// THE THREE VCOs through ONE set of cases, by stride - see
-		// vcoParam() in SimpleSynthParams.h.
+		// vcoParam() in R2SynthParams.h.
 		case kVco1Wave: case kVco2Wave: case kVco3Wave:
 			mDsp.setVcoWave ((id - kVco1Wave) / kVcoParamStride,
 			                 (v >= 0.5) ? Vco::Wave::Square : Vco::Wave::Saw);
@@ -247,7 +247,7 @@ void SimpleSynthProcessor::applyParam (ParamID id, double normalized)
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthProcessor::writeOutput (ProcessData& data, int32 offset, int32 numSamples)
+void R2SynthProcessor::writeOutput (ProcessData& data, int32 offset, int32 numSamples)
 {
 	if (data.numOutputs < 1 || data.outputs[0].numChannels < kChannelCount || numSamples <= 0)
 		return;
@@ -273,7 +273,7 @@ void SimpleSynthProcessor::writeOutput (ProcessData& data, int32 offset, int32 n
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthProcessor::process (ProcessData& data)
+tresult PLUGIN_API R2SynthProcessor::process (ProcessData& data)
 {
 	// PARAMETERS FIRST, ALWAYS - before the early return below, or a
 	// parameter-only block would be thrown away along with the block.
@@ -414,10 +414,10 @@ tresult PLUGIN_API SimpleSynthProcessor::process (ProcessData& data)
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthProcessor::publishLive (ProcessData& data)
+void R2SynthProcessor::publishLive (ProcessData& data)
 {
 	// THROUGH outputParameterChanges, the one route from process() to
-	// the panel that is not silently dropped - see SimpleSynthIDs.h.
+	// the panel that is not silently dropped - see R2SynthIDs.h.
 	if (data.outputParameterChanges == nullptr || data.numSamples <= 0)
 		return;
 
@@ -457,7 +457,7 @@ void SimpleSynthProcessor::publishLive (ProcessData& data)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthProcessor::getState (IBStream* state)
+tresult PLUGIN_API R2SynthProcessor::getState (IBStream* state)
 {
 	if (state == nullptr)
 		return kResultFalse;
@@ -482,7 +482,7 @@ tresult PLUGIN_API SimpleSynthProcessor::getState (IBStream* state)
 }
 
 //------------------------------------------------------------------------
-tresult PLUGIN_API SimpleSynthProcessor::setState (IBStream* state)
+tresult PLUGIN_API R2SynthProcessor::setState (IBStream* state)
 {
 	if (state == nullptr)
 		return kResultFalse;
@@ -536,4 +536,4 @@ tresult PLUGIN_API SimpleSynthProcessor::setState (IBStream* state)
 }
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

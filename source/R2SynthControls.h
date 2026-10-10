@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleSynth - custom VSTGUI controls
+// R2Synth - custom VSTGUI controls
 //
 // LIFTED from ~/DXi-DEv/FilterDrum-VSTi/source/FilterDrumControls.*,
 // which came from Project6, VocalFilter and SpyBand before it - the
@@ -59,7 +59,7 @@
 #include <string>
 #include <vector>
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
 // The original's palette
@@ -209,7 +209,7 @@ public:
 
 	void setNames (const std::vector<std::string>& names);
 
-	/** ADDED FOR SIMPLESYNTH - see the banner. The whole control still
+	/** ADDED FOR R2SYNTH - see the banner. The whole control still
 	    takes the click; only the drawing changes. */
 	void setCompact (bool compact);
 
@@ -422,10 +422,10 @@ public:
 	    and the text has to. */
 	void setLegend (const std::string& vcf, const std::string& vca);
 
-	/** ADDED FOR SIMPLESYNTH. false hides the Amount markers. */
+	/** ADDED FOR R2SYNTH. false hides the Amount markers. */
 	void setShowAmounts (bool show);
 
-	/** ADDED FOR SIMPLESYNTH. A dotted vertical line at `fraction` of
+	/** ADDED FOR R2SYNTH. A dotted vertical line at `fraction` of
 	    the plot's width; negative for none. */
 	void setGateMarker (double fraction);
 
@@ -484,7 +484,7 @@ public:
 	SpyGroupBox (const VSTGUI::CRect& size, const std::string& title,
 	             const VSTGUI::CColor& frame);
 
-	/** ADDED FOR SIMPLESYNTH - see the banner. */
+	/** ADDED FOR R2SYNTH - see the banner. */
 	void setTitleBand (VSTGUI::CCoord band);
 
 	void draw (VSTGUI::CDrawContext* context) override;
@@ -498,4 +498,4 @@ private:
 };
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

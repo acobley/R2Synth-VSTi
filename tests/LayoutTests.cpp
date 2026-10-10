@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleSynth - layout and panel-text tests
+// R2Synth - layout and panel-text tests
 //
 // The panel cannot be opened from the session that writes it - there is
 // no host - so what CAN be checked about it is checked here, from the
@@ -19,16 +19,16 @@
 // LFO 2 - went with the grid.
 //
 // Needs one header-only file from the SDK (pluginterfaces/vst/vsttypes.h,
-// through SimpleSynthParams.h); nothing is linked from it:
+// through R2SynthParams.h); nothing is linked from it:
 //
 //   c++ -std=c++17 -I<sdk> -I../source LayoutTests.cpp
-//       ../source/SimpleSynthReadouts.cpp ../source/SimpleSynthParams.cpp
-//       ../source/SimpleSynthDsp.cpp -o /tmp/layouttests
+//       ../source/R2SynthReadouts.cpp ../source/R2SynthParams.cpp
+//       ../source/R2SynthDsp.cpp -o /tmp/layouttests
 //------------------------------------------------------------------------
 
-#include "SimpleSynthLayout.h"
-#include "SimpleSynthReadouts.h"
-#include "SimpleSynthDsp.h"
+#include "R2SynthLayout.h"
+#include "R2SynthReadouts.h"
+#include "R2SynthDsp.h"
 
 #include <algorithm>
 #include <cctype>
@@ -36,8 +36,8 @@
 #include <string>
 #include <vector>
 
-using namespace SimpleSynth;
-using namespace SimpleSynth::Layout;
+using namespace R2Synth;
+using namespace R2Synth::Layout;
 
 namespace {
 
@@ -120,7 +120,7 @@ constexpr int kPillPadding   = 40;
 //------------------------------------------------------------------------
 int main ()
 {
-	std::printf ("SimpleSynth layout tests\n");
+	std::printf ("R2Synth layout tests\n");
 	std::printf ("------------------------\n");
 
 	const Rect panel { 0, 0, kEditorWidth, kEditorHeight };

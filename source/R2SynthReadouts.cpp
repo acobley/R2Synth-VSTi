@@ -1,9 +1,9 @@
 //------------------------------------------------------------------------
-// SimpleSynth - the panel's text, implementation
+// R2Synth - the panel's text, implementation
 //------------------------------------------------------------------------
 
-#include "SimpleSynthReadouts.h"
-#include "SimpleSynthDsp.h"
+#include "R2SynthReadouts.h"
+#include "R2SynthDsp.h"
 
 #include <cctype>
 #include <cmath>
@@ -12,7 +12,7 @@
 
 using namespace Steinberg::Vst;
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
 std::string shortLabel (ParamID tag)
@@ -100,7 +100,7 @@ std::string readoutText (ParamID tag, double normalized)
 		case kCutoff:
 			// Hz below 1 k, kHz above - the same rule as the host's own
 			// generic editor, because it is the same rule in
-			// SimpleSynthController.cpp's toString.
+			// R2SynthController.cpp's toString.
 			if (plain >= 1000.0)
 				std::snprintf (text, sizeof (text), "%.2fk", plain / 1000.0);
 			else
@@ -244,7 +244,7 @@ const char* lfoDisplayCaption (double lfo2Level)
 //------------------------------------------------------------------------
 const char* panelTitleText ()
 {
-	return "SimpleSynth   -   three VCOs, an MS-20 LFO swept by a sine, a Moog or MS-20 filter and two ADSRs";
+	return "R2Synth   -   three VCOs, an MS-20 LFO swept by a sine, a Moog or MS-20 filter and two ADSRs";
 }
 
 const char* panelFlowText ()
@@ -376,4 +376,4 @@ std::string modInfoLineText (const std::function<double (Steinberg::Vst::ParamID
 	return lfoLineText (internalOf) + "        " + lfo2LineText (internalOf);
 }
 
-} // namespace SimpleSynth
+} // namespace R2Synth

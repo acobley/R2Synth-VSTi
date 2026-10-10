@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleSynth - parameter table
+// R2Synth - parameter table
 //
 // Column order matches the DXi ports in this folder:
 //   id, title, units, type, plain min/max/default, internal min/max,
@@ -21,10 +21,10 @@
 // DSP suite - see measureDefaultLevel() in tests/DspTests.cpp.
 //------------------------------------------------------------------------
 
-#include "SimpleSynthParams.h"
-#include "SimpleSynthDsp.h"
+#include "R2SynthParams.h"
+#include "R2SynthDsp.h"
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
 const ParamDef kParams[kNumParams] = {
@@ -126,4 +126,4 @@ const char* enumName (Steinberg::Vst::ParamID id, int position)
 }
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

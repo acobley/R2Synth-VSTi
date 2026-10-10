@@ -1,17 +1,17 @@
 //------------------------------------------------------------------------
-// SimpleSynth - the audio engine, implementation
+// R2Synth - the audio engine, implementation
 //
 // SDK-FREE. If a #include of anything under pluginterfaces/ or
 // public.sdk/ ever appears in this file, the standalone test build stops
 // compiling and the only executable verification on this project goes
-// with it. See the banner in SimpleSynthDsp.h.
+// with it. See the banner in R2SynthDsp.h.
 //------------------------------------------------------------------------
 
-#include "SimpleSynthDsp.h"
+#include "R2SynthDsp.h"
 
 #include <algorithm>
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
 namespace {
@@ -689,9 +689,9 @@ void traceLfo (LfoOutput output, double shape, float* out, int count, double cyc
 }
 
 //------------------------------------------------------------------------
-// SimpleSynthDsp
+// R2SynthDsp
 //------------------------------------------------------------------------
-SimpleSynthDsp::SimpleSynthDsp ()
+R2SynthDsp::R2SynthDsp ()
 {
 	// Built HERE, the first time, so no audio thread ever builds it.
 	(void) ladderTuning ();
@@ -708,7 +708,7 @@ SimpleSynthDsp::SimpleSynthDsp ()
 	setSampleRate (44100.0);
 }
 
-void SimpleSynthDsp::setSampleRate (double sampleRate)
+void R2SynthDsp::setSampleRate (double sampleRate)
 {
 	if (sampleRate < 1000.0)
 		sampleRate = 44100.0;
@@ -739,14 +739,14 @@ void SimpleSynthDsp::setSampleRate (double sampleRate)
 	reset ();
 }
 
-void SimpleSynthDsp::setMaxBlockSize (int maxSamples)
+void R2SynthDsp::setMaxBlockSize (int maxSamples)
 {
 	// Nothing in the voice needs scratch - it renders a sample at a
 	// time - so this only records the promise for the tests.
 	mMaxBlockSize = (maxSamples > 0) ? maxSamples : 0;
 }
 
-void SimpleSynthDsp::reset ()
+void R2SynthDsp::reset ()
 {
 	// SNAP every smoother, not glide: a reset that left the output at
 	// zero would fade in, and a cutoff that swept from 1 kHz to the
@@ -791,32 +791,32 @@ void SimpleSynthDsp::reset ()
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthDsp::setOutputLevelDb (double db)
+void R2SynthDsp::setOutputLevelDb (double db)
 {
 	mOutputDb = db;
 	mOutput.setTarget (static_cast<float> (dbToGain (db)));
 }
 
-void SimpleSynthDsp::setVcoWave (int vco, Vco::Wave wave)
+void R2SynthDsp::setVcoWave (int vco, Vco::Wave wave)
 {
 	if (vco >= 0 && vco < kNumVcos)
 		mVco[vco].setWave (wave);
 }
 
-void SimpleSynthDsp::setVcoTune (int vco, double semitones)
+void R2SynthDsp::setVcoTune (int vco, double semitones)
 {
 	if (vco >= 0 && vco < kNumVcos)
 		mVcoTune[vco].setTarget (static_cast<float> (std::clamp (semitones, -12.0, 12.0)));
 }
 
-void SimpleSynthDsp::setVcoLevel (int vco, double level)
+void R2SynthDsp::setVcoLevel (int vco, double level)
 {
 	if (vco >= 0 && vco < kNumVcos)
 		mVcoLevel[vco].setTarget (static_cast<float> (std::clamp (level, 0.0, 1.0)));
 }
 
-void SimpleSynthDsp::setLfoRate (double hz)          { mLfo.setRate (std::max (0.0, hz)); }
-void SimpleSynthDsp::setLfoShape (double shape)
+void R2SynthDsp::setLfoRate (double hz)          { mLfo.setRate (std::max (0.0, hz)); }
+void R2SynthDsp::setLfoShape (double shape)
 {
 	// The KNOB. What LFO 1 runs at is this swept by LFO 2, per sample, in
 	// renderSample(); setting it on the LFO too keeps it right for a
@@ -824,57 +824,57 @@ void SimpleSynthDsp::setLfoShape (double shape)
 	mLfoShapeKnob = std::clamp (shape, -1.0, 1.0);
 	mLfo.setShape (mLfoShapeKnob);
 }
-void SimpleSynthDsp::setLfoOutput (LfoOutput o)     { mLfo.setOutput (o); }
+void R2SynthDsp::setLfoOutput (LfoOutput o)     { mLfo.setOutput (o); }
 
-void SimpleSynthDsp::setLfoPitchDepth (double semitones)
+void R2SynthDsp::setLfoPitchDepth (double semitones)
 {
 	mLfoPitch.setTarget (static_cast<float> (std::clamp (semitones, 0.0, kMaxLfoPitchSemis)));
 }
 
-void SimpleSynthDsp::setLfoCutoffDepth (double octaves)
+void R2SynthDsp::setLfoCutoffDepth (double octaves)
 {
 	mLfoCutoff.setTarget (static_cast<float> (std::clamp (octaves, 0.0, kMaxLfoCutoffOctaves)));
 }
 
-void SimpleSynthDsp::setLfo2Rate (double hz)         { mLfo2.setRate (std::max (0.0, hz)); }
+void R2SynthDsp::setLfo2Rate (double hz)         { mLfo2.setRate (std::max (0.0, hz)); }
 
-void SimpleSynthDsp::setLfo2Level (double level)
+void R2SynthDsp::setLfo2Level (double level)
 {
 	mLfo2Level.setTarget (static_cast<float> (std::clamp (level, 0.0, 1.0)));
 }
 
-void SimpleSynthDsp::setLfoVcaDepth (double depth)
+void R2SynthDsp::setLfoVcaDepth (double depth)
 {
 	mLfoVca.setTarget (static_cast<float> (std::clamp (depth, 0.0, 1.0)));
 }
 
-void SimpleSynthDsp::setLfoResonanceDepth (double loopGain)
+void R2SynthDsp::setLfoResonanceDepth (double loopGain)
 {
 	mLfoRes.setTarget (static_cast<float> (std::clamp (loopGain, 0.0, kMaxLfoResonanceK)));
 }
 
-void SimpleSynthDsp::setCutoffHz (double hz)
+void R2SynthDsp::setCutoffHz (double hz)
 {
 	hz = std::max (kMinCutoffHz, hz);
 	mCutoffOct.setTarget (static_cast<float> (std::log2 (hz)));
 }
 
-void SimpleSynthDsp::setResonance (double loopGain)
+void R2SynthDsp::setResonance (double loopGain)
 {
 	mResonance.setTarget (static_cast<float> (std::clamp (loopGain, 0.0, kMaxResonanceK)));
 }
 
-void SimpleSynthDsp::setKeyTrack (double amount)     { mKeyTrack = std::clamp (amount, 0.0, 1.0); }
+void R2SynthDsp::setKeyTrack (double amount)     { mKeyTrack = std::clamp (amount, 0.0, 1.0); }
 
-void SimpleSynthDsp::setVcfEnvAmount (double octaves)
+void R2SynthDsp::setVcfEnvAmount (double octaves)
 {
 	mEnvAmount.setTarget (static_cast<float> (std::clamp (octaves, -kMaxEnvOctaves, kMaxEnvOctaves)));
 }
 
-void SimpleSynthDsp::setVcfEnvelope (const AdsrSpec& spec) { mVcfEnv.setSpec (spec); }
-void SimpleSynthDsp::setVcaEnvelope (const AdsrSpec& spec) { mVcaEnv.setSpec (spec); }
+void R2SynthDsp::setVcfEnvelope (const AdsrSpec& spec) { mVcfEnv.setSpec (spec); }
+void R2SynthDsp::setVcaEnvelope (const AdsrSpec& spec) { mVcaEnv.setSpec (spec); }
 
-void SimpleSynthDsp::setFilterType (FilterType type)
+void R2SynthDsp::setFilterType (FilterType type)
 {
 	const int t = static_cast<int> (type);
 	if (t < 0 || t >= kNumFilterTypes)
@@ -895,13 +895,13 @@ void SimpleSynthDsp::setFilterType (FilterType type)
 	}
 }
 
-double SimpleSynthDsp::filterWeight (FilterType type) const
+double R2SynthDsp::filterWeight (FilterType type) const
 {
 	const int t = static_cast<int> (type);
 	return (t >= 0 && t < kNumFilterTypes) ? mFilterWeight[t] : 0.0;
 }
 
-void SimpleSynthDsp::settleFilterWeights ()
+void R2SynthDsp::settleFilterWeights ()
 {
 	// EXACT targets, and the filters now out of the output cleared.
 	for (int i = 0; i < kNumFilterTypes; ++i)
@@ -915,13 +915,13 @@ void SimpleSynthDsp::settleFilterWeights ()
 	if (mFilterType != FilterType::Ms20Late) mMs20Late.reset ();
 }
 
-void SimpleSynthDsp::setPortamento (double seconds)
+void R2SynthDsp::setPortamento (double seconds)
 {
 	mPortamentoSeconds = std::clamp (seconds, kMinPortamentoSeconds, kMaxPortamentoSeconds);
 }
 
 //------------------------------------------------------------------------
-void SimpleSynthDsp::startPitchTo (int note)
+void R2SynthDsp::startPitchTo (int note)
 {
 	const double target = static_cast<double> (note);
 
@@ -950,7 +950,7 @@ void SimpleSynthDsp::startPitchTo (int note)
 //------------------------------------------------------------------------
 
 //------------------------------------------------------------------------
-void SimpleSynthDsp::noteOn (int pitch, float /*velocity*/)
+void R2SynthDsp::noteOn (int pitch, float /*velocity*/)
 {
 	// VELOCITY IS IGNORED, like the MS-20's keyboard. The parameter is
 	// accepted so that adding a sensitivity control later is a change
@@ -983,7 +983,7 @@ void SimpleSynthDsp::noteOn (int pitch, float /*velocity*/)
 	mVcaEnv.gateOn ();
 }
 
-void SimpleSynthDsp::noteOff (int pitch)
+void R2SynthDsp::noteOff (int pitch)
 {
 	int w = 0;
 	bool found = false;
@@ -1014,20 +1014,20 @@ void SimpleSynthDsp::noteOff (int pitch)
 	mVcaEnv.gateOff ();
 }
 
-void SimpleSynthDsp::allNotesOff ()
+void R2SynthDsp::allNotesOff ()
 {
 	mHeldCount = 0;
 	mVcfEnv.gateOff ();
 	mVcaEnv.gateOff ();
 }
 
-double SimpleSynthDsp::tailSeconds () const
+double R2SynthDsp::tailSeconds () const
 {
 	return releaseTailSeconds (mVcaEnv.spec ().release);
 }
 
 //------------------------------------------------------------------------
-float SimpleSynthDsp::renderSample ()
+float R2SynthDsp::renderSample ()
 {
 	// LFO 2 turns LFO 1's Shape knob, then LFO 1 runs at the result.
 	// The Level is smoothed, so a move of it glides the sweep in rather
@@ -1140,7 +1140,7 @@ float SimpleSynthDsp::renderSample ()
 	return static_cast<float> (filtered * vcaEnv * tremolo * kVoiceGain);
 }
 
-void SimpleSynthDsp::render (float* left, float* right, int numSamples)
+void R2SynthDsp::render (float* left, float* right, int numSamples)
 {
 	// A PARAMETER-ONLY BLOCK is legal and arrives in practice.
 	if (numSamples <= 0 || left == nullptr || right == nullptr)
@@ -1156,7 +1156,7 @@ void SimpleSynthDsp::render (float* left, float* right, int numSamples)
 	applyOutputLevel (left, right, numSamples);
 }
 
-void SimpleSynthDsp::applyOutputLevel (float* left, float* right, int numSamples)
+void R2SynthDsp::applyOutputLevel (float* left, float* right, int numSamples)
 {
 	if (numSamples <= 0 || left == nullptr || right == nullptr)
 		return;
@@ -1171,4 +1171,4 @@ void SimpleSynthDsp::applyOutputLevel (float* left, float* right, int numSamples
 }
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

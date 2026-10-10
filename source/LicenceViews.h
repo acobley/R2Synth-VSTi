@@ -21,14 +21,14 @@
 #pragma once
 
 #include "LicenceStore.h"
-#include "SimpleSynthControls.h"
+#include "R2SynthControls.h"
 
 #include "vstgui/vstgui.h"
 
 #include <functional>
 #include <string>
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 /** True the first time it is called in this process, false after: the
     reminder shows at most once per session, however many instances or
@@ -133,4 +133,4 @@ private:
 	SpyPresetButton* mAllButtons[8] = {};
 };
 
-} // namespace SimpleSynth
+} // namespace R2Synth

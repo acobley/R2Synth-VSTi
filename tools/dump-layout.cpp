@@ -4,7 +4,7 @@
 // WHY A C++ TOOL AND NOT A PARSER. Everything the picture needs - the
 // positions, the sections, the text on every control, the four screens'
 // curves - is printed here by the SAME code the editor runs:
-// SimpleSynthLayout.h for where things are, SimpleSynthReadouts.cpp for
+// R2SynthLayout.h for where things are, R2SynthReadouts.cpp for
 // what they say, traceFilterResponse(), traceLfo() and traceEnvelopes()
 // for the curves. The Python script only draws. So the picture cannot
 // drift from the panel without this failing to compile first.
@@ -13,20 +13,20 @@
 // panel as it opens on a fresh instance at 48 k.
 //
 //   c++ -std=c++17 -I<sdk> -Isource tools/dump-layout.cpp
-//       source/SimpleSynthReadouts.cpp source/SimpleSynthParams.cpp
-//       source/SimpleSynthDsp.cpp -o /tmp/dump-layout
+//       source/R2SynthReadouts.cpp source/R2SynthParams.cpp
+//       source/R2SynthDsp.cpp -o /tmp/dump-layout
 //------------------------------------------------------------------------
 
-#include "SimpleSynthLayout.h"
-#include "SimpleSynthReadouts.h"
-#include "SimpleSynthDsp.h"
+#include "R2SynthLayout.h"
+#include "R2SynthReadouts.h"
+#include "R2SynthDsp.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <string>
 
-using namespace SimpleSynth;
-using namespace SimpleSynth::Layout;
+using namespace R2Synth;
+using namespace R2Synth::Layout;
 
 namespace {
 

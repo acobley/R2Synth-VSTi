@@ -1,20 +1,20 @@
 //------------------------------------------------------------------------
-// SimpleSynth - processor tests
+// R2Synth - processor tests
 //
 // The DSP suite tests the engine; this tests the VST3 half around it -
 // the parts a host exercises and the SDK validator does not look at
 // closely: notes landing on their own sample, the state stream, 64-bit
 // buffers, bypass, and the silence flags.
 //
-// It drives SimpleSynthProcessor DIRECTLY, with the SDK's own hosting
+// It drives R2SynthProcessor DIRECTLY, with the SDK's own hosting
 // helpers (EventList, ParameterChanges, MemoryStream), so it needs the
 // SDK built as libraries. tools/linux-validate/ builds it on Linux next to
 // the plug-in and runs it after the validator; on the Mac the same
 // CMakeLists works with the in-tree SDK. It does not need VSTGUI.
 //------------------------------------------------------------------------
 
-#include "SimpleSynthProcessor.h"
-#include "SimpleSynthParams.h"
+#include "R2SynthProcessor.h"
+#include "R2SynthParams.h"
 
 #include "public.sdk/source/common/memorystream.h"
 #include "public.sdk/source/vst/hosting/eventlist.h"
@@ -29,7 +29,7 @@
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
-using namespace SimpleSynth;
+using namespace R2Synth;
 
 namespace {
 
@@ -52,7 +52,7 @@ constexpr int    kBlock = 512;
 /** One processor, set up and active, and the buffers to run it. */
 struct Rig
 {
-	IPtr<SimpleSynthProcessor> proc = owned (new SimpleSynthProcessor);
+	IPtr<R2SynthProcessor> proc = owned (new R2SynthProcessor);
 	std::vector<float>  l32 = std::vector<float> (kBlock), r32 = std::vector<float> (kBlock);
 	std::vector<double> l64 = std::vector<double> (kBlock), r64 = std::vector<double> (kBlock);
 	float*  ch32[2];
@@ -159,7 +159,7 @@ struct Rig
 	}
 };
 
-std::vector<char> stateOf (SimpleSynthProcessor* proc)
+std::vector<char> stateOf (R2SynthProcessor* proc)
 {
 	auto stream = owned (new MemoryStream);
 	proc->getState (stream);
@@ -171,7 +171,7 @@ std::vector<char> stateOf (SimpleSynthProcessor* proc)
 //------------------------------------------------------------------------
 int main ()
 {
-	std::printf ("SimpleSynth processor tests\n");
+	std::printf ("R2Synth processor tests\n");
 	std::printf ("---------------------------\n");
 
 	std::printf ("notes land on their own sample\n");

@@ -1,12 +1,12 @@
 //------------------------------------------------------------------------
-// SimpleSynth - audio processor
+// R2Synth - audio processor
 //
-// SimpleSynth is an INSTRUMENT: an event input and one stereo audio
+// R2Synth is an INSTRUMENT: an event input and one stereo audio
 // output, no audio input. That decision reaches FOUR places and they
 // must all agree, or the plug-in loads in the wrong list, or auval
 // rejects the Audio Unit:
 //
-//   * PlugType::kInstrumentSynth in SimpleSynthEntry.cpp
+//   * PlugType::kInstrumentSynth in R2SynthEntry.cpp
 //   * the buses added in initialize() below
 //   * what setBusArrangements accepts
 //   * the single 0-in / 2-out entry in resource/au-info.plist
@@ -45,25 +45,25 @@
 
 #pragma once
 
-#include "SimpleSynthDsp.h"
-#include "SimpleSynthParams.h"
+#include "R2SynthDsp.h"
+#include "R2SynthParams.h"
 
 #include "public.sdk/source/vst/vstaudioeffect.h"
 #include "pluginterfaces/vst/ivstevents.h"
 
 #include <vector>
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
-class SimpleSynthProcessor : public Steinberg::Vst::AudioEffect
+class R2SynthProcessor : public Steinberg::Vst::AudioEffect
 {
 public:
-	SimpleSynthProcessor ();
+	R2SynthProcessor ();
 
 	static Steinberg::FUnknown* createInstance (void*)
 	{
-		return (Steinberg::Vst::IAudioProcessor*)new SimpleSynthProcessor;
+		return (Steinberg::Vst::IAudioProcessor*)new R2SynthProcessor;
 	}
 
 	Steinberg::tresult PLUGIN_API initialize (Steinberg::FUnknown* context) SMTG_OVERRIDE;
@@ -111,7 +111,7 @@ private:
 	void writeOutput (Steinberg::Vst::ProcessData& data, Steinberg::int32 offset,
 	                  Steinberg::int32 numSamples);
 
-	SimpleSynthDsp mDsp;
+	R2SynthDsp mDsp;
 
 	/** The most events one block can hold. Overflowing it drops the
 	    surplus rather than growing on the audio thread. */
@@ -153,4 +153,4 @@ private:
 };
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

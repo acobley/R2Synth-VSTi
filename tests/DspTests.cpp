@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------
-// SimpleSynth - DSP tests
+// R2Synth - DSP tests
 //
-// SDK-FREE, compiled directly against SimpleSynthDsp.cpp:
+// SDK-FREE, compiled directly against R2SynthDsp.cpp:
 //
 //   c++ -std=c++17 -O2 -ffp-contract=off -I../source DspTests.cpp
-//       ../source/SimpleSynthDsp.cpp -o /tmp/dsptests  &&  /tmp/dsptests
+//       ../source/R2SynthDsp.cpp -o /tmp/dsptests  &&  /tmp/dsptests
 //
 // -ffp-contract=off MATTERS: see the ladder's bit-identity tests.
 //
@@ -21,7 +21,7 @@
 // clips masks other faults and sends you chasing the wrong bug.
 //------------------------------------------------------------------------
 
-#include "SimpleSynthDsp.h"
+#include "R2SynthDsp.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-using namespace SimpleSynth;
+using namespace R2Synth;
 
 //------------------------------------------------------------------------
 namespace {
@@ -104,9 +104,9 @@ double measureFrequency (const std::vector<double>& x, double sampleRate)
 }
 
 /** THE PATCH THE PARAMETER TABLE SHIPS WITH, in internal units - kept in
-    step with SimpleSynthParams.cpp by hand, because this suite does not
+    step with R2SynthParams.cpp by hand, because this suite does not
     include SDK headers. If one moves, move the other. */
-void applyDefaultPatch (SimpleSynthDsp& d)
+void applyDefaultPatch (R2SynthDsp& d)
 {
 	d.setOutputLevelDb (0.0);
 	d.setVcoWave (0, Vco::Wave::Saw);    d.setVcoTune (0, 0.0);   d.setVcoLevel (0, 1.0);
@@ -229,7 +229,7 @@ static void testOutputStage ()
 
 	for (double rate : kRates)
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (rate);
 		dsp.setOutputLevelDb (0.0);
 		dsp.reset ();
@@ -244,7 +244,7 @@ static void testOutputStage ()
 	// THE NEGATIVE CONTROL. The same comparison at half gain MUST fail -
 	// a guard that has never failed is a guess.
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		dsp.setOutputLevelDb (gainToDb (0.5));
 		dsp.reset ();
@@ -314,7 +314,7 @@ static void testVcos ()
 	// octave up, -12 exactly an octave down.
 	for (double tune : { -12.0, 0.0, 12.0 })
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		applyDefaultPatch (dsp);
 		dsp.setVcoLevel (1, 0.0);                        // VCO 1 alone
@@ -466,7 +466,7 @@ static void testLfoSine ()
 	// And through the engine: the Sine output on the cutoff reaches its
 	// full depth either way.
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		applyDefaultPatch (dsp);
 		dsp.setVcfEnvAmount (0.0);
@@ -638,7 +638,7 @@ static void testLfo2 ()
 	// patch that ignores LFO 2 sounds exactly as it did before LFO 2.
 	{
 		auto render = [] (double lfo2Rate, std::vector<float>& out, bool& shapeOnKnob) {
-			SimpleSynthDsp d;
+			R2SynthDsp d;
 			d.setSampleRate (48000.0);
 			applyDefaultPatch (d);
 			d.setLfoShape (0.3);
@@ -670,7 +670,7 @@ static void testLfo2 ()
 	// +0.6, down to -0.4 and parked at the rising saw at the top.
 	for (double knob : { 0.0, 0.6 })
 	{
-		SimpleSynthDsp d;
+		R2SynthDsp d;
 		d.setSampleRate (48000.0);
 		applyDefaultPatch (d);
 		d.setLfoShape (knob);
@@ -708,7 +708,7 @@ static void testLfo2 ()
 	// cutoff, has its duty swept - so the filter spends a different
 	// fraction of the time up in each half of LFO 2's cycle.
 	{
-		SimpleSynthDsp d;
+		R2SynthDsp d;
 		d.setSampleRate (48000.0);
 		applyDefaultPatch (d);
 		d.setLfoOutput (LfoOutput::Square);
@@ -739,7 +739,7 @@ static void testLfo2 ()
 	// THE LEVEL IS SMOOTHED: a jump from 0 to 100 % mid-note glides the
 	// sweep in rather than jumping the Shape.
 	{
-		SimpleSynthDsp d;
+		R2SynthDsp d;
 		d.setSampleRate (48000.0);
 		applyDefaultPatch (d);
 		d.setLfo2Rate (20.0);
@@ -1242,7 +1242,7 @@ static void testFilterSwitch ()
 {
 	std::printf ("VCF Type switch\n");
 
-	auto render = [] (SimpleSynthDsp& d, int samples) {
+	auto render = [] (R2SynthDsp& d, int samples) {
 		std::vector<float> l (static_cast<size_t> (samples)), r (l.size ());
 		d.render (l.data (), r.data (), samples);
 		return l;
@@ -1252,7 +1252,7 @@ static void testFilterSwitch ()
 	// that never heard of the switch and one switched away and back
 	// (and settled, and reset) render the same samples.
 	{
-		SimpleSynthDsp a, b;
+		R2SynthDsp a, b;
 		a.setSampleRate (48000.0);
 		b.setSampleRate (48000.0);
 		applyDefaultPatch (a);
@@ -1278,7 +1278,7 @@ static void testFilterSwitch ()
 	// EXACTLY; a reset lands at once.
 	for (double rate : kRates)
 	{
-		SimpleSynthDsp d;
+		R2SynthDsp d;
 		d.setSampleRate (rate);
 		applyDefaultPatch (d);
 		d.reset ();
@@ -1333,7 +1333,7 @@ static void testFilterSwitch ()
 	// NO CLICK: switching mid-note, the biggest sample-to-sample step
 	// in the fade is no bigger than the sawtooth's own steps either side.
 	{
-		SimpleSynthDsp d;
+		R2SynthDsp d;
 		d.setSampleRate (48000.0);
 		applyDefaultPatch (d);
 		d.setVcfEnvAmount (0.0);
@@ -1358,8 +1358,8 @@ static void testFilterSwitch ()
 
 	// THE MS-20 VOICE SOUNDS DIFFERENT - brighter for the same knobs.
 	{
-		SimpleSynthDsp m, s;
-		for (SimpleSynthDsp* d : { &m, &s })
+		R2SynthDsp m, s;
+		for (R2SynthDsp* d : { &m, &s })
 		{
 			d->setSampleRate (48000.0);
 			applyDefaultPatch (*d);
@@ -1472,7 +1472,7 @@ static void testNotes ()
 {
 	std::printf ("mono, last-note priority\n");
 
-	SimpleSynthDsp dsp;
+	R2SynthDsp dsp;
 	dsp.setSampleRate (48000.0);
 	applyDefaultPatch (dsp);
 	dsp.reset ();
@@ -1531,7 +1531,7 @@ static void testPortamento ()
 	std::printf ("portamento\n");
 
 	const double fs = 48000.0;
-	SimpleSynthDsp dsp;
+	R2SynthDsp dsp;
 	dsp.setSampleRate (fs);
 	applyDefaultPatch (dsp);
 	dsp.reset ();
@@ -1616,7 +1616,7 @@ static void testPortamento ()
 	// ---- SAMPLE-RATE INDEPENDENT --------------------------------------
 	for (double rate : { 44100.0, 96000.0 })
 	{
-		SimpleSynthDsp d;
+		R2SynthDsp d;
 		d.setSampleRate (rate);
 		applyDefaultPatch (d);
 		d.setPortamento (t);
@@ -1632,7 +1632,7 @@ static void testPortamento ()
 
 	// ---- THE VCOs REALLY SLIDE: the sound's period follows the pitch --
 	{
-		SimpleSynthDsp d;
+		R2SynthDsp d;
 		d.setSampleRate (fs);
 		applyDefaultPatch (d);
 		d.setVcoLevel (1, 0.0);                 // VCO 1 alone, a sawtooth
@@ -1671,7 +1671,7 @@ static void testModulation ()
 
 	// The VCF envelope: +3 octaves at the top of the attack.
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		applyDefaultPatch (dsp);
 		dsp.setKeyTrack (0.0);
@@ -1686,7 +1686,7 @@ static void testModulation ()
 	// Key tracking at 100 %: an octave up the keyboard is an octave up
 	// the cutoff.
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		applyDefaultPatch (dsp);
 		dsp.setVcfEnvAmount (0.0);
@@ -1700,7 +1700,7 @@ static void testModulation ()
 
 	// The LFO on the cutoff: the cutoff swings its depth either way.
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		applyDefaultPatch (dsp);
 		dsp.setVcfEnvAmount (0.0);
@@ -1723,7 +1723,7 @@ static void testModulation ()
 	// The LFO on the VCA: at 100 % it reaches silence, and never lifts
 	// the level above the envelope.
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		applyDefaultPatch (dsp);
 		dsp.setLfoVcaDepth (1.0);
@@ -1743,7 +1743,7 @@ static void testModulation ()
 		}
 		check (quietest < 0.02 * loudest, "100% LFO on the VCA reaches near silence");
 
-		SimpleSynthDsp plain;
+		R2SynthDsp plain;
 		plain.setSampleRate (48000.0);
 		applyDefaultPatch (plain);
 		plain.reset ();
@@ -1756,7 +1756,7 @@ static void testModulation ()
 	// The LFO on the pitch: vibrato of 1 semitone moves the pitch a
 	// semitone either way.
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		applyDefaultPatch (dsp);
 		dsp.setVcoLevel (1, 0.0);
@@ -1815,7 +1815,7 @@ static void testDegenerate ()
 {
 	std::printf ("zero frames, null buffers, absurd settings\n");
 
-	SimpleSynthDsp dsp;
+	R2SynthDsp dsp;
 	dsp.setSampleRate (48000.0);
 	applyDefaultPatch (dsp);
 	dsp.reset ();
@@ -1837,7 +1837,7 @@ static void testDegenerate ()
 	for (int corner = 0; corner < 4; ++corner)
 	{
 		const bool hiEnd = (corner & 1) != 0, hiRate = (corner & 2) != 0;
-		SimpleSynthDsp d;
+		R2SynthDsp d;
 		d.setSampleRate (hiRate ? 192000.0 : 22050.0);
 		applyDefaultPatch (d);
 		for (int v = 0; v < kNumVcos; ++v)
@@ -1879,7 +1879,7 @@ static void measureDefaultLevel ()
 	{
 		for (int note : { 36, 48, 60, 72, 84 })
 		{
-			SimpleSynthDsp dsp;
+			R2SynthDsp dsp;
 			dsp.setSampleRate (rate);
 			applyDefaultPatch (dsp);
 			dsp.reset ();
@@ -1904,7 +1904,7 @@ static void measureDefaultLevel ()
 		for (int t = 0; t < 3; ++t)
 			for (int note : { 36, 48, 60, 72, 84 })
 			{
-				SimpleSynthDsp dsp;
+				R2SynthDsp dsp;
 				dsp.setSampleRate (48000.0);
 				applyDefaultPatch (dsp);
 				dsp.setFilterType (static_cast<FilterType> (t));
@@ -1930,7 +1930,7 @@ static void measureDefaultLevel ()
 	// The worst case a user can dial in: three full squares in unison,
 	// full resonance, +6 dB of Output Level.
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		applyDefaultPatch (dsp);
 		for (int v = 0; v < kNumVcos; ++v)
@@ -1961,7 +1961,7 @@ static void measureDefaultLevel ()
 
 	// Self-oscillation with every VCO off - the noise floor starts it.
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (48000.0);
 		applyDefaultPatch (dsp);
 		for (int v = 0; v < kNumVcos; ++v)
@@ -1999,9 +1999,9 @@ static void measureDefaultLevel ()
 
 	// AND AT THE HARD CORNER: a 30 Hz cutoff on a 192 k engine, where
 	// SpaceDub's 1e-15 state floor zeroed the noise that starts it. See
-	// kStateFloor in SimpleSynthDsp.cpp.
+	// kStateFloor in R2SynthDsp.cpp.
 	{
-		SimpleSynthDsp dsp;
+		R2SynthDsp dsp;
 		dsp.setSampleRate (192000.0);
 		applyDefaultPatch (dsp);
 		for (int v = 0; v < kNumVcos; ++v)
@@ -2043,7 +2043,7 @@ static void testLfoResonance ()
 		checkClose (hi, 0.72, 1e-12, "and up to 0.72");
 	}
 
-	auto setup = [] (SimpleSynthDsp& d, double depth) {
+	auto setup = [] (R2SynthDsp& d, double depth) {
 		d.setSampleRate (48000.0);
 		applyDefaultPatch (d);
 		d.setResonance (0.5);
@@ -2057,7 +2057,7 @@ static void testLfoResonance ()
 	// AT DEPTH 0 THE FILTER GETS THE KNOB on every sample, and the audio
 	// is bit-identical to a patch that never heard of the control.
 	{
-		SimpleSynthDsp a, b;
+		R2SynthDsp a, b;
 		setup (a, 0.0);
 		setup (b, 0.0);
 		b.setLfoResonanceDepth (0.0);   // set twice, on purpose: no drift from the smoother
@@ -2076,7 +2076,7 @@ static void testLfoResonance ()
 	// AT DEPTH THE RESONANCE SWINGS round the knob, at the LFO's rate,
 	// and the swing reaches the expected ends.
 	{
-		SimpleSynthDsp d;
+		R2SynthDsp d;
 		setup (d, 0.3);
 		float l[1], r[1];
 		for (int i = 0; i < 4800; ++i) d.render (l, r, 1);   // the smoothers settle
@@ -2097,7 +2097,7 @@ static void testLfoResonance ()
 	// FULL DEPTH FROM A KNOB AT ZERO sings on the peaks: the swing crosses
 	// self-oscillation, and nothing blows up.
 	{
-		SimpleSynthDsp d;
+		R2SynthDsp d;
 		setup (d, kMaxLfoResonanceK);
 		d.setResonance (0.0);
 		d.setLfoRate (1.0);
@@ -2198,7 +2198,7 @@ static void testLadderResponse ()
 
 int main ()
 {
-	std::printf ("SimpleSynth DSP tests\n");
+	std::printf ("R2Synth DSP tests\n");
 	std::printf ("---------------------\n");
 
 	testConversions ();

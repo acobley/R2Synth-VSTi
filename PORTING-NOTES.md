@@ -1,4 +1,4 @@
-# SimpleSynth — project notes
+# R2Synth — project notes
 
 A monophonic VST3 + AUv2 synthesiser, written from scratch on the
 `../vst3-port-template` scaffold. This file is the record that outlives the
@@ -9,6 +9,7 @@ sessions that wrote it.
 | 29 Sep 2026 | Blank scaffold, as **SimpleDrum** (`SiDr`) |
 | 29 Sep 2026 | Renamed **SimpleSynth** (`SiSy`, `kInstrumentSynth`, `audio.simplesynth.*`) before any build existed. Class UIDs kept — never shipped, still unique |
 | 29 Sep 2026 | The engine and the panel — everything below |
+| 10 Oct 2026 | Renamed **R2Synth**, before any public release: an older, well-known free Mac app is already called SimpleSynth (Pete Yandell). Every visible name, the source files, namespace and bundle IDs (`audio.r2synth.*`) changed. **Kept on purpose:** both class UIDs and the AU codes `aumu` / `SiSy` / `AECo`, so projects saved with SimpleSynth builds open with R2Synth in its place, and licence product 0x0101 (now `kProductR2SynthFree`), so codes already issued still activate. Notes below say R2Synth throughout, including for work done under the old name |
 
 ## The decisions
 
@@ -16,7 +17,7 @@ sessions that wrote it.
 |---|---|---|
 | Effect or instrument | **Instrument** — `PlugType::kInstrumentSynth`, AU `aumu`, event input (16 ch) | It is a synthesiser |
 | Bus layout | **0 in / 2 out** | Said identically in `initialize`, `setBusArrangements` and the single `SupportedNumChannels` entry in `resource/au-info.plist` |
-| Name and codes | `SimpleSynth` / `SiSy` / `AECo` | `SiSy` checked against FDrm, FTrn, Prj6, SmDr, SDub, SpyB, VcFl — no clash |
+| Name and codes | `R2Synth` / `SiSy` / `AECo` | `SiSy` checked against FDrm, FTrn, Prj6, SmDr, SDub, SpyB, VcFl — no clash |
 | Voices | **Mono, last-note priority**; every new note retriggers both envelopes; releasing the sounding key returns to the last one still held, *without* retriggering | Chosen by Andy — MS-20-like |
 | LFO destinations | **Pitch, cutoff and VCA**, each with its own depth | Chosen by Andy |
 | Tune | **Per VCO, continuous, ±12 semitones** | Chosen by Andy |
@@ -30,9 +31,9 @@ sessions that wrote it.
 | Processor UID | `0x6D69A51B, 0xD84BE44A, 0x4927F783, 0x18477FAD` |
 | Controller UID | `0x935E5313, 0x9EF72A9E, 0xA1A91CCB, 0x968140F1` |
 | AU type / subtype / manufacturer | `aumu` / `SiSy` / `AECo` |
-| VST3 bundle id | `audio.simplesynth.vst3` |
-| AU bundle id | `audio.simplesynth.audiounit` |
-| Vendor | `AE Cobley` (no full stops — REAPER cuts AU names at the first one); AU name `AE Cobley: SimpleSynth` |
+| VST3 bundle id | `audio.r2synth.vst3` |
+| AU bundle id | `audio.r2synth.audiounit` |
+| Vendor | `AE Cobley` (no full stops — REAPER cuts AU names at the first one); AU name `AE Cobley: R2Synth` |
 
 **The parameter ids are now permanent too.** They were laid out in one go
 before any build existed (the scaffold's Output Trim, id 0, became Output
@@ -139,7 +140,7 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
   musicdsp.org), `DelayLine::process`'s per-sample arithmetic unchanged. At
   zero resonance it is **bit-identical** to SpaceDub's loop — a test holds it
   to that against a verbatim copy. Four deliberate differences, all in
-  `SimpleSynthDsp.{h,cpp}`:
+  `R2SynthDsp.{h,cpp}`:
   1. **Tuning.** SpaceDub drives it with coefficient = Hz / (fs/4). Measured,
      that puts a 440 Hz request at **332 Hz** and runs sharp above fs/4, and
      differently at every sample rate. `ladderTuning()` builds a 256-point
@@ -168,7 +169,7 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
 - **VCF Type: Moog / MS-20 I / MS-20 II** (branch `MS20Filter`, 7 Oct 2026;
   param `kVcfType`, id 32, Enum Moog = 0 / MS-20 I = 1 / MS-20 II = 2,
   appended — Moog by default so older projects are unchanged; `FilterType`
-  in SimpleSynthDsp.h, values permanent). The two MS-20s follow **Tim
+  in R2SynthDsp.h, values permanent). The two MS-20s follow **Tim
   Stinchcombe, "A Study of the Korg MS10 & MS20 Filters"**, which settles the
   question the first version of this got wrong — where each revision puts
   its diodes:
@@ -252,7 +253,7 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
 
 ### The "signal flow" panel (branch `UpdatedUI`, 4 Oct 2026)
 
-From the design `Designs/SimpleSynth-ConceptA-SignalFlow.png` (the Designs
+From the design `Designs/R2Synth-ConceptA-SignalFlow.png` (the Designs
 folder is git-ignored locally via `.git/info/exclude`). 1200 × 640:
 a header (wordmark, engine line, licence pill), then OSCILLATORS › FILTER ›
 AMP left to right, then a MODULATION strip (LFO 1 scope + Rate/Shape/Output,
@@ -260,10 +261,10 @@ LFO 2, and all four LFO 1 depths together). One colour per section — osc
 amber, filter blue, amp mint, mod violet — on the knobs' value arcs.
 Parameters, controller and processor unchanged.
 
-- **New views in `SimpleSynthPanelViews.*`** (namespace `Panel`):
+- **New views in `R2SynthPanelViews.*`** (namespace `Panel`):
   `Backdrop` (everything static, from the layout tables), `Knob`,
   `SegmentSwitch`, `Scope`, `Lamp`. Paths and text only, no bitmaps.
-  `SimpleSynthControls.*` is untouched — the licence dialog still uses
+  `R2SynthControls.*` is untouched — the licence dialog still uses
   `SpyPresetButton` — but the panel no longer uses its sliders, boxes or
   envelope view.
 - **Knobs**: vertical drag (200 px = full range), Shift ×0.1, double-click
@@ -271,7 +272,7 @@ Parameters, controller and processor unchanged.
   which go to 0 st (VCO 2's default is −12; 6 Oct) — wheel 1 % a click. The whole
   rectangle, reading and label included, takes the drag. Tune, Shape and
   Env Amount are drawn **bipolar** (arc from the top).
-- **Filter screen** = `traceFilterResponse()` (new, `SimpleSynthDsp`):
+- **Filter screen** = `traceFilterResponse()` (new, `R2SynthDsp`):
   `ladderResponseGain()` closes SpaceDub's stage response round the loop
   (`H = G / (1 + G·fb·z⁻¹)`) and is set up exactly as `process()` sets the
   filter up (ceiling clamp, `ladderTuning()` lookup, resonance × unity
@@ -309,7 +310,7 @@ Parameters, controller and processor unchanged.
   the strip (`modInfoLineText()` = LFO 1's line + LFO 2's); the depths line
   went (each depth has its own knob reading). `controlLabel()`,
   `spanText()`, `envAmountText()`, `filterDisplayAnnotation()` are new in
-  `SimpleSynthReadouts.cpp` so the editor and `dump-layout` share them.
+  `R2SynthReadouts.cpp` so the editor and `dump-layout` share them.
 - **Tests**: `LayoutTests` rewritten for the new tables (2058 checks:
   every parameter once, no overlaps, each control in its section and
   colour, every reading/label/segment fits, the info line at its longest,
@@ -327,18 +328,18 @@ VCA/OUTPUT + VCA ENV — with an LFO display (both outputs, the patched one mark
 display (both ADSRs on one time axis, key-up marked with dots) in a strip on
 the right. 1270 × 302 (was 1176 until LFO 1 → resonance).
 
-- **`SimpleSynthControls.*` is FilterDrum's control set**, namespace renamed,
+- **`R2SynthControls.*` is FilterDrum's control set**, namespace renamed,
   plus four opt-in additions — `SpyEnvelopeView::setShowAmounts` and
   `setGateMarker`, `SpySelector::setCompact` and `SpyGroupBox::setTitleBand`
   — see its banner. `diff` it against FilterDrum's to see
   exactly that.
-- **The layout is data** in `SimpleSynthLayout.h`, with no VSTGUI in it.
+- **The layout is data** in `R2SynthLayout.h`, with no VSTGUI in it.
 - **LFO 2 went in without growing the panel.** Its box ("LFO 2 -> SHAPE")
   took columns 4–5 of row 1, which had been readout text. The readouts
   are now three short lines at `columnX (6, 2)` — LFO 1's period and
   output, its depths, LFO 2's period and Shape range; the engine line
   moved to the title row (`kEngineLineX`) and the retrigger note into the
-  flow line. The title and flow text live in `SimpleSynthReadouts.cpp`
+  flow line. The title and flow text live in `R2SynthReadouts.cpp`
   (`panelTitleText()`, `panelFlowText()`) so the picture prints them too.
 - **LFO 1 → resonance grew the panel by one column.** "LFO Res"
   (`kVcfLfoRes`, appended after `kLfo2Level`) sits in the VCF box next to
@@ -351,7 +352,7 @@ the right. 1270 × 302 (was 1176 until LFO 1 → resonance).
   swings into self-oscillation on the LFO's peaks. The lamp still shows
   the knob only. Exactly the knob at depth 0 (tested bit-for-bit).
 - **Every string that depends on a value** is made in
-  `SimpleSynthReadouts.cpp`, also VSTGUI-free.
+  `R2SynthReadouts.cpp`, also VSTGUI-free.
 - Both, plus the DSP's trace functions, feed **`tools/dump-layout.cpp`**,
   whose JSON `tools/render-panel.py` draws into `docs/panel.png`. So the
   picture is drawn from the code the editor runs, not from a parsed copy.
@@ -379,7 +380,7 @@ only as odd host behaviour:
    but a virtual call from a base-class constructor reaches the *base's*
    linear version — so LFO Rate's 4 Hz default was published as 0.196
    instead of 0.696 (a host "reset to default" would play 0.28 Hz). Fixed by
-   setting `info.defaultNormalizedValue` again in `SimpleSynthParameter`.
+   setting `info.defaultNormalizedValue` again in `R2SynthParameter`.
    **FilterDrum has the same bug** — its controller never overrides this, and
    its Cutoff, Attack and Release rows are Log.
 2. **Bypass would not parse its own "Off"** — the plain `addParameter`
@@ -410,7 +411,7 @@ only as odd host behaviour:
 
 | Omitted | The trap when you add it |
 |---|---|
-| `getProcessContextRequirements` | The LFO is free-running in Hz. The moment anything reads tempo, add the override — code in the banner of `SimpleSynthProcessor.h` — or the tempo reads 120 in every host and the validator prints `- None` |
+| `getProcessContextRequirements` | The LFO is free-running in Hz. The moment anything reads tempo, add the override — code in the banner of `R2SynthProcessor.h` — or the tempo reads 120 in every host and the validator prints `- None` |
 | Velocity, pitch bend, mod wheel | VST3 delivers bend and CCs only through `IMidiMapping` to parameters; none is mapped |
 | Legato (non-retriggering) envelopes | Every note retriggers, by decision. Portamento exists (6 Oct) and glides regardless of overlap |
 | Sample-accurate automation | The last point of each queue is applied per block; the 20 ms smoothers hide the rest |
@@ -442,7 +443,7 @@ v3.8.1_build_84 — the tag the template pins:
 |---|---|
 | `tools/run-tests.sh` — DSP suite | **249 checks, 0 failures** with LFO 2, on arm64 GCC 11 (the Mac's VM) and x86-64 GCC 13 (201 before LFO 2, 184 before the sine) |
 | `tools/run-tests.sh` — layout and panel text | **914 checks, 0 failures** with LFO 2 (812 before) |
-| Every `source/*.cpp` compiled against the SDK and VSTGUI headers, `-Wall -Wextra` | 8/8, no warnings in our code; `nm -C`: all 57 referenced `SimpleSynth::` symbols defined |
+| Every `source/*.cpp` compiled against the SDK and VSTGUI headers, `-Wall -Wextra` | 8/8, no warnings in our code; `nm -C`: all 57 referenced `R2Synth::` symbols defined |
 | `tools/linux-validate/` — the plug-in built on Linux (editor stubbed), **SDK validator** | **47 tests passed, 0 failed** (re-run after the sine and after LFO 2: still 47 / 0) |
 | `tests/ProcessorTests.cpp` against the real processor | **30 checks, 0 failures** with the live-Shape output (25 before) |
 
@@ -465,7 +466,7 @@ picture is a reconstruction from the same numbers), the AU wrapper,
 `auval`, and listening.
 
 ```sh
-cd ~/DXi-DEv/SimpleSynth-VSTi
+cd ~/DXi-DEv/R2Synth-VSTi
 tools/run-tests.sh                                   # needs external/vst3sdk for the layout suite
 python3 tools/render-panel.py                        # redraws docs/panel.png
 cmake -S tools/linux-validate -B /tmp/ss-linux -G Ninja \
@@ -482,7 +483,7 @@ the project is self-contained and can ship separately.
 ## Next steps on the Mac
 
 ```sh
-cd ~/DXi-DEv/SimpleSynth-VSTi && ./setup-xcode.sh     # new source files: re-run it
+cd ~/DXi-DEv/R2Synth-VSTi && ./setup-xcode.sh     # new source files: re-run it
 # build, watch the validator's post-build output, then:
 auval -v aumu SiSy AECo
 ```
@@ -570,11 +571,11 @@ Implements "Licence key format" from the Nag-ware Licensing Design doc.
 
 - The site (WebPages, branch licence-server) now issues FREE codes at
   https://www.r2-dvd.net/activate.jsp: name + email in, a signed key out,
-  recorded in MySQL. Product code **0x0101 `kProductSimpleSynthFree`**
+  recorded in MySQL. Product code **0x0101 `kProductR2SynthFree`**
   (LicenceKey.h), so it never counts as a paid Bundle v1 (0x0001) licence.
   WebPages/LICENSING.md has the server side.
 - LicenceConfig.h: `kAcceptedProducts = {kProductBundleV1,
-  kProductSimpleSynthFree}`; `kActivationUrl` (empty = no button).
+  kProductR2SynthFree}`; `kActivationUrl` (empty = no button).
 - Reminder page: new first button **Get activation code** opens
   kActivationUrl in the browser - `openInBrowser()` in LicenceViews.cpp,
   LSOpenCFURLRef (CoreServices, linked in CMakeLists.txt; the deprecation

@@ -2,14 +2,14 @@
 """Draw the plug-in's panel into docs/panel.png.
 
 WHY IT DOES NOT PARSE THE SOURCE. This script asks the plug-in:
-tools/dump-layout.cpp is compiled against source/SimpleSynthLayout.h,
-SimpleSynthReadouts.cpp and SimpleSynthDsp.cpp and prints every position,
+tools/dump-layout.cpp is compiled against source/R2SynthLayout.h,
+R2SynthReadouts.cpp and R2SynthDsp.cpp and prints every position,
 every piece of text and all four screens' curves as JSON - from the SAME
 code the editor runs. This script only draws. A layout change that breaks
 the tool fails to compile rather than drawing last week's panel.
 
 What it cannot show is VSTGUI's own rendering: this is a reconstruction
-from the same numbers in the panel's palette (SimpleSynthPanelViews.h),
+from the same numbers in the panel's palette (R2SynthPanelViews.h),
 not a screenshot - and the faces are whatever this machine has nearest to
 Helvetica Neue and Menlo. It exists so that a control in the wrong place
 HERE is a control in the wrong place in the plug-in - the only way to
@@ -56,15 +56,15 @@ def dump_layout():
         exe = os.path.join(tmp, 'dump-layout')
         subprocess.run([cxx, '-std=c++17', '-O1', '-I' + sdk, '-I' + src, '-o', exe,
                         os.path.join(ROOT, 'tools', 'dump-layout.cpp'),
-                        os.path.join(src, 'SimpleSynthReadouts.cpp'),
-                        os.path.join(src, 'SimpleSynthParams.cpp'),
-                        os.path.join(src, 'SimpleSynthDsp.cpp')], check=True)
+                        os.path.join(src, 'R2SynthReadouts.cpp'),
+                        os.path.join(src, 'R2SynthParams.cpp'),
+                        os.path.join(src, 'R2SynthDsp.cpp')], check=True)
         out = subprocess.run([exe], check=True, capture_output=True, text=True).stdout
     return json.loads(out)
 
 
 # ---------------------------------------------------------------------------
-# The palette - SimpleSynthPanelViews.h
+# The palette - R2SynthPanelViews.h
 # ---------------------------------------------------------------------------
 GROUND = (20, 21, 24)
 HEADER = (26, 28, 32)

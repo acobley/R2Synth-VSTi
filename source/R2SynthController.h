@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleSynth - edit controller
+// R2Synth - edit controller
 //
 // The half of the plug-in that talks to the host about parameters and
 // owns the panel. It does NOT share memory with the processor - they may
@@ -7,35 +7,35 @@
 // that run through this project:
 //
 //   * anything the panel displays that the DSP computes comes from one
-//     shared function both call (SimpleSynthDsp.h), not from two copies
+//     shared function both call (R2SynthDsp.h), not from two copies
 //     of the arithmetic;
 //   * a value the DSP produces per block reaches here through
 //     data.outputParameterChanges, never through sendMessage from
-//     process() (SimpleSynthIDs.h).
+//     process() (R2SynthIDs.h).
 //------------------------------------------------------------------------
 
 #pragma once
 
-#include "SimpleSynthParams.h"
+#include "R2SynthParams.h"
 
 #include "public.sdk/source/vst/vsteditcontroller.h"
 
 #include <vector>
 
-namespace SimpleSynth {
+namespace R2Synth {
 
-class SimpleSynthEditor;
+class R2SynthEditor;
 
 //------------------------------------------------------------------------
-class SimpleSynthController : public Steinberg::Vst::EditControllerEx1
+class R2SynthController : public Steinberg::Vst::EditControllerEx1
 {
 public:
-	SimpleSynthController () = default;
-	~SimpleSynthController () SMTG_OVERRIDE = default;
+	R2SynthController () = default;
+	~R2SynthController () SMTG_OVERRIDE = default;
 
 	static Steinberg::FUnknown* createInstance (void*)
 	{
-		return (Steinberg::Vst::IEditController*)new SimpleSynthController;
+		return (Steinberg::Vst::IEditController*)new R2SynthController;
 	}
 
 	Steinberg::tresult PLUGIN_API initialize (Steinberg::FUnknown* context) SMTG_OVERRIDE;
@@ -70,9 +70,9 @@ public:
 	void editorDestroyed (Steinberg::Vst::EditorView* editor) SMTG_OVERRIDE;
 
 private:
-	std::vector<SimpleSynthEditor*> mEditors;
+	std::vector<R2SynthEditor*> mEditors;
 	double mHostSampleRate = 44100.0;
 };
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

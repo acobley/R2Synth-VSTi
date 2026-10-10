@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleSynth - custom VSTGUI controls
+// R2Synth - custom VSTGUI controls
 //
 // LIFTED from ~/DXi-DEv/VocalFilter-VSTi/source/VocalFilterControls.*,
 // which was itself lifted from SpyBand-VSTi/source/SpyBandControls.*. The
@@ -27,7 +27,7 @@
 //     way and the panel stays resolution-independent for free.
 //------------------------------------------------------------------------
 
-#include "SimpleSynthControls.h"
+#include "R2SynthControls.h"
 
 #include <algorithm>
 #include <cmath>
@@ -35,7 +35,7 @@
 
 using namespace VSTGUI;
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 namespace {
 
@@ -393,7 +393,7 @@ int SpySelector::currentIndex () const
 
 void SpySelector::setCompact (bool compact)
 {
-	// ADDED FOR SIMPLESYNTH - see the banner in SimpleSynthControls.h.
+	// ADDED FOR R2SYNTH - see the banner in R2SynthControls.h.
 	if (compact == mCompact)
 		return;
 	mCompact = compact;
@@ -406,7 +406,7 @@ void SpySelector::draw (CDrawContext* context)
 
 	if (mCompact)
 	{
-		// ADDED FOR SIMPLESYNTH. The box is EXACTLY a slider's bar -
+		// ADDED FOR R2SYNTH. The box is EXACTLY a slider's bar -
 		// same rectangle, same 3d edge - so a switch in a row of sliders
 		// lines up with them top and bottom. Outlined and never filled:
 		// a filled bar is a slider's value, and a switch that looked
@@ -1197,7 +1197,7 @@ void SpyEnvelopeView::draw (CDrawContext* context)
 		drawAmountMarker (context, mVcaAmount, Colours::kTraceVca, left, width, top, height);
 	}
 
-	// ADDED FOR SIMPLESYNTH: the key-up line, dotted so it reads as a
+	// ADDED FOR R2SYNTH: the key-up line, dotted so it reads as a
 	// reference and not as a third trace. Drawn before the curves for
 	// the same reason as the markers.
 	if (mGateMarker >= 0.0 && mGateMarker <= 1.0)
@@ -1258,7 +1258,7 @@ void SpyGroupBox::draw (CDrawContext* context)
 
 	const CCoord left   = r.left + 0.5;
 	const CCoord right  = r.right - 0.5;
-	// ADDED FOR SIMPLESYNTH: mTitleBand moves the top edge down the view
+	// ADDED FOR R2SYNTH: mTitleBand moves the top edge down the view
 	// so the title centred on it is inside the view - see setTitleBand.
 	const CCoord top    = r.top + mTitleBand + 0.5;
 	const CCoord bottom = r.bottom - 0.5;
@@ -1305,7 +1305,7 @@ void SpyGroupBox::draw (CDrawContext* context)
 
 //------------------------------------------------------------------------
 //------------------------------------------------------------------------
-// ADDED FOR SIMPLESYNTH - see the banner in SimpleSynthControls.h
+// ADDED FOR R2SYNTH - see the banner in R2SynthControls.h
 //------------------------------------------------------------------------
 void SpyGroupBox::setTitleBand (CCoord band)
 {
@@ -1332,4 +1332,4 @@ void SpyEnvelopeView::setGateMarker (double fraction)
 }
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

@@ -15,7 +15,7 @@
 #endif
 
 #include "LicenceViews.h"
-#include "SimpleSynthPanelViews.h"
+#include "R2SynthPanelViews.h"
 #include "LicenceConfig.h"
 #include "LicencePublicKey.h"
 
@@ -25,7 +25,7 @@
 
 using namespace VSTGUI;
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
 namespace {
@@ -361,13 +361,13 @@ void LicenceDialog::showPage (Page page)
 			{
 				mTitle->setText ("Your licence covers an earlier version");
 				mLine[0]->setText (("The licence for " + d.licensedName +
-				                    " doesn't include this version of SimpleSynth.").c_str ());
-				mLine[1]->setText ("SimpleSynth keeps working in full while you decide - there's no time limit.");
+				                    " doesn't include this version of R2Synth.").c_str ());
+				mLine[1]->setText ("R2Synth keeps working in full while you decide - there's no time limit.");
 				mLine[2]->setText ("Upgrade, or enter a licence that covers this version.");
 			}
 			else
 			{
-				mTitle->setText ("Thank you for trying SimpleSynth");
+				mTitle->setText ("Thank you for trying R2Synth");
 				mLine[0]->setText ("It's free to try and keeps working in full - there's no time limit.");
 				mLine[1]->setText ("A free activation code turns this reminder off - it takes your name and email.");
 				const std::string when =
@@ -394,14 +394,14 @@ void LicenceDialog::showPage (Page page)
 		case Page::Licensed:
 		{
 			const auto& d = mDecision;
-			mTitle->setText ("SimpleSynth is activated");
+			mTitle->setText ("R2Synth is activated");
 			mLine[0]->setText (("Licensed to " + d.licensedName).c_str ());
 			std::string detail = "Licence " + std::to_string (d.payload.licenceId) + "  -  issued " +
 			                     R2Licence::formatDate (d.payload.issueDay);
 			if (R2Licence::kPublicKeyIsDevelopment)
 				detail += "  -  DEVELOPMENT KEY";
 			mLine[1]->setText (detail.c_str ());
-			mLine[2]->setText (d.payload.product == R2Licence::kProductSimpleSynthFree
+			mLine[2]->setText (d.payload.product == R2Licence::kProductR2SynthFree
 			                       ? "Thank you for registering."
 			                       : "Thank you for supporting R2Project.");
 			placeButtons ({mChangeButton, mCloseButton});
@@ -549,4 +549,4 @@ void LicenceDialog::onMouseDownEvent (MouseDownEvent& event)
 	event.consumed = true;
 }
 
-} // namespace SimpleSynth
+} // namespace R2Synth

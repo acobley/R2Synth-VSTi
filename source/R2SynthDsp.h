@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// SimpleSynth - the audio engine
+// R2Synth - the audio engine
 //
 // NO SDK HEADER MAY ENTER THIS FILE OR ITS .cpp. That is deliberate, and
 // there are two reasons for it.
@@ -74,7 +74,7 @@
 //     whatever the interval. ALWAYS, not only legato: a key struck after
 //     the previous one was released glides too, because the pitch is
 //     held between notes the way an analogue keyboard's CV is. See
-//     SimpleSynthDsp::noteOn() and portamentoActive().
+//     R2SynthDsp::noteOn() and portamentoActive().
 //   * Two ADSRs, one on the cutoff (in octaves, signed) and one on the
 //     VCA. Retriggered on every new note, FROM WHEREVER THEY ARE, so a
 //     retrigger never clicks.
@@ -91,7 +91,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace SimpleSynth {
+namespace R2Synth {
 
 //------------------------------------------------------------------------
 /** Stereo, and only stereo. It agrees with setBusArrangements in the
@@ -984,10 +984,10 @@ double traceEnvelopes (const AdsrSpec& vcf, const AdsrSpec& vca,
 void traceLfo (LfoOutput output, double shape, float* out, int count, double cycles);
 
 //------------------------------------------------------------------------
-class SimpleSynthDsp
+class R2SynthDsp
 {
 public:
-	SimpleSynthDsp ();
+	R2SynthDsp ();
 
 	/** Recomputes EVERY rate-dependent coefficient and resets state.
 	    Call it from setupProcessing, never from process(). */
@@ -1168,4 +1168,4 @@ private:
 };
 
 //------------------------------------------------------------------------
-} // namespace SimpleSynth
+} // namespace R2Synth

@@ -1,8 +1,8 @@
 //------------------------------------------------------------------------
-// SimpleSynth - the "signal flow" panel's views
+// R2Synth - the "signal flow" panel's views
 //------------------------------------------------------------------------
 
-#include "SimpleSynthPanelViews.h"
+#include "R2SynthPanelViews.h"
 
 #include <algorithm>
 #include <cctype>
@@ -10,7 +10,7 @@
 
 using namespace VSTGUI;
 
-namespace SimpleSynth {
+namespace R2Synth {
 namespace Panel {
 
 //------------------------------------------------------------------------
@@ -762,4 +762,4 @@ void Lamp::draw (CDrawContext* context)
 
 //------------------------------------------------------------------------
 } // namespace Panel
-} // namespace SimpleSynth
+} // namespace R2Synth
