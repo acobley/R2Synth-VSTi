@@ -27,3 +27,6 @@ installer/.built-from
 *.pfx
 *.p8
 AuthKey_*
+
+# Scratch output from Claude sessions (plots, renders) - not part of the project.
+Claude outputs/
