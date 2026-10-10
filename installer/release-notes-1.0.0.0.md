@@ -72,7 +72,7 @@ R2Project plug-ins; leave it if you might reinstall.
 ## Checksum
 
 ```
-SHA-256: <paste from: shasum -a 256 installer/R2Synth-1.0.0.0.pkg>
+SHA-256: 77d6b84e46015383976ecf8a7781b539b9e5da8224245f049d7512fbdcdc7e73
 ```
 
 ---
