@@ -7,6 +7,8 @@
 #                                    (external/vst3sdk, or VST3_SDK_ROOT)
 #   Licence tests/LicenceTests.cpp - SDK-free; Monocypher built as C first
 #
+#   + tools/check-versions.py and the release scripts' stub suites
+#
 # tests/ProcessorTests.cpp needs the SDK built as libraries, so it runs
 # from tools/linux-validate/ alongside the validator - see the banner
 # there.
@@ -61,6 +63,23 @@ if "$CC" -std=c99 -O2 -c -o "$WORK/monocypher.o" "$MONO/monocypher.c" 2>"$WORK/b
 else
     printf '\n=== Licence ===\n  BUILD FAILED (Monocypher)\n'; head -20 "$WORK/build.err" | sed 's/^/  /'; fail=1
 fi
+
+#------------------------------------------------------------------------
+# The release kit: the version and maker's name agree everywhere, and the
+# release scripts' own refusals still refuse. None of this needs a Mac.
+#------------------------------------------------------------------------
+printf '\n=== check-versions ===\n'
+python3 "$ROOT/tools/check-versions.py" || fail=1
+for t in test-build-release test-publish; do
+    printf '\n=== installer/%s ===\n' "$t"
+    if [ -x "$ROOT/installer/$t.sh" ]; then
+        "$ROOT/installer/$t.sh" || fail=1
+    else
+        # A script that will not run is not a check that passed.
+        echo "  NOT EXECUTABLE: installer/$t.sh - chmod +x installer/*.sh"
+        fail=1
+    fi
+done
 
 echo
 if [ $fail -eq 0 ]; then echo "ALL SUITES PASSED"; else echo "SOMETHING FAILED"; fi

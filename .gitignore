@@ -12,6 +12,14 @@ build-licence/
 licence-dev/
 *signing-seed*.hex
 
+# Installer outputs. The machinery is tracked; what it produces is not.
+# Released packages are GitHub Release assets against a tag, not commits - git
+# never forgets a binary. Ignoring them also means an UNSIGNED local build can
+# never be swept in by a `git add -A`.
+installer/build/
+installer/*.pkg
+installer/.built-from
+
 # Signing material. None of this should ever be in a repository.
 *.cer
 *.certSigningRequest

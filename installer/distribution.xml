@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The product archive: the panes the installer shows and the two things a
+    person can choose to install. __VERSION__ is substituted by
+    build-installer.sh from CMakeLists.txt, so the version lives in one place.
+-->
+<installer-gui-script minSpecVersion="2">
+
+    <title>R2Synth</title>
+    <organization>audio.r2synth</organization>
+
+    <!-- customize="always" so the choice pane is always shown: somebody who
+         only uses one format should not have the other installed silently. -->
+    <options customize="always"
+             require-scripts="false"
+             hostArchitectures="x86_64,arm64"/>
+
+    <!-- WHERE IT MAY BE INSTALLED. This replaces rootVolumeOnly="true", which
+         is what used to be here and which Apple's own Distribution XML
+         reference marks DEPRECATED, naming this element as its replacement.
+
+         Plug-ins go in /Library/Audio/Plug-Ins, which is on the boot volume
+         by definition, so: the system domain yes, an arbitrary volume no, and
+         the user's home no - the component packages install to absolute
+         paths under /Library and a home-directory install would put them
+         somewhere no host looks. -->
+    <domains enable_anywhere="false"
+             enable_currentUserHome="false"
+             enable_localSystem="true"/>
+
+    <welcome    file="welcome.html"    mime-type="text/html"/>
+    <license    file="license.txt"     mime-type="text/plain"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+
+    <choices-outline>
+        <line choice="choice.vst3"/>
+        <line choice="choice.au"/>
+        <!-- PRESETS-BEGIN -->
+        <line choice="choice.presets"/>
+        <!-- PRESETS-END -->
+    </choices-outline>
+
+    <choice id="choice.vst3"
+            title="VST3"
+            description="R2Synth.vst3, installed into /Library/Audio/Plug-Ins/VST3. Works in any VST3 host.">
+        <pkg-ref id="audio.r2synth.vst3.pkg"/>
+    </choice>
+
+    <choice id="choice.au"
+            title="Audio Unit"
+            description="R2Synth.component, installed into /Library/Audio/Plug-Ins/Components. For Logic Pro and other AU hosts.">
+        <pkg-ref id="audio.r2synth.audiounit.pkg"/>
+    </choice>
+
+    <pkg-ref id="audio.r2synth.vst3.pkg"
+             version="__VERSION__"
+             onConclusion="none">R2Synth-VST3.pkg</pkg-ref>
+
+    <pkg-ref id="audio.r2synth.audiounit.pkg"
+             version="__VERSION__"
+             onConclusion="none">R2Synth-AU.pkg</pkg-ref>
+
+    <!-- PRESETS-BEGIN
+         Both formats read the same folder, so one component serves the VST3
+         and the Audio Unit. build-installer.sh deletes everything between
+         these two markers when installer/presets is empty: a pkg-ref to a
+         package that was never built is exactly what Installer reports as
+         "pagecontroller error -1", naming none of it. -->
+    <choice id="choice.presets"
+            title="Factory presets"
+            description="Patches installed into /Library/Audio/Presets/AE Cobley/R2Synth, where both the VST3 and the Audio Unit look for them.">
+        <pkg-ref id="audio.r2synth.presets.pkg"/>
+    </choice>
+
+    <pkg-ref id="audio.r2synth.presets.pkg"
+             version="__VERSION__"
+             onConclusion="none">R2Synth-Presets.pkg</pkg-ref>
+    <!-- PRESETS-END -->          
+
+</installer-gui-script>
