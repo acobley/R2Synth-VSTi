@@ -181,8 +181,8 @@ def backdrop(d, L):
     d.rectangle([0, p(HH - 1), p(W), p(HH)], fill=BORDER)
 
     wm = L['wordmark']
-    text_in(d, wm, 'SIMPLE', TEXT, F_WORDMARK)
-    w = text_width(d, 'SIMPLE', F_WORDMARK)
+    text_in(d, wm, 'R2', TEXT, F_WORDMARK)
+    w = text_width(d, 'R2', F_WORDMARK)
     text_in(d, [wm[0] + w + 1, wm[1], wm[2], wm[3]], 'SYNTH', ACCENT['osc'], F_WORDMARK)
     d.rectangle([p(wm[2] + 4), p(16), p(wm[2] + 5), p(40)], fill=BORDER)
 

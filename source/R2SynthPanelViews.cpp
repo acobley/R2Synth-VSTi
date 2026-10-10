@@ -183,14 +183,14 @@ void Backdrop::draw (CDrawContext* context)
 	context->setFillColor (Palette::kBorder);
 	context->drawRect (CRect (all.left, kHeaderHeight - 1, all.right, kHeaderHeight), kDrawFilled);
 
-	// ---- the wordmark: SIMPLE in the text colour, SYNTH in amber -------
+	// ---- the wordmark: R2 in the text colour, SYNTH in amber -----------
 	{
 		context->setFont (fontWordmark ());
-		const CCoord simpleWidth = context->getStringWidth ("SIMPLE");
+		const CCoord prefixWidth = context->getStringWidth ("R2");
 		CRect r = toCRect (kWordmark);
 		context->setFontColor (Palette::kText);
-		context->drawString ("SIMPLE", r, kLeftText, true);
-		r.left += simpleWidth + 1;
+		context->drawString ("R2", r, kLeftText, true);
+		r.left += prefixWidth + 1;
 		context->setFontColor (Palette::accent (Accent::Osc));
 		context->drawString ("SYNTH", r, kLeftText, true);
 
