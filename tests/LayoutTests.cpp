@@ -26,6 +26,11 @@
 // and a click on a position's name picks that position. The screens'
 // black cut-outs are held clear of everything else.
 //
+// THE WEAR (22 Oct 2026, "Studio Worn", PanelWear.h): the same marks
+// every time; every mark on the panel and off the screens' glass, every
+// glass mark on its own glass, every knob's marks on its own knob; and
+// all of it faint - no mark may be opaque enough to hide a label.
+//
 // Needs one header-only file from the SDK (pluginterfaces/vst/vsttypes.h,
 // through R2SynthParams.h); nothing is linked from it:
 //
@@ -34,6 +39,7 @@
 //       ../source/R2SynthDsp.cpp -o /tmp/layouttests
 //------------------------------------------------------------------------
 
+#include "PanelWear.h"
 #include "R2SynthLayout.h"
 #include "R2SynthReadouts.h"
 #include "R2SynthDsp.h"
@@ -548,6 +554,126 @@ int main ()
 		check (Lettering::width ("", kTextLabel) == 0.0 && Lettering::width ("   ", kTextLabel) > 0.0,
 		       "nothing is no width; spaces are not nothing");
 		check (Lettering::width ("abc", kTextValue) == Lettering::width ("ABC", kTextValue), "lowercase is drawn as capitals");
+	}
+
+	// ---- the wear ---------------------------------------------------------
+	{
+		using namespace Wear;
+		const PanelWear a = panelWear (), b = panelWear ();
+		bool same = a.specks.size () == b.specks.size () && a.scratches.size () == b.scratches.size () &&
+		            a.haze.size () == b.haze.size ();
+		for (size_t i = 0; same && i < a.specks.size (); ++i)
+			same = a.specks[i].x == b.specks[i].x && a.specks[i].y == b.specks[i].y && a.specks[i].alpha == b.specks[i].alpha;
+		check (same, "the wear is the same every time it is made");
+		check (a.haze.size () >= 50 && a.specks.size () >= 500 && a.scratches.size () >= 30 && !a.drifts.empty () &&
+		       !a.fibres.empty (), "the panel has haze, drifts, specks, scratches and fibres");
+		check (static_cast<int> (a.rings.size ()) == kNumControls, "every knob and selector has dust round its foot");
+
+		Random r1 (42), r2 (42);
+		bool repeat = true;
+		for (int i = 0; i < 100; ++i)
+			repeat = repeat && r1.next () == r2.next ();
+		check (repeat && Random (43).next () != Random (42).next (), "the random numbers repeat for a seed, and only for it");
+		{
+			Random r (7);
+			double sum = 0.0, sq = 0.0;
+			for (int i = 0; i < 20000; ++i) { const double v = r.normal (); sum += v; sq += v * v; }
+			const double mean = sum / 20000, var = sq / 20000 - mean * mean;
+			check (std::fabs (mean) < 0.03 && std::fabs (var - 1.0) < 0.05, "the normal distribution is standard");
+		}
+
+		const Rect panel { 0, 0, kEditorWidth, kEditorHeight };
+		auto onPanel = [&] (double x, double y) { return x >= 0 && y >= 0 && x <= kEditorWidth && y <= kEditorHeight; };
+		auto onGlass = [&] (double x, double y, double pad) {
+			for (const auto& s : kScreens)
+			{
+				const Rect bz = bezelOf (s);
+				if (x >= bz.left - pad && x <= bz.right + pad && y >= bz.top - pad && y <= bz.bottom + pad)
+					return true;
+			}
+			return false;
+		};
+
+		bool hazeOk = true, specksOk = true, linesOk = true, faint = true, driftsOk = true;
+		for (const auto& h : a.haze)
+			hazeOk = hazeOk && h.alpha <= kMaxHazeAlpha && h.r > 0;
+		for (const auto& d : a.drifts)
+			driftsOk = driftsOk && inside (d.r, panel) && d.alpha <= kMaxHazeAlpha &&
+			           (std::abs (d.fromX) + std::abs (d.fromY)) == 1;
+		for (const auto& f : a.rings)
+			hazeOk = hazeOk && f.alpha <= 32 && f.inner < f.peak && f.peak < f.outer;
+		for (const auto& sp : a.specks)
+		{
+			specksOk = specksOk && onPanel (sp.x, sp.y);
+			for (const auto& s : kScreens)
+				specksOk = specksOk && !(sp.x > s.left && sp.x < s.right && sp.y > s.top && sp.y < s.bottom);
+			faint = faint && sp.alpha <= kMaxMarkAlpha && sp.r <= 0.7;
+		}
+		for (const auto* set : { &a.scratches, &a.fibres })
+			for (const auto& l : *set)
+			{
+				faint = faint && l.alpha <= kMaxMarkAlpha && l.width <= 0.5;
+				linesOk = linesOk && l.pts.size () >= 2;
+				for (const auto& q : l.pts)
+					linesOk = linesOk && onPanel (q.x, q.y) && !onGlass (q.x, q.y, 1.0);
+			}
+		check (hazeOk, "the haze and the foot rings are faint (alpha <= " + std::to_string (kMaxHazeAlpha) + ")");
+		check (driftsOk, "every drift is on the panel, faint, and fades from one edge");
+		check (specksOk, "every speck is on the panel and none on a screen's glass");
+		check (linesOk, "every scratch and fibre is on the panel and stops short of the screens");
+		check (faint, "no speck, scratch or fibre is opaque enough to hide a label");
+
+		bool knobsOk = true, distinct = false;
+		const KnobWear first = knobWear (1);
+		for (int i = 0; i < kNumControls; ++i)
+		{
+			if (kControls[i].kind == Kind::Knob)
+			{
+				const KnobWear k = knobWear (i);
+				knobsOk = knobsOk && !k.scuffs.empty () && !k.grit.empty () && k.sheen > 0 && k.sheen <= kMaxHazeAlpha;
+				for (const auto& arc : k.scuffs)
+					knobsOk = knobsOk && arc.radius > 0 && arc.radius <= 0.95 && arc.span > 0 && arc.span < 180 &&
+					          arc.alpha <= kMaxMarkAlpha;
+				for (const auto& g : k.grit)
+					knobsOk = knobsOk && g.radius > 0 && g.radius < 1.0 && g.alpha <= kMaxMarkAlpha;
+				if (i != 1 && !k.scuffs.empty () && k.scuffs[0].start != first.scuffs[0].start)
+					distinct = true;
+			}
+			else
+				for (const auto& g : selectorGrit (i))
+					knobsOk = knobsOk && g.radius > 0 && g.radius <= 1.0 && g.alpha <= kMaxMarkAlpha;
+		}
+		check (knobsOk, "every knob's marks are on its cap or in its knurling, and faint");
+		check (distinct, "every knob wears differently");
+		check (controlIndex (kCutoff) >= 0 && kControls[controlIndex (kCutoff)].tag == kCutoff && controlIndex (999999) == -1,
+		       "a control's wear is found by its tag");
+
+		const int screens = static_cast<int> (sizeof (kScreens) / sizeof (kScreens[0]));
+		int prints = 0;
+		for (int i = 0; i < screens; ++i)
+		{
+			const GlassWear g = glassWear (i);
+			const Rect s = kScreens[i];
+			auto on = [&] (double x, double y) { return x >= s.left && x <= s.right && y >= s.top && y <= s.bottom; };
+			bool ok = !g.dust.empty ();
+			for (const auto& d : g.dust)
+				ok = ok && on (d.x, d.y) && d.alpha <= kMaxMarkAlpha;
+			for (const auto& l : g.fibres)
+				for (const auto& q : l.pts)
+					ok = ok && on (q.x, q.y);
+			for (const auto& p : g.prints)
+			{
+				++prints;
+				for (const auto& ridge : p.ridges)
+				{
+					ok = ok && ridge.alpha <= kMaxPrintAlpha;
+					for (const auto& q : ridge.pts)
+						ok = ok && on (q.x, q.y);
+				}
+			}
+			check (ok, "screen " + std::to_string (i) + ": its glass's marks are on its glass, and faint");
+		}
+		check (prints == 2, "two fingerprints: the filter screen and the amp screen");
 	}
 
 	std::printf ("------------------------\n");

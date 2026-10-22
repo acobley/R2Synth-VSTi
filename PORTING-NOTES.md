@@ -252,6 +252,41 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
 
 ![The panel](docs/panel.png)
 
+### The worn look, "Studio Worn" (branch `PolivoksUI`, 22 Oct 2026)
+
+Design 1 of three weathered looks (`Designs/R2Synth-Weathered-1-StudioWorn.png`;
+2 Road Case and 3 Barn Find were not chosen): the black panel after ten
+years on a desk. Light wear, nothing that costs a label its legibility.
+
+- **New header `source/PanelWear.h`** (VSTGUI-free): every mark is
+  generated as data from a fixed seed — its own SplitMix64 and Box–Muller,
+  not `<random>`, whose distributions differ between standard libraries,
+  so every machine makes the same marks. `panelWear()` (haze blobs, dust
+  drifted inside the section boxes, a dust ring round every knob's and
+  selector's foot, hairline scratches in clusters and strays, specks,
+  fibres), `knobWear(i)` (turning scuffs as arcs, grit in the knurling and
+  on the cap, a polished sheen, faint dust over the knurling),
+  `selectorGrit(i)`, `glassWear(i)` (dust, a fibre, and fingerprints on
+  the filter and amp screens). `i` is the control's place in `kControls`
+  (`controlIndex(tag)`) or the screen's in `kScreens`.
+- **Drawing**: `Backdrop` draws the panel's marks over the printing, only
+  those that touch the clip rectangle (a knob turning does not redraw a
+  thousand specks). `Knob`, `RotarySwitch` and `Scope` take theirs through
+  `setWear()`, set by the editor. A knob's scuffs and grit are stored
+  RELATIVE TO THE POINTER, so they turn with it; the sheen stays where the
+  light is. Glass marks are drawn over the traces. Still no bitmaps — all
+  paths and gradients.
+- **Scratches stop at the glass**: no panel mark is generated within 2 px
+  of a screen's cut-out, and no speck on a screen.
+- **Tests**: `LayoutTests` holds the wear to the same marks every run,
+  every mark on the panel (and off the glass), every glass mark on its own
+  screen, every knob mark on its cap or knurling, and all of it faint
+  (`kMaxHazeAlpha`, `kMaxMarkAlpha`, `kMaxPrintAlpha`). `dump-layout`
+  prints every mark and the dirt's colours under `"wear"`;
+  `render-panel.py` draws them, so `docs/panel.png` shows the worn panel.
+- **A new source file** (`PanelWear.h`): re-run `./setup-xcode.sh` before
+  building. `tools/linux-validate` leaves it out with the editor files.
+
 ### The black panel (branch `PolivoksUI`, 22 Oct 2026)
 
 From `Designs/R2Synth-Polivoks-1c-OLED.png` (Andy chose design 1 of three

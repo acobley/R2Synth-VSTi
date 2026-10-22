@@ -28,6 +28,12 @@
 //   TextLine      one line of lettering whose words change - the engine
 //                 line, the modulation info line.
 //
+// WORN (22 Oct 2026): design 1 of the weathered looks, "Studio Worn" -
+// dust, hairline scratches, polished and scuffed knob tops, specks and
+// fingerprints on the screens' glass. The marks are generated as data in
+// PanelWear.h; the Backdrop draws the panel's, each Knob, RotarySwitch
+// and Scope draws its own (setWear). A knob's marks turn with it.
+//
 // THE SAME TWO RULES AS EVER. No bitmaps - everything is paths, the
 // lettering included, so the panel is resolution-independent and
 // resource/ needs no artwork. And no numbers made here: every reading
@@ -38,6 +44,7 @@
 
 #pragma once
 
+#include "PanelWear.h"
 #include "R2SynthLayout.h"
 #include "SciFiLettering.h"
 
@@ -130,6 +137,14 @@ public:
 	explicit Backdrop (const VSTGUI::CRect& size);
 	void draw (VSTGUI::CDrawContext* context) override;
 	CLASS_METHODS (Backdrop, VSTGUI::CView)
+
+private:
+	/** The wear on the panel - over the printing, under the controls.
+	    Only the marks that touch the area being redrawn are drawn, so a
+	    knob turning does not redraw a thousand specks. */
+	void drawWear (VSTGUI::CDrawContext* context);
+
+	Wear::PanelWear mWear;
 };
 
 //------------------------------------------------------------------------
@@ -158,6 +173,10 @@ public:
 	    readoutText() so the panel and the host cannot disagree. */
 	void setFormatter (std::function<std::string (float)> formatter) { mFormatter = std::move (formatter); }
 
+	/** Its wear (Wear::knobWear) - drawn relative to the pointer, so it
+	    turns with the knob. None until set. */
+	void setWear (const Wear::KnobWear& wear) { mWear = wear; }
+
 	void draw (VSTGUI::CDrawContext* context) override;
 
 	void onMouseDownEvent (VSTGUI::MouseDownEvent& event) override;
@@ -180,6 +199,7 @@ private:
 	bool mBipolar;
 	std::string mLabel;
 	std::function<std::string (float)> mFormatter;
+	Wear::KnobWear mWear;
 
 	bool mDragging = false;
 	VSTGUI::CCoord mLastY = 0.;
@@ -207,6 +227,9 @@ public:
 	void setNames (const std::vector<std::string>& names);
 	void setLabel (const std::string& label) { mLabel = upper (label); }
 
+	/** Grit round the hub (Wear::selectorGrit), turning with it. */
+	void setWear (const std::vector<Wear::PolarSpeck>& grit) { mGrit = grit; }
+
 	void draw (VSTGUI::CDrawContext* context) override;
 	void onMouseDownEvent (VSTGUI::MouseDownEvent& event) override;
 	void onMouseUpEvent (VSTGUI::MouseUpEvent& event) override;
@@ -223,6 +246,7 @@ private:
 	Layout::Selector mGeometry;
 	std::vector<std::string> mNames;
 	std::string mLabel;
+	std::vector<Wear::PolarSpeck> mGrit;
 };
 
 //------------------------------------------------------------------------
@@ -259,6 +283,10 @@ public:
 	    none. */
 	void setGateMarker (double fraction) { mGate = fraction; }
 
+	/** The dust and fingerprints on its glass (Wear::glassWear), drawn
+	    over everything - they are on the glass, not in the picture. */
+	void setWear (const Wear::GlassWear& wear) { mWear = wear; }
+
 	void draw (VSTGUI::CDrawContext* context) override;
 
 	CLASS_METHODS (Scope, VSTGUI::CView)
@@ -280,6 +308,7 @@ private:
 	double mMarkerX = -1.0;
 	double mMarkerY = 0.0;
 	double mGate = -1.0;
+	Wear::GlassWear mWear;
 };
 
 //------------------------------------------------------------------------

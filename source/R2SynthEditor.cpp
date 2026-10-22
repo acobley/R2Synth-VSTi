@@ -72,6 +72,9 @@ bool PLUGIN_API R2SynthEditor::open (void* parent, const PlatformType& platformT
 		auto* scope = new Panel::Scope (toCRect (r));
 		scope->setColours (Panel::Palette::accent (main), companion);
 		scope->setFill (fill);
+		for (int i = 0; i < static_cast<int> (sizeof (Layout::kScreens) / sizeof (Layout::kScreens[0])); ++i)
+			if (Layout::kScreens[i].left == r.left && Layout::kScreens[i].top == r.top)
+				scope->setWear (Wear::glassWear (i));
 		frame->addView (scope);
 		return scope;
 	};
@@ -201,12 +204,14 @@ void R2SynthEditor::addControl (const Layout::Control& c)
 		for (int i = 0; i <= paramDef (tag).stepCount; ++i)
 			names.push_back (enumName (tag, i));
 		sw->setNames (names);
+		sw->setWear (Wear::selectorGrit (Wear::controlIndex (tag)));
 		registerControl (tag, sw);
 		return;
 	}
 
 	auto* knob = new Panel::Knob (r, this, static_cast<int32_t> (tag), c.accent, c.diameter, c.bipolar);
 	knob->setLabel (controlLabel (c));
+	knob->setWear (Wear::knobWear (Wear::controlIndex (tag)));
 
 	// THE PANEL BORROWS readoutFor() rather than formatting in the
 	// control, so every number on the panel has one source.

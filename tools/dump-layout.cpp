@@ -18,11 +18,16 @@
 // copy of the table), each section's title box, and each selector's
 // geometry and where its position names are printed.
 //
+// THE WEAR (22 Oct 2026, "Studio Worn"): every mark PanelWear.h makes -
+// the panel's, each knob's and selector's (relative to its pointer), each
+// screen's glass - and the colours of the dirt, under "wear".
+//
 //   c++ -std=c++17 -I<sdk> -Isource tools/dump-layout.cpp
 //       source/R2SynthReadouts.cpp source/R2SynthParams.cpp
 //       source/R2SynthDsp.cpp -o /tmp/dump-layout
 //------------------------------------------------------------------------
 
+#include "PanelWear.h"
 #include "R2SynthLayout.h"
 #include "R2SynthReadouts.h"
 #include "R2SynthDsp.h"
@@ -125,6 +130,123 @@ std::string curve (const float* v, int n)
 	return out + "]";
 }
 
+std::string pts (const std::vector<Wear::Pt>& v)
+{
+	std::string out = "[";
+	char t[48];
+	for (size_t i = 0; i < v.size (); ++i)
+	{
+		std::snprintf (t, sizeof (t), "%s%.3f,%.3f", i ? "," : "", v[i].x, v[i].y);
+		out += t;
+	}
+	return out + "]";
+}
+
+std::string lines (const std::vector<Wear::Line>& v)
+{
+	std::string out = "[";
+	for (size_t i = 0; i < v.size (); ++i)
+		out += std::string (i ? "," : "") + "{\"w\": " + num (v[i].width) + ", \"a\": " +
+		       std::to_string (v[i].alpha) + ", \"pts\": " + pts (v[i].pts) + "}";
+	return out + "]";
+}
+
+std::string specks (const std::vector<Wear::Speck>& v)
+{
+	std::string out = "[";
+	for (size_t i = 0; i < v.size (); ++i)
+		out += std::string (i ? "," : "") + "[" + num (v[i].x) + "," + num (v[i].y) + "," + num (v[i].r) + "," +
+		       std::to_string (v[i].alpha) + "]";
+	return out + "]";
+}
+
+std::string polar (const std::vector<Wear::PolarSpeck>& v)
+{
+	std::string out = "[";
+	for (size_t i = 0; i < v.size (); ++i)
+		out += std::string (i ? "," : "") + "[" + num (v[i].radius) + "," + num (v[i].angle) + "," + num (v[i].r) +
+		       "," + std::to_string (v[i].alpha) + "]";
+	return out + "]";
+}
+
+std::string rgb (const Wear::Rgb& c)
+{
+	return "[" + std::to_string (c.r) + "," + std::to_string (c.g) + "," + std::to_string (c.b) + "]";
+}
+
+void printWear ()
+{
+	using namespace Wear;
+	const PanelWear w = panelWear ();
+	std::printf ("  \"wear\": {\n");
+	std::printf ("    \"colours\": {\"dust\": %s, \"speck\": %s, \"scratch\": %s, \"scuff\": %s, \"knurlDust\": %s, "
+	             "\"glassDust\": %s, \"print\": %s, \"sheen\": %s},\n",
+	             rgb (kDust).c_str (), rgb (kSpeck).c_str (), rgb (kScratch).c_str (), rgb (kScuff).c_str (),
+	             rgb (kKnurlDust).c_str (), rgb (kGlassDust).c_str (), rgb (kPrint).c_str (), rgb (kSheen).c_str ());
+
+	std::string haze = "[";
+	for (size_t i = 0; i < w.haze.size (); ++i)
+		haze += std::string (i ? "," : "") + "[" + num (w.haze[i].x) + "," + num (w.haze[i].y) + "," +
+		        num (w.haze[i].r) + "," + std::to_string (w.haze[i].alpha) + "]";
+	std::printf ("    \"haze\": %s],\n", haze.c_str ());
+
+	std::string drifts = "[";
+	for (size_t i = 0; i < w.drifts.size (); ++i)
+		drifts += std::string (i ? "," : "") + "[" + rect (w.drifts[i].r) + "," + std::to_string (w.drifts[i].fromX) +
+		          "," + std::to_string (w.drifts[i].fromY) + "," + std::to_string (w.drifts[i].alpha) + "]";
+	std::printf ("    \"drifts\": %s],\n", drifts.c_str ());
+
+	std::string rings = "[";
+	for (size_t i = 0; i < w.rings.size (); ++i)
+	{
+		const auto& f = w.rings[i];
+		rings += std::string (i ? "," : "") + "[" + num (f.cx) + "," + num (f.cy) + "," + num (f.inner) + "," +
+		         num (f.peak) + "," + num (f.outer) + "," + std::to_string (f.alpha) + "]";
+	}
+	std::printf ("    \"rings\": %s],\n", rings.c_str ());
+	std::printf ("    \"scratches\": %s,\n", lines (w.scratches).c_str ());
+	std::printf ("    \"specks\": %s,\n", specks (w.specks).c_str ());
+	std::printf ("    \"fibres\": %s,\n", lines (w.fibres).c_str ());
+
+	// one entry per control, in kControls order: a knob's wear, or a
+	// selector's grit
+	std::printf ("    \"controls\": [\n");
+	for (int i = 0; i < kNumControls; ++i)
+	{
+		const char* end = (i + 1 < kNumControls) ? "," : "";
+		if (kControls[i].kind == Kind::Knob)
+		{
+			const KnobWear k = knobWear (i);
+			std::string scuffs = "[";
+			for (size_t j = 0; j < k.scuffs.size (); ++j)
+			{
+				const auto& a = k.scuffs[j];
+				scuffs += std::string (j ? "," : "") + "[" + num (a.radius) + "," + num (a.start) + "," +
+				          num (a.span) + "," + num (a.width) + "," + std::to_string (a.alpha) + "]";
+			}
+			std::printf ("      {\"scuffs\": %s], \"grit\": %s, \"sheen\": %d, \"knurl\": %d}%s\n", scuffs.c_str (),
+			             polar (k.grit).c_str (), k.sheen, k.knurlAlpha, end);
+		}
+		else
+			std::printf ("      {\"grit\": %s}%s\n", polar (selectorGrit (i)).c_str (), end);
+	}
+	std::printf ("    ],\n");
+
+	// one entry per screen, in kScreens order
+	const int screens = static_cast<int> (sizeof (kScreens) / sizeof (kScreens[0]));
+	std::printf ("    \"glass\": [\n");
+	for (int i = 0; i < screens; ++i)
+	{
+		const GlassWear g = glassWear (i);
+		std::string prints = "[";
+		for (size_t j = 0; j < g.prints.size (); ++j)
+			prints += std::string (j ? "," : "") + lines (g.prints[j].ridges);
+		std::printf ("      {\"dust\": %s, \"fibres\": %s, \"prints\": %s]}%s\n", specks (g.dust).c_str (),
+		             lines (g.fibres).c_str (), prints.c_str (), (i + 1 < screens) ? "," : "");
+	}
+	std::printf ("    ]\n  },\n");
+}
+
 } // anonymous namespace
 
 int main ()
@@ -158,6 +280,8 @@ int main ()
 			std::printf ("    \"%u\": [%s, %s],\n", c, num (g->advance).c_str (), commands (g->path).c_str ());
 	std::printf ("    \"missing\": [%s, %s]\n  },\n", num (Lettering::missingGlyph ().advance).c_str (),
 	             commands (Lettering::missingGlyph ().path).c_str ());
+
+	printWear ();
 
 	std::printf ("  \"screws\": [");
 	for (size_t i = 0; i < sizeof (kScrews) / sizeof (kScrews[0]); ++i)

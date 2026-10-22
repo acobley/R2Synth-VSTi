@@ -101,6 +101,110 @@ void fillCap (CDrawContext* context, CGraphicsPath* path, const CPoint& centre, 
 	                             CPoint (-radius * 0.25, -radius * 0.35));
 }
 
+//------------------------------------------------------------------------
+// The wear (PanelWear.h): the marks as paths
+//------------------------------------------------------------------------
+CColor wearColour (const Wear::Rgb& c, uint8_t alpha)
+{
+	return CColor (c.r, c.g, c.b, alpha);
+}
+
+/** Does the box (l, t, r, b) touch the area being drawn? */
+bool touches (const CRect& clip, double l, double t, double r, double b)
+{
+	return r >= clip.left && l <= clip.right && b >= clip.top && t <= clip.bottom;
+}
+
+bool lineTouches (const CRect& clip, const std::vector<Wear::Pt>& pts, double pad)
+{
+	if (pts.empty ())
+		return false;
+	double l = pts[0].x, t = pts[0].y, r = l, b = t;
+	for (const auto& p : pts)
+	{
+		l = std::min (l, p.x); r = std::max (r, p.x);
+		t = std::min (t, p.y); b = std::max (b, p.y);
+	}
+	return touches (clip, l - pad, t - pad, r + pad, b + pad);
+}
+
+void polyline (CDrawContext* context, const std::vector<Wear::Pt>& pts, size_t from, size_t to,
+               const CColor& colour, CCoord width)
+{
+	if (to <= from || to >= pts.size () + 1)
+		return;
+	auto path = owned (context->createGraphicsPath ());
+	if (!path)
+		return;
+	path->beginSubpath (CPoint (pts[from].x, pts[from].y));
+	for (size_t i = from + 1; i < to; ++i)
+		path->addLine (CPoint (pts[i].x, pts[i].y));
+	context->setFrameColor (colour);
+	context->setLineWidth (width);
+	context->setLineStyle (roundLine ());
+	context->drawGraphicsPath (path, CDrawContext::kPathStroked);
+}
+
+/** A hairline: half strength in its first and last thirds, so it fades
+    in and out. */
+void wearLine (CDrawContext* context, const Wear::Line& line, const Wear::Rgb& rgb)
+{
+	const size_t n = line.pts.size ();
+	if (n < 2)
+		return;
+	const size_t a = std::max<size_t> (1, n / 3), b = std::max (a + 1, n - n / 3);
+	const uint8_t half = static_cast<uint8_t> (line.alpha / 2);
+	polyline (context, line.pts, 0, a + 1, wearColour (rgb, half), line.width);
+	polyline (context, line.pts, a, std::min (b + 1, n), wearColour (rgb, line.alpha), line.width);
+	if (b < n - 1)
+		polyline (context, line.pts, b, n, wearColour (rgb, half), line.width);
+}
+
+/** A soft round patch: `alpha` at the centre, none at the edge. */
+void softDisc (CDrawContext* context, const CPoint& centre, double radius, const Wear::Rgb& rgb, uint8_t alpha)
+{
+	auto path = owned (context->createGraphicsPath ());
+	auto gradient = owned (CGradient::create (0.0, 1.0, wearColour (rgb, alpha), wearColour (rgb, 0)));
+	if (!path || !gradient)
+		return;
+	gradient->addColorStop (0.5, wearColour (rgb, static_cast<uint8_t> (alpha * 0.55)));
+	path->addEllipse (circleRect (centre, radius));
+	context->fillRadialGradient (path, *gradient, centre, radius);
+}
+
+/** Dust round a knob's foot: a ring that fades both ways from `peak`. */
+void footRing (CDrawContext* context, const Wear::FootRing& f)
+{
+	auto path = owned (context->createGraphicsPath ());
+	const CColor clear = wearColour (Wear::kDust, 0);
+	auto gradient = owned (CGradient::create (0.0, 1.0, clear, clear));
+	if (!path || !gradient)
+		return;
+	gradient->addColorStop (f.inner / f.outer, clear);
+	gradient->addColorStop (f.peak / f.outer, wearColour (Wear::kDust, f.alpha));
+	const CPoint centre (f.cx, f.cy);
+	path->addEllipse (circleRect (centre, f.outer));
+	context->fillRadialGradient (path, *gradient, centre, f.outer);
+}
+
+/** Dust drifted against a box edge: fades from the edge inwards. */
+void drift (CDrawContext* context, const Wear::Drift& d)
+{
+	auto path = owned (context->createGraphicsPath ());
+	auto gradient = owned (CGradient::create (0.0, 1.0, wearColour (Wear::kDust, d.alpha), wearColour (Wear::kDust, 0)));
+	if (!path || !gradient)
+		return;
+	const CRect r (d.r.left, d.r.top, d.r.right, d.r.bottom);
+	path->addRect (r);
+	const CPoint mid ((r.left + r.right) / 2., (r.top + r.bottom) / 2.);
+	CPoint from = mid, to = mid;
+	if (d.fromX < 0) { from.x = r.left;  to.x = r.right; }
+	if (d.fromX > 0) { from.x = r.right; to.x = r.left; }
+	if (d.fromY < 0) { from.y = r.top;    to.y = r.bottom; }
+	if (d.fromY > 0) { from.y = r.bottom; to.y = r.top; }
+	context->fillLinearGradient (path, *gradient, from, to);
+}
+
 /** The glyphs, parsed once each. */
 const std::vector<Lettering::Command>& commandsOf (const Lettering::Glyph& glyph)
 {
@@ -232,8 +336,39 @@ void drawLettering (CDrawContext* context, const std::string& text, const Letter
 //------------------------------------------------------------------------
 Backdrop::Backdrop (const CRect& size)
 : CView (size)
+, mWear (Wear::panelWear ())
 {
 	setMouseEnabled (false);
+}
+
+void Backdrop::drawWear (CDrawContext* context)
+{
+	CRect clip;
+	context->getClipRect (clip);
+
+	// ---- the haze and the drifts: soft, underneath the sharper marks -------
+	for (const auto& b : mWear.haze)
+		if (touches (clip, b.x - b.r, b.y - b.r, b.x + b.r, b.y + b.r))
+			softDisc (context, CPoint (b.x, b.y), b.r, Wear::kDust, b.alpha);
+	for (const auto& d : mWear.drifts)
+		if (touches (clip, d.r.left, d.r.top, d.r.right, d.r.bottom))
+			drift (context, d);
+	for (const auto& f : mWear.rings)
+		if (touches (clip, f.cx - f.outer, f.cy - f.outer, f.cx + f.outer, f.cy + f.outer))
+			footRing (context, f);
+
+	// ---- hairlines through the paint, and the printing ------------------------
+	for (const auto& l : mWear.scratches)
+		if (lineTouches (clip, l.pts, l.width))
+			wearLine (context, l, Wear::kScratch);
+
+	// ---- specks and fibres ------------------------------------------------------
+	for (const auto& sp : mWear.specks)
+		if (touches (clip, sp.x - sp.r, sp.y - sp.r, sp.x + sp.r, sp.y + sp.r))
+			fillCircle (context, CPoint (sp.x, sp.y), sp.r, wearColour (Wear::kSpeck, sp.alpha));
+	for (const auto& l : mWear.fibres)
+		if (lineTouches (clip, l.pts, l.width))
+			wearLine (context, l, Wear::kSpeck);
 }
 
 void Backdrop::draw (CDrawContext* context)
@@ -347,6 +482,9 @@ void Backdrop::draw (CDrawContext* context)
 		}
 	}
 
+	// ---- the wear, over the printing ----------------------------------------
+	drawWear (context);
+
 	setDirty (false);
 }
 
@@ -428,6 +566,34 @@ void Knob::draw (CDrawContext* context)
 			context->setLineStyle (kLineSolid);
 			context->drawGraphicsPath (cap, CDrawContext::kPathStroked);
 		}
+	}
+
+	// ---- the wear: dust in the knurling, the polished cap, turning marks ------
+	// Everything but the sheen is placed relative to the pointer (`a`), so
+	// it turns with the knob; the sheen is where the light is, so it stays.
+	{
+		const double capR = body * 0.78;
+		if (mWear.knurlAlpha > 0)
+			strokeCircle (context, centre, (capR + body) / 2.0, wearColour (Wear::kKnurlDust, mWear.knurlAlpha),
+			              body - capR);
+		if (mWear.sheen > 0)
+			softDisc (context, CPoint (centre.x - capR * 0.25, centre.y - capR * 0.3), capR * 0.55, Wear::kSheen,
+			          mWear.sheen);
+		for (const auto& s : mWear.scuffs)
+		{
+			auto arc = owned (context->createGraphicsPath ());
+			if (!arc)
+				continue;
+			const double start = a + s.start;
+			arc->addArc (circleRect (centre, capR * s.radius), start, start + s.span, true);
+			context->setFrameColor (wearColour (Wear::kScuff, s.alpha));
+			context->setLineWidth (s.width);
+			context->setLineStyle (roundLine ());
+			context->drawGraphicsPath (arc, CDrawContext::kPathStroked);
+		}
+		for (const auto& g : mWear.grit)
+			fillCircle (context, pointAt (centre, body * g.radius, a + g.angle), g.r,
+			            wearColour (Wear::kKnurlDust, g.alpha));
 	}
 
 	// ---- the white line -------------------------------------------------------
@@ -589,6 +755,9 @@ void RotarySwitch::draw (CDrawContext* context)
 	const double a = (n > 0) ? g.angle[current] : 0.0;
 	fillCircle (context, centre, g.radius * 0.8, CColor (11, 11, 11, 255));
 	strokeCircle (context, centre, g.radius * 0.8, CColor (68, 68, 68, 255), 0.8);
+	for (const auto& s : mGrit)   // grit round the hub, turning with the beak
+		fillCircle (context, pointFromTop (centre, g.radius * 0.8 * s.radius, a + s.angle), s.r,
+		            wearColour (Wear::kKnurlDust, s.alpha));
 
 	auto beak = owned (context->createGraphicsPath ());
 	if (beak)
@@ -816,6 +985,16 @@ void Scope::draw (CDrawContext* context)
 		}
 		strokeLine (context, CPoint (r.left + 3., r.top + 0.8), CPoint (r.right - 3., r.top + 0.8),
 		            CColor (255, 255, 255, 30), 0.6);
+
+		// ---- the wear on the glass: fingerprints, dust, the odd fibre -------
+		for (const auto& p : mWear.prints)
+			for (const auto& ridge : p.ridges)
+				polyline (context, ridge.pts, 0, ridge.pts.size (), wearColour (Wear::kPrint, ridge.alpha),
+				          ridge.width);
+		for (const auto& d : mWear.dust)
+			fillCircle (context, CPoint (d.x, d.y), d.r, wearColour (Wear::kGlassDust, d.alpha));
+		for (const auto& l : mWear.fibres)
+			wearLine (context, l, Wear::kGlassDust);
 	}
 
 	setDirty (false);
