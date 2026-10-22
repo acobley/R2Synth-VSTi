@@ -128,42 +128,41 @@ bool LicenceBadge::hit (const CPoint& where) const
 
 void LicenceBadge::drawPill (CDrawContext* context)
 {
+	// THE BLACK PANEL'S licence window (PolivoksUI, 22 Oct 2026): a black
+	// window right-aligned in the header, white lettering, a red frame and
+	// lamp while evaluating, a grey frame and a green lamp once licensed.
 	const CRect r = getViewSize ();
 	context->setDrawMode (kAntiAliasing | kNonIntegralMode);
 
-	context->setFont (Panel::fontTitle ());
-	const CCoord textWidth = context->getStringWidth (mText.c_str ());
-	const CCoord height = r.getHeight ();
-	const CCoord width = std::min (r.getWidth (), textWidth + 40.);
+	const CCoord textWidth = Lettering::width (mText, Layout::kTextPill);
+	const CCoord width = std::min (r.getWidth (), textWidth + 46.);
 	mPillRect = CRect (r.right - width, r.top, r.right, r.bottom);
 
-	const CColor back   = mLicensed ? CColor (23, 39, 31, 255)   : CColor (42, 36, 24, 255);
-	const CColor edge   = mLicensed ? CColor (43, 74, 58, 255)   : CColor (74, 59, 30, 255);
-	const CColor ink    = mLicensed ? CColor (143, 224, 187, 255) : CColor (242, 194, 122, 255);
-	const CColor dotInk = Panel::Palette::accent (mLicensed ? Layout::Accent::Amp : Layout::Accent::Osc);
+	const CColor back (12, 12, 12, 255);
+	const CColor edge = mLicensed ? Panel::Palette::kInkDim : Panel::Palette::kRed;
+	const CColor dotInk = mLicensed ? Panel::Palette::accent (Layout::Accent::Amp) : Panel::Palette::kRed;
 
 	auto path = owned (context->createGraphicsPath ());
 	if (path)
 	{
 		CRect pill (mPillRect);
-		pill.inset (0.5, 0.5);
-		path->addRoundRect (pill, height / 2.);
+		pill.inset (0.6, 0.6);
+		path->addRoundRect (pill, 3.);
 		context->setFillColor (back);
 		context->drawGraphicsPath (path, CDrawContext::kPathFilled);
 		context->setFrameColor (edge);
-		context->setLineWidth (1.);
+		context->setLineWidth (1.2);
 		context->setLineStyle (kLineSolid);
 		context->drawGraphicsPath (path, CDrawContext::kPathStroked);
 	}
 
 	const CPoint dot (mPillRect.left + 16., (r.top + r.bottom) / 2.);
 	context->setFillColor (dotInk);
-	context->drawEllipse (CRect (dot.x - 4., dot.y - 4., dot.x + 4., dot.y + 4.), kDrawFilled);
+	context->drawEllipse (CRect (dot.x - 4.5, dot.y - 4.5, dot.x + 4.5, dot.y + 4.5), kDrawFilled);
 
-	context->setFontColor (mPressed ? Panel::Palette::kText : ink);
-	CRect text (mPillRect);
-	text.left += 28.;
-	context->drawString (mText.c_str (), text, kLeftText, true);
+	Panel::drawLettering (context, mText, Layout::kTextPill,
+	                      mPressed ? Panel::Palette::kInkDim : Panel::Palette::kInk,
+	                      mPillRect.left + 30., (r.top + r.bottom) / 2.);
 	setDirty (false);
 }
 

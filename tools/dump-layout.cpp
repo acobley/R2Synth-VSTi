@@ -12,6 +12,12 @@
 // The values are the parameter table's DEFAULTS, so docs/panel.png is the
 // panel as it opens on a fresh instance at 48 k.
 //
+// THE BLACK PANEL (PolivoksUI, 22 Oct 2026) adds what the lettering and
+// the selectors need: the text styles, every glyph of the face PARSED
+// (SciFiLettering.h - so the script strokes the same paths and keeps no
+// copy of the table), each section's title box, and each selector's
+// geometry and where its position names are printed.
+//
 //   c++ -std=c++17 -I<sdk> -Isource tools/dump-layout.cpp
 //       source/R2SynthReadouts.cpp source/R2SynthParams.cpp
 //       source/R2SynthDsp.cpp -o /tmp/dump-layout
@@ -77,6 +83,36 @@ double internalDefault (Steinberg::Vst::ParamID id)
 	return paramDef (id).toInternal (paramDef (id).defaultNormalized ());
 }
 
+std::string num (double v)
+{
+	char t[32];
+	std::snprintf (t, sizeof (t), "%.3f", v);
+	return t;
+}
+
+std::string style (const Lettering::Style& s)
+{
+	return "{\"cap\": " + num (s.cap) + ", \"weight\": " + num (s.weight) + ", \"track\": " + num (s.track) + "}";
+}
+
+std::string box (const Box& b)
+{
+	return "[" + num (b.left) + "," + num (b.top) + "," + num (b.right) + "," + num (b.bottom) + "]";
+}
+
+std::string commands (const char* path)
+{
+	std::string out = "[";
+	bool first = true;
+	for (const auto& c : Lettering::parse (path))
+	{
+		out += first ? "" : ",";
+		first = false;
+		out += "[\"" + std::string (1, c.op) + "\"," + num (c.x1) + "," + num (c.y1) + "," + num (c.x) + "," + num (c.y) + "]";
+	}
+	return out + "]";
+}
+
 std::string curve (const float* v, int n)
 {
 	std::string out = "[";
@@ -103,7 +139,30 @@ int main ()
 	std::printf ("  \"knobGap\": %d, \"knobValueH\": %d, \"knobLabelH\": %d,\n", kKnobGap, kKnobValueH, kKnobLabelH);
 	std::printf ("  \"wordmark\": %s, \"engineLine\": {\"rect\": %s, \"text\": %s},\n", rect (kWordmark).c_str (),
 	             rect (kEngineLine).c_str (), quoted (engineLineText (sampleRate, internalDefault (kVcaRelease))).c_str ());
-	std::printf ("  \"badge\": %s,\n", rect (kBadge).c_str ());
+	std::printf ("  \"badge\": %s, \"pillText\": \"Evaluation - 7 days left - activate...\",\n", rect (kBadge).c_str ());
+	std::printf ("  \"headerDivider\": %d, \"screenBezel\": %d, \"badgeSize\": %d, \"selectorNameH\": %d,\n",
+	             kHeaderDivider, kScreenBezel, kBadgeSize, kSelectorNameH);
+
+	// ---- the lettering: the styles, and every glyph parsed -----------------
+	std::printf ("  \"styles\": {\"wordmark\": %s, \"title\": %s, \"subtitle\": %s, \"label\": %s, \"value\": %s,\n"
+	             "             \"block\": %s, \"note\": %s, \"engine\": %s, \"info\": %s, \"screen\": %s,\n"
+	             "             \"badge\": %s, \"badgeSub\": %s, \"tick\": %s, \"pill\": %s},\n",
+	             style (kTextWordmark).c_str (), style (kTextTitle).c_str (), style (kTextSubtitle).c_str (),
+	             style (kTextLabel).c_str (), style (kTextValue).c_str (), style (kTextBlock).c_str (),
+	             style (kTextNote).c_str (), style (kTextEngine).c_str (), style (kTextInfo).c_str (),
+	             style (kTextScreen).c_str (), style (kTextBadge).c_str (), style (kTextBadgeSub).c_str (),
+	             style (kTextTick).c_str (), style (kTextPill).c_str ());
+	std::printf ("  \"space\": %s,\n  \"glyphs\": {\n", num (Lettering::kSpace).c_str ());
+	for (uint32_t c = 1; c < 0x2600; ++c)
+		if (const Lettering::Glyph* g = Lettering::glyphFor (c))
+			std::printf ("    \"%u\": [%s, %s],\n", c, num (g->advance).c_str (), commands (g->path).c_str ());
+	std::printf ("    \"missing\": [%s, %s]\n  },\n", num (Lettering::missingGlyph ().advance).c_str (),
+	             commands (Lettering::missingGlyph ().path).c_str ());
+
+	std::printf ("  \"screws\": [");
+	for (size_t i = 0; i < sizeof (kScrews) / sizeof (kScrews[0]); ++i)
+		std::printf ("%s[%d,%d]", i ? "," : "", kScrews[i].x, kScrews[i].y);
+	std::printf ("],\n");
 	std::printf ("  \"lamp\": {\"rect\": %s, \"on\": %s},\n", rect (kSelfOscLamp).c_str (),
 	             selfOscillating (internalDefault (kResonance)) ? "true" : "false");
 	std::printf ("  \"info\": {\"rect\": %s, \"text\": %s},\n", rect (kModInfoLine).c_str (),
@@ -111,9 +170,12 @@ int main ()
 
 	std::printf ("  \"sections\": [\n");
 	for (int i = 0; i < kNumSections; ++i)
-		std::printf ("    {\"title\": %s, \"subtitle\": %s, \"accent\": %s, \"rect\": %s}%s\n",
+		std::printf ("    {\"title\": %s, \"subtitle\": %s, \"accent\": %s, \"rect\": %s, \"titleBox\": %s, "
+		             "\"subtitleLeft\": %s}%s\n",
 		             quoted (kSections[i].title).c_str (), quoted (kSections[i].subtitle).c_str (),
-		             accentName (kSections[i].accent), rect (kSections[i].r).c_str (), (i + 1 < kNumSections) ? "," : "");
+		             accentName (kSections[i].accent), rect (kSections[i].r).c_str (),
+		             box (titleBox (kSections[i])).c_str (), num (subtitleLeft (kSections[i])).c_str (),
+		             (i + 1 < kNumSections) ? "," : "");
 	std::printf ("  ],\n");
 
 	std::printf ("  \"chevrons\": [");
@@ -140,16 +202,29 @@ int main ()
 		const Control& c = kControls[i];
 		const double v = paramDef (c.tag).defaultNormalized ();
 		std::string names = "[";
+		std::string selector = "null";
 		if (c.kind == Kind::Switch)
-			for (int p = 0; p <= paramDef (c.tag).stepCount; ++p)
+		{
+			const int positions = paramDef (c.tag).stepCount + 1;
+			const Selector g = selectorOf (c, positions);
+			std::string angles = "[", boxes = "[";
+			for (int p = 0; p < positions; ++p)
+			{
 				names += std::string (p ? "," : "") + quoted (enumName (c.tag, p));
+				angles += std::string (p ? "," : "") + num (g.angle[p]);
+				boxes += std::string (p ? "," : "") + box (selectorLabelBox (g, p, enumName (c.tag, p)));
+			}
+			selector = "{\"cx\": " + num (g.cx) + ", \"cy\": " + num (g.cy) + ", \"radius\": " + num (g.radius) +
+			           ", \"angles\": " + angles + "], \"labelBoxes\": " + boxes + "], \"nameY\": " +
+			           num (g.nameCentreY) + "}";
+		}
 		names += "]";
 		std::printf ("    {\"kind\": %s, \"accent\": %s, \"rect\": %s, \"diameter\": %d, \"bipolar\": %s, "
-		             "\"value\": %.4f, \"text\": %s, \"label\": %s, \"names\": %s}%s\n",
+		             "\"value\": %.4f, \"text\": %s, \"label\": %s, \"names\": %s, \"selector\": %s}%s\n",
 		             (c.kind == Kind::Knob) ? "\"knob\"" : "\"switch\"", accentName (c.accent),
 		             rect (controlRect (c)).c_str (), c.diameter, c.bipolar ? "true" : "false", v,
 		             quoted (readoutText (c.tag, v)).c_str (), quoted (controlLabel (c)).c_str (),
-		             names.c_str (), (i + 1 < kNumControls) ? "," : "");
+		             names.c_str (), selector.c_str (), (i + 1 < kNumControls) ? "," : "");
 	}
 	std::printf ("  ],\n");
 

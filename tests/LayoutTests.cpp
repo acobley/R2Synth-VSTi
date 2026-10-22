@@ -18,6 +18,14 @@
 // checks - title bands, the common right edge, the readout lines beside
 // LFO 2 - went with the grid.
 //
+// THE BLACK PANEL (branch PolivoksUI, 22 Oct 2026). Every fit is now
+// measured with the panel's own lettering - Lettering::width() from
+// SciFiLettering.h, the function the editor draws with - rather than an
+// average character width. The selectors are held to their rectangles:
+// every printed position inside it, clear of the knob and of each other,
+// and a click on a position's name picks that position. The screens'
+// black cut-outs are held clear of everything else.
+//
 // Needs one header-only file from the SDK (pluginterfaces/vst/vsttypes.h,
 // through R2SynthParams.h); nothing is linked from it:
 //
@@ -29,9 +37,11 @@
 #include "R2SynthLayout.h"
 #include "R2SynthReadouts.h"
 #include "R2SynthDsp.h"
+#include "SciFiLettering.h"
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -87,33 +97,37 @@ int sectionOf (const Rect& r)
 	return found;
 }
 
-/** The section a CONTROL is inside. A title-row switch (the VCF Type)
-    lives in its section's title row, which innerOf() leaves out; it is
-    held to the section's padded outline instead. */
+/** The section a control is inside. */
 int sectionOfControl (const Control& c)
 {
-	if (c.kind != Kind::Switch || c.height != kTitleSwitchHeight)
-		return sectionOf (controlRect (c));
-	int found = -1;
-	for (int i = 0; i < kNumSections; ++i)
-	{
-		const Rect& sr = kSections[i].r;
-		const Rect padded { sr.left + kSectionPadX, sr.top + 6, sr.right - kSectionPadX, sr.bottom - 10 };
-		if (inside (controlRect (c), padded))
-			found = (found == -1) ? i : -2;
-	}
-	return found;
+	return sectionOf (controlRect (c));
 }
 
-/** A knob's reading is drawn 4 px wider than the knob each side. */
+/** A knob's reading is allowed 4 px past the knob's rectangle each side. */
 constexpr int kTextSlack = 8;
 
-/** The segment names, bold 12: a generous average. */
-constexpr int kSegmentCharWidth = 8;
+/** Does `text` in `style` fit `pixels`? */
+bool fits (const std::string& text, const Lettering::Style& style, double pixels)
+{
+	return Lettering::width (text, style) <= pixels;
+}
 
-/** The licence pill's face, bold 13, and its padding round the text. */
-constexpr int kPillCharWidth = 8;
-constexpr int kPillPadding   = 40;
+bool boxInside (const Box& b, const Rect& r)
+{
+	return b.left >= r.left && b.right <= r.right && b.top >= r.top && b.bottom <= r.bottom;
+}
+
+bool boxesOverlap (const Box& a, const Box& b)
+{
+	return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+std::string px (double v)
+{
+	char t[32];
+	std::snprintf (t, sizeof (t), "%.1f", v);
+	return t;
+}
 
 } // anonymous namespace
 
@@ -142,8 +156,10 @@ int main ()
 	{
 		check ((paramDef (c.tag).type == ParamType::Enum) == (c.kind == Kind::Switch),
 		       name (c) + ": an Enum is a switch and a range is a knob");
-		check ((c.kind == Kind::Knob) == (c.diameter > 0), name (c) + ": a knob has a diameter, a switch none");
-		check (c.kind == Kind::Switch || c.diameter <= c.width, name (c) + ": the knob fits its own width");
+		check (c.diameter > 0, name (c) + ": a knob, or a selector's knob, has a diameter");
+		check (c.diameter <= c.width, name (c) + ": the knob fits its own width");
+		check (c.kind == Kind::Switch || (c.height == 0 && c.pivotX == 0),
+		       name (c) + ": only a selector has a height and a pivot");
 	}
 
 	// ---- nothing overlaps -----------------------------------------------
@@ -169,7 +185,19 @@ int main ()
 	}
 	for (size_t i = 0; i < 4; ++i)
 		for (size_t j = i + 1; j < 4; ++j)
-			check (!overlaps (screens[i], screens[j]), "the screens do not overlap");
+			check (!overlaps (bezelOf (screens[i]), bezelOf (screens[j])), "the screens do not overlap");
+
+	// THE BLACK CUT-OUTS round the screens reach 3 px past them: still
+	// inside their sections, and clear of every control.
+	for (const auto& s : screens)
+	{
+		check (sectionOf (bezelOf (s)) >= 0 || sectionOf (s) >= 0, "a screen's cut-out stays in its section");
+		const Rect& sec = kSections[sectionOf (s) >= 0 ? sectionOf (s) : 0].r;
+		check (inside (bezelOf (s), { sec.left + 8, sec.top + 8, sec.right - 8, sec.bottom - 8 }),
+		       "a screen's cut-out is 8 px or more inside its section's edge");
+		for (const auto& c : kControls)
+			check (!overlaps (bezelOf (s), controlRect (c)), "a screen's cut-out clear of " + name (c));
+	}
 
 	for (const auto& c : kControls)
 		check (sectionOfControl (c) >= 0, name (c) + " is inside exactly one section");
@@ -188,7 +216,7 @@ int main ()
 		for (const auto& c : kControls)
 			check (!overlaps (cap.r, controlRect (c)), std::string ("caption \"") + cap.text + "\" clear of " + name (c));
 		for (const auto& s : screens)
-			check (!overlaps (cap.r, s), std::string ("caption \"") + cap.text + "\" clear of the screens");
+			check (!overlaps (cap.r, bezelOf (s)), std::string ("caption \"") + cap.text + "\" clear of the screens");
 	}
 
 	for (const auto& r : kRules)
@@ -217,17 +245,47 @@ int main ()
 	for (const auto& c : kControls)
 	{
 		const int width = controlRect (c).width ();
+		const std::string l = controlLabel (c);
+		check (!l.empty (), name (c) + " has a label");
+
 		if (c.kind == Kind::Switch)
 		{
+			// THE SELECTOR: its knob and marks, every printed position and
+			// its name inside the rectangle the view draws in; positions
+			// clear of the knob and of each other; a click on a name picks it.
+			const Rect r = controlRect (c);
 			const int positions = paramDef (c.tag).stepCount + 1;
-			const int segment = (width - 4) / positions;
+			check (positions >= 2 && positions <= 3, name (c) + " has two or three positions");
+			const Selector g = selectorOf (c, positions);
+			const double reach = g.radius + 8.0;
+			const Box knob { g.cx - reach, g.cy - reach, g.cx + reach, g.cy + reach };
+			check (boxInside (knob, r), name (c) + ": the knob and its marks fit the rectangle");
+			check (fits (l, kTextLabel, width), name (c) + ": its name fits");
+			check (g.nameCentreY - kTextLabel.height () / 2 >= g.cy + g.radius + 2,
+			       name (c) + ": its name is under the knob");
+
+			std::vector<Box> boxes;
 			for (int p = 0; p < positions; ++p)
 			{
 				const std::string t = enumName (c.tag, p);
 				check (!t.empty (), name (c) + " position " + std::to_string (p) + " has a name");
-				check (static_cast<int> (t.size ()) * kSegmentCharWidth <= segment - 6,
-				       name (c) + " \"" + t + "\" fits its segment");
+				const Box b = selectorLabelBox (g, p, t);
+				boxes.push_back (b);
+				check (boxInside (b, r), name (c) + " \"" + t + "\" is printed inside the selector (" +
+				       px (b.left) + ".." + px (b.right) + " in " + std::to_string (r.left) + ".." +
+				       std::to_string (r.right) + ")");
+				// Clear of the knob and its marks: the nearest point of the
+				// name's box is outside the circle the marks reach to.
+				const double nx = std::clamp (g.cx, b.left, b.right) - g.cx;
+				const double ny = std::clamp (g.cy, b.top, b.bottom) - g.cy;
+				check (nx * nx + ny * ny > reach * reach, name (c) + " \"" + t + "\" clear of the knob and its marks");
+				const double mx = (b.left + b.right) / 2, my = (b.top + b.bottom) / 2;
+				check (selectorPositionAt (g, mx, my) == p, name (c) + ": a click on \"" + t + "\" picks it");
 			}
+			for (size_t i = 0; i < boxes.size (); ++i)
+				for (size_t j = i + 1; j < boxes.size (); ++j)
+					check (!boxesOverlap (boxes[i], boxes[j]), name (c) + ": its printed positions do not touch");
+			check (selectorPositionAt (g, g.cx, g.cy) == -1, name (c) + ": a click on the knob steps it on");
 			continue;
 		}
 
@@ -235,47 +293,67 @@ int main ()
 		{
 			const std::string t = readoutText (c.tag, n);
 			check (!t.empty (), name (c) + " has a reading at " + std::to_string (n));
-			check (static_cast<int> (t.size ()) * kValueCharWidth <= width + kTextSlack,
-			       name (c) + " reading \"" + t + "\" fits " + std::to_string (width) + " px");
+			check (fits (t, kTextValue, width + kTextSlack),
+			       name (c) + " reading \"" + t + "\" fits " + std::to_string (width) + " px (" +
+			       px (Lettering::width (t, kTextValue)) + ")");
 		}
-		const std::string l = controlLabel (c);
-		check (!l.empty (), name (c) + " has a label");
-		check (static_cast<int> (l.size ()) * kLabelCharWidth <= width + kTextSlack,
-		       name (c) + " label \"" + l + "\" fits");
+		check (fits (l, kTextLabel, width + kTextSlack), name (c) + " label \"" + l + "\" fits");
 	}
 
 	for (const auto& cap : kCaptions)
 	{
-		const int cw = (cap.style == CaptionStyle::Note) ? kNoteCharWidth : kLabelCharWidth;
-		if (cap.style != CaptionStyle::Badge)
-			check (static_cast<int> (std::string (cap.text).size ()) * cw <= cap.r.width (),
-			       std::string ("caption \"") + cap.text + "\" fits its place");
+		switch (cap.style)
+		{
+			case CaptionStyle::Block:
+				check (fits (cap.text, kTextBlock, cap.r.width ()), std::string ("caption \"") + cap.text + "\" fits its place");
+				break;
+			case CaptionStyle::Field:
+				check (fits (cap.text, kTextLabel, cap.r.width ()), std::string ("caption \"") + cap.text + "\" fits its place");
+				break;
+			case CaptionStyle::Note:
+				check (fits (cap.text, kTextNote, cap.r.width ()), std::string ("caption \"") + cap.text + "\" fits its place");
+				break;
+			case CaptionStyle::Badge:
+				check (cap.r.width () >= kBadgeSize && cap.r.height () >= kBadgeSize + 12,
+				       std::string ("badge ") + cap.text + " has room for its ring and VCO");
+				check (fits ("VCO", kTextBadgeSub, cap.r.width ()), "VCO fits under the ring");
+				break;
+		}
 	}
 	for (const auto& s : kSections)
 	{
-		// Title (bold 13) and subtitle (12) side by side on the title row.
-		const int need = kSectionPadX + 16 + static_cast<int> (std::string (s.title).size ()) * 9 + 10 +
-		                 static_cast<int> (std::string (s.subtitle).size ()) * 6;
-		check (need <= s.r.width () - kSectionPadX, std::string (s.title) + "'s title row fits");
+		// The title box, then the subtitle, inside the section's padding.
+		const Box b = titleBox (s);
+		double end = b.right;
+		if (s.subtitle && *s.subtitle)
+			end = subtitleLeft (s) + Lettering::width (s.subtitle, kTextSubtitle);
+		check (end <= s.r.right - kSectionPadX, std::string (s.title) + "'s title row fits (" + px (end) + ")");
+		check (b.bottom <= contentTop (s.r) - 4, std::string (s.title) + "'s title box is above the contents");
+		check (b.top >= s.r.top + 4, std::string (s.title) + "'s title box is inside the section's top edge");
 	}
 	{
-		// The filter section's title row carries the VCF Type switch and
-		// the lamp: title, switch, lamp, left to right, clear of each
-		// other, and the switch above the screen.
-		const int titleEnd = kFilterRect.left + kSectionPadX + 16 + 6 * 9;
+		// The filter's title row ends short of the SELF-OSC lamp, whose
+		// dot sits 12 px left of its lettering.
+		const Section& f = kSections[1];
+		const double end = subtitleLeft (f) + Lettering::width (f.subtitle, kTextSubtitle);
+		const double lampLeft = kSelfOscLamp.right - Lettering::width ("SELF-OSC", kTextLabel) - 12.0 - 8.0;
+		check (end + 8 <= lampLeft, "the filter's subtitle stops short of the SELF-OSC lamp");
+		check (lampLeft >= kSelfOscLamp.left, "the lamp's dot is inside its rectangle");
+
+		// The VCF Type selector: the first thing in the filter section,
+		// left of the screen's cut-out, under the title row.
 		const Control* type = nullptr;
 		for (const auto& c : kControls)
 			if (c.tag == kVcfType)
 				type = &c;
-		check (type != nullptr, "the VCF Type switch is on the panel");
+		check (type != nullptr, "the VCF Type selector is on the panel");
 		if (type)
 		{
 			const Rect r = controlRect (*type);
-			check (r.height () == kTitleSwitchHeight, "the VCF Type switch is the title-row height");
-			check (titleEnd + 8 <= r.left, "the VCF Type switch starts after the FILTER title");
-			check (r.right + 8 <= kSelfOscLamp.left, "and stops short of the lamp");
-			check (r.bottom <= kFilterView.top, "and is above the filter screen");
-			check (r.top >= kFilterRect.top + 6, "and inside the section's top edge");
+			check (type->kind == Kind::Switch, "the VCF Type is a rotary selector");
+			check (r.right + 4 <= bezelOf (kFilterView).left, "the VCF Type selector is left of the filter screen");
+			check (r.top >= titleBox (f).bottom + 4, "and under the filter's title row");
+			check (r.bottom <= 218, "and above the Cutoff knob");
 		}
 	}
 
@@ -286,6 +364,7 @@ int main ()
 		// spread of Shape and Level, the rates at their slowest (most
 		// digits).
 		size_t longest = 0;
+		double widest = 0.0;
 		for (double output : { 0.0, 0.5, 1.0 })
 			for (double shape : { 0.0, 0.25, 0.5, 0.75, 1.0 })
 				for (double level : { 0.0, 0.001, 0.5, 1.0 })
@@ -300,20 +379,30 @@ int main ()
 					};
 					const std::string line = modInfoLineText (at);
 					longest = std::max (longest, line.size ());
-					if (static_cast<int> (line.size ()) * kValueCharWidth > kModInfoLine.width ())
+					widest = std::max (widest, Lettering::width (line, kTextInfo));
+					if (!fits (line, kTextInfo, kModInfoLine.width ()))
 						check (false, "info line fits the modulation strip: " + line);
 				}
-		std::printf ("  longest info line: %d chars in %d px\n", static_cast<int> (longest), kModInfoLine.width ());
-		check (static_cast<int> (longest) * kValueCharWidth <= kModInfoLine.width (), "every info line fits");
+		std::printf ("  longest info line: %d chars, %s px of %d\n", static_cast<int> (longest), px (widest).c_str (),
+		             kModInfoLine.width ());
+		check (widest <= kModInfoLine.width (), "every info line fits");
 
 		const std::string eng = engineLineText (192000.0, 10.0);
-		check (static_cast<int> (eng.size ()) * kNoteCharWidth <= kEngineLine.width (),
-		       "the engine line fits the header: " + eng);
+		check (fits (eng, kTextEngine, kEngineLine.width ()),
+		       "the engine line fits the header: " + eng + " (" + px (Lettering::width (eng, kTextEngine)) + ")");
+
+		// The wordmark: R2, 12 px, SYNTH - inside its rectangle.
+		const double wordmark = Lettering::width ("R2", kTextWordmark) + 12.0 + Lettering::width ("SYNTH", kTextWordmark);
+		check (kWordmark.left + wordmark <= kWordmark.right, "the wordmark fits its place (" + px (wordmark) + ")");
+		check (kTextWordmark.height () <= kHeaderHeight - 12, "and its height fits the header");
 
 		// The licence pill: 40 characters (R2Licence::kBadgeMaxChars,
-		// tested in LicenceTests) in the pill's face, plus its padding.
-		check (40 * kPillCharWidth + kPillPadding <= kBadge.width () + 24,
+		// tested in LicenceTests) - forty round capitals, a fair stand-in
+		// for a long licensee's name - plus the window's lamp and margins.
+		check (Lettering::width (std::string (40, 'O'), kTextPill) + 46 <= kBadge.width (),
 		       "the licence pill's longest line fits");
+		check (fits ("Evaluation - 7 days left - activate...", kTextPill, kBadge.width () - 46),
+		       "the evaluation line fits the pill");
 
 		// LFO 2's part of the line from the SAME clamp the DSP runs: knob
 		// +60 %, full Level, reaches -40 % and parks at the rising saw.
@@ -389,8 +478,12 @@ int main ()
 		check (filterDisplayCaption (false, FilterType::Moog) == "at the knobs   24 dB/oct" &&
 		       filterDisplayCaption (true, FilterType::Ms20) == "live   12 dB/oct",
 		       "the screen's caption names the slope of the chosen filter");
-		check (static_cast<int> (filterDisplayCaption (false).size ()) * kValueCharWidth <= kFilterView.width () / 2,
+		check (fits (filterDisplayCaption (false), kTextScreen, kFilterView.width () / 2.0 - 8),
 		       "the caption fits the left half of the screen");
+		check (fits (filterDisplayCaption (true, FilterType::Ms20Late), kTextScreen, kFilterView.width () / 2.0 - 8),
+		       "and so does the live one");
+		check (fits (filterDisplayAnnotation (1.0, 1.0), kTextScreen, kFilterView.width () / 2.0 - 8),
+		       "the figure fits the right half: " + filterDisplayAnnotation (1.0, 1.0));
 		check (filterDisplayCaption (false, FilterType::Ms20Late) == "at the knobs   12 dB/oct",
 		       "the MS-20 II is 12 dB/oct too");
 		check (filterTypeOf (paramDef (kVcfType).toInternal (0.0)) == FilterType::Moog &&
@@ -404,6 +497,57 @@ int main ()
 		filterDisplayData (20000.0, 0.0, 44100.0, curve, kDisplayPoints, mx, my);
 		const double ceilingX = std::log (cutoffCeilingHz (44100.0) / kFilterMinHz) / std::log (kFilterMaxHz / kFilterMinHz);
 		check (std::fabs (mx - ceilingX) < 1e-9, "the dot stops at the cutoff ceiling");
+	}
+
+	// ---- the lettering --------------------------------------------------------
+	std::printf ("the lettering\n");
+	{
+		for (char c = 'A'; c <= 'Z'; ++c)
+			check (Lettering::glyphFor (static_cast<uint32_t> (c)) != nullptr, std::string ("the face has ") + c);
+		for (char c = '0'; c <= '9'; ++c)
+			check (Lettering::glyphFor (static_cast<uint32_t> (c)) != nullptr, std::string ("the face has ") + c);
+		for (const char* c : { ".", ",", ":", "%", "-", "+", "/", "=", "'", "(", ")", ">", "<", "!", "?", "\"",
+		                       "|", "[", "]", "_", "&", "#", "@", "*" })
+		{
+			const Lettering::Glyph* g = Lettering::glyphFor (static_cast<unsigned char> (c[0]));
+			check (g != nullptr, std::string ("the face has ") + c);
+			if (g)
+			{
+				const auto cmds = Lettering::parse (g->path);
+				check (!cmds.empty () && cmds.front ().op == 'M', std::string ("glyph ") + c + " parses");
+			}
+		}
+		for (uint32_t c = 0; c < 0x2600; ++c)
+			if (const Lettering::Glyph* g = Lettering::glyphFor (c))
+			{
+				const auto cmds = Lettering::parse (g->path);
+				if (cmds.empty () || cmds.front ().op != 'M')
+					check (false, "glyph U+" + std::to_string (c) + " parses");
+				for (const auto& k : cmds)
+					if (k.x < -1.0 || k.x > 6.0 || k.y < -1.0 || k.y > 7.5)
+					{
+						check (false, "glyph U+" + std::to_string (c) + " stays on its grid");
+						break;
+					}
+			}
+		check (Lettering::parse ("L1,1").empty () && Lettering::parse ("M1").empty (),
+		       "a malformed path parses to nothing rather than to half a glyph");
+
+		const auto cps = Lettering::codePoints ("aZ\xC3\xA9\xC3\x9F\xE2\x86\x92\xFF");
+		check (cps.size () == 6 && cps[0] == 'A' && cps[1] == 'Z' && cps[2] == 'E' && cps[3] == 'S' &&
+		       cps[4] == 0x2192 && cps[5] == 0xFFFD,
+		       "lowercase in capitals, accents folded, UTF-8 decoded, a bad byte a dot");
+		check (Lettering::glyphFor (0xFFFD) == nullptr && Lettering::glyphOrDot (0xFFFD).path != nullptr,
+		       "a character the face lacks is drawn as the dot");
+
+		// THE METRICS: SAW in the label style is (4 + 4 + 5) + 3 x (1.25
+		// + 1.05) - 1.05 = 18.85 grid units, x 6.1 / 6 px.
+		check (std::fabs (Lettering::width ("SAW", kTextLabel) - 18.85 * 6.1 / 6.0) < 1e-9, "SAW is 19.2 px wide");
+		check (std::fabs (Lettering::width ("A B", kTextLabel) - Lettering::width ("AB", kTextLabel) -
+		                  Lettering::kSpace * 6.1 / 6.0) < 1e-9, "a space is 2.6 units");
+		check (Lettering::width ("", kTextLabel) == 0.0 && Lettering::width ("   ", kTextLabel) > 0.0,
+		       "nothing is no width; spaces are not nothing");
+		check (Lettering::width ("abc", kTextValue) == Lettering::width ("ABC", kTextValue), "lowercase is drawn as capitals");
 	}
 
 	std::printf ("------------------------\n");

@@ -252,6 +252,70 @@ Times are 0.5 ms (attack) / 1 ms (decay, release) to 10 s, log.
 
 ![The panel](docs/panel.png)
 
+### The black panel (branch `PolivoksUI`, 22 Oct 2026)
+
+From `Designs/R2Synth-Polivoks-1c-OLED.png` (Andy chose design 1 of three
+Soviet-synth-style concepts, with his 70s sci-fi lettering, all lettering
+white on black, and small colour OLED screens). **The same layout and the
+same parameters**, redressed; the processor, controller and DSP are
+untouched.
+
+- **Look**: matte black (`#121212`), white printing, each section boxed in
+  a thin white line with its title in its own white-outlined box; black
+  knurled knobs with a white line and a printed 11-tick scale (`0`/`10`,
+  or `-`/`+` on Tune, Shape and Env Amt); corner screws; a white rule
+  under the header. Red is kept for the one thing that is *set*: a
+  selector's chosen position, the SELF-OSC lamp, the licence window while
+  evaluating.
+- **Every switch is a rotary selector** (`Panel::RotarySwitch`, replacing
+  `SegmentSwitch`), even the two-position wave switches: a chicken-head
+  knob, positions printed at ±45° (and straight up for the middle of
+  three), the chosen one white with a red mark, the others dim. Click a
+  position's name (or off the knob towards it) to pick it; click the knob
+  to step round; the wheel steps. The geometry is `Layout::selectorOf()`,
+  `selectorLabelBox()` and `selectorPositionAt()` — VSTGUI-free, so the
+  tests hold every printed name inside the view, clear of the knob and of
+  each other, and check that a click on a name picks it.
+- **Layout moves** (the only ones): the **VCF Type** left the filter's
+  title row (a selector needs height) for the space left of the filter
+  screen (398–508 × 129–210, knob at 447,172); the **filter screen** now
+  starts at x = 516 (was 398); the filter's subtitle is back ("low-pass -
+  three circuits"); LFO 1's **OUTPUT** heading became the selector's name
+  under it; the **note beside Portamento** ("Mono, last note wins…") is
+  gone; the wordmark is wider, so the header divider is at 240 and the
+  engine line starts at 254.
+- **The lettering**: every word on the panel — titles, readings, labels,
+  screen text, the engine and info lines, the licence window — is drawn in
+  the 70s sci-fi face, stroked paths, no font. New header
+  **`source/SciFiLettering.h`** (VSTGUI-free): the glyph table (4 × 6 grid,
+  round caps), a path parser, UTF-8 decoding (lowercase drawn as capitals,
+  Latin-1 accents folded so a licensee's name still reads), and
+  `Lettering::width()`. `Panel::drawLettering()` strokes it with a
+  `CGraphicsPath` (quadratics converted to cubics). The styles (cap height,
+  weight) are `Layout::kText*`. Characters the face lacks draw as a dot;
+  `> < ! ? " | [ ] _ & # @ *` were added in the same hand. The engine and
+  info lines are `Panel::TextLine` views now (not `CTextLabel`).
+- **OLED screens**: true black glass in a black cut-out 3 px larger
+  (drawn by the Backdrop; `Layout::bezelOf()`), a dot grid instead of grid
+  lines, crisp 1.6 px traces with a slight bloom in the section colours
+  (filter `#2fb8ff`, amp `#38f0a0`, mod `#c27bff`), the fill a gradient from
+  the line's colour to black, the cutoff marker a white ring, captions grey
+  and the figures in the trace's colour, a faint glass sheen.
+- **Licence window**: `LicenceBadge::drawPill` redrawn — black, white
+  lettering, red frame and lamp while evaluating, grey frame and green lamp
+  once licensed. The licence **dialog** keeps its old look.
+- **Tests**: `LayoutTests` measures every fit with `Lettering::width()`
+  instead of average character widths, adds the selector checks above,
+  holds the screens' cut-outs clear of everything, and tests the face
+  itself (every glyph parses and stays on its grid, A–Z and 0–9 present,
+  UTF-8/accents, the metrics). `dump-layout` prints the parsed glyphs,
+  styles, title boxes and selector geometry; `render-panel.py` strokes the
+  same glyphs (it no longer needs any fonts).
+- **A new source file** (`SciFiLettering.h`): re-run `./setup-xcode.sh`
+  (or cmake configure) — the pre-build source guard will otherwise stop
+  the Xcode build. `tools/linux-validate` leaves it out with the other
+  editor files.
+
 ### The "signal flow" panel (branch `UpdatedUI`, 4 Oct 2026)
 
 From the design `Designs/R2Synth-ConceptA-SignalFlow.png` (the Designs

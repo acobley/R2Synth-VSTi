@@ -1,34 +1,45 @@
 //------------------------------------------------------------------------
-// R2Synth - the "signal flow" panel's views
+// R2Synth - the panel's views
 //
-// WRITTEN FOR THE UPDATED PANEL (branch UpdatedUI, 4 Oct 2026), from the
-// design in Designs/R2Synth-ConceptA-SignalFlow.png. They replace
-// the FilterDrum controls in R2SynthControls.h on the panel itself;
-// that file stays, unchanged, because the licence dialog still uses its
-// push button and fonts.
+// WRITTEN FOR THE "SIGNAL FLOW" PANEL (branch UpdatedUI, 4 Oct 2026) and
+// REDRESSED AS THE BLACK PANEL (branch PolivoksUI, 22 Oct 2026), from
+// Designs/R2Synth-Polivoks-1c-OLED.png: matte black, white printing,
+// boxed sections, black knurled knobs with printed scales, chicken-head
+// rotary selectors, small colour OLED screens, and every letter in
+// Andy's 70s sci-fi lettering (SciFiLettering.h). They replace the
+// FilterDrum controls in R2SynthControls.h on the panel itself; that
+// file stays, because the licence dialog still uses its push button and
+// fonts.
 //
-//   Backdrop       everything that never changes: the ground, the
-//                  header band, the four sections with their titles,
-//                  the chevrons, the rules and the fixed captions - all
-//                  read from R2SynthLayout.h. One view, behind the
-//                  rest, mouse-disabled.
-//   Knob           a rotary control with a value arc in its section's
-//                  colour, its reading and its label underneath.
-//   SegmentSwitch  one segment per named position; click one.
-//   Scope          a dark screen with a grid and one or two traces -
-//                  the filter response, the two envelopes, the LFO.
-//   Lamp           the SELF-OSC indicator.
+//   Backdrop      everything that never changes: the ground, the header
+//                 and its wordmark, the corner screws, the four boxed
+//                 sections with their titles, the chevrons, the rules,
+//                 the screens' black cut-outs and the fixed captions -
+//                 all read from R2SynthLayout.h. One view, behind the
+//                 rest, mouse-disabled.
+//   Knob          a black knurled knob with a white line, its printed
+//                 scale, its reading and its label underneath.
+//   RotarySwitch  a chicken-head selector with its positions printed
+//                 round it; the one that is set has a red mark.
+//   Scope         a small colour OLED: true black, a dot grid, crisp
+//                 traces in the section's colour - the filter response,
+//                 the two envelopes, the LFO.
+//   Lamp          the SELF-OSC indicator, a red lamp.
+//   TextLine      one line of lettering whose words change - the engine
+//                 line, the modulation info line.
 //
-// THE SAME TWO RULES AS EVER. No bitmaps - everything is paths and text,
-// so the panel is resolution-independent and resource/ needs no artwork.
-// And no numbers made here: every reading comes in through a formatter
-// the editor hands over (readoutText() in R2SynthReadouts.cpp), and
-// every curve through setCurves() from the shared trace functions.
+// THE SAME TWO RULES AS EVER. No bitmaps - everything is paths, the
+// lettering included, so the panel is resolution-independent and
+// resource/ needs no artwork. And no numbers made here: every reading
+// comes in through a formatter the editor hands over (readoutText() in
+// R2SynthReadouts.cpp), and every curve through setCurves() from the
+// shared trace functions.
 //------------------------------------------------------------------------
 
 #pragma once
 
 #include "R2SynthLayout.h"
+#include "SciFiLettering.h"
 
 #include "vstgui/vstgui.h"
 
@@ -44,53 +55,70 @@ namespace Panel {
 //------------------------------------------------------------------------
 namespace Palette {
 
-const VSTGUI::CColor kGround    ( 20,  21,  24, 255);
-const VSTGUI::CColor kHeader    ( 26,  28,  32, 255);
-const VSTGUI::CColor kBorder    ( 42,  45,  51, 255);
-const VSTGUI::CColor kSection   ( 28,  30,  34, 255);
-const VSTGUI::CColor kRule      ( 36,  38,  43, 255);
-const VSTGUI::CColor kTrack     ( 46,  49,  55, 255);
-const VSTGUI::CColor kCap       ( 42,  44,  49, 255);
-const VSTGUI::CColor kCapEdge   ( 60,  64,  71, 255);
-const VSTGUI::CColor kText      (236, 234, 228, 255);
-const VSTGUI::CColor kTitle     (201, 204, 210, 255);
-const VSTGUI::CColor kMuted     (156, 161, 170, 255);
-const VSTGUI::CColor kSubtle    (126, 131, 140, 255);
-const VSTGUI::CColor kDim       ( 74,  78,  86, 255);
-const VSTGUI::CColor kScreen    ( 15,  16,  18, 255);
-const VSTGUI::CColor kScreenEdge( 38,  41,  46, 255);
-const VSTGUI::CColor kGrid      ( 26,  29,  33, 255);
-const VSTGUI::CColor kSegBack   ( 18,  19,  22, 255);
-const VSTGUI::CColor kLampOn    (255, 138,  61, 255);
-const VSTGUI::CColor kLampOff   ( 58,  42,  32, 255);
-const VSTGUI::CColor kLampEdge  ( 90,  58,  40, 255);
+const VSTGUI::CColor kGround     ( 18,  18,  18, 255);
+const VSTGUI::CColor kHeader     ( 12,  12,  12, 255);
+const VSTGUI::CColor kHeaderRule (233, 230, 220, 255);
+const VSTGUI::CColor kSection    ( 21,  21,  21, 255);
+const VSTGUI::CColor kSectionEdge(217, 214, 204, 255);   // box lines, chevrons, rings
+const VSTGUI::CColor kInk        (244, 241, 232, 255);   // ALL the lettering: white on black
+const VSTGUI::CColor kInkSoft    (185, 182, 174, 255);   // subtitles, notes
+const VSTGUI::CColor kInkDim     (143, 140, 133, 255);   // a selector's positions not set
+const VSTGUI::CColor kDivider    ( 90,  88,  82, 255);
+const VSTGUI::CColor kRule       ( 58,  58,  58, 255);
+const VSTGUI::CColor kTick       (233, 230, 220, 255);   // the printed scales
+const VSTGUI::CColor kRed        (226,  52,  43, 255);   // the position that is set
+const VSTGUI::CColor kScrew      ( 58,  58,  58, 255);
+const VSTGUI::CColor kKnobBody   ( 10,  10,  10, 255);
+const VSTGUI::CColor kKnobRim    ( 47,  47,  47, 255);
+const VSTGUI::CColor kBezel      (  5,   5,   5, 255);
+const VSTGUI::CColor kBezelEdge  ( 60,  60,  60, 255);
+const VSTGUI::CColor kScreen     (  0,   0,   0, 255);
+const VSTGUI::CColor kGridDot    ( 42,  45,  51, 255);
+const VSTGUI::CColor kScreenText (141, 150, 163, 255);
+const VSTGUI::CColor kCompanion  (141, 150, 163, 150);   // the second trace on a screen
+const VSTGUI::CColor kLampOn     (255,  59,  47, 255);
+const VSTGUI::CColor kLampOff    ( 58,  21,  18, 255);
 
-/** A section's colour: osc amber, filter blue, amp mint, mod violet. */
+/** The names the editor and the licence views used before the black
+    panel, kept so they still mean something sensible. */
+const VSTGUI::CColor kText   = kInk;
+const VSTGUI::CColor kMuted  = kInkSoft;
+const VSTGUI::CColor kSubtle = kInkSoft;
+const VSTGUI::CColor kDim    = kInkDim;
+
+/** A section's SCREEN colour: filter blue, amp green, modulation violet
+    (the oscillators have no screen: white). */
 VSTGUI::CColor accent (Layout::Accent a);
 
-/** The same at `alpha` (0..255), for fills under a trace. */
+/** The same at `alpha` (0..255). */
 VSTGUI::CColor accentAlpha (Layout::Accent a, uint8_t alpha);
-
-/** The text drawn ON an accent-coloured segment: a near-black of the
-    same hue, so a lit segment reads at a glance. */
-VSTGUI::CColor accentInk (Layout::Accent a);
 
 } // namespace Palette
 
 //------------------------------------------------------------------------
-// The faces. On macOS CoreText falls back to the system face if one is
-// missing, so a name here can never leave text undrawn.
+// The lettering
 //------------------------------------------------------------------------
-VSTGUI::CFontRef fontWordmark ();   // Avenir Next Condensed, bold 23
-VSTGUI::CFontRef fontTitle ();      // Helvetica Neue, bold 13
-VSTGUI::CFontRef fontSubtitle ();   // Helvetica Neue 12
-VSTGUI::CFontRef fontLabel ();      // Helvetica Neue, bold 10 - capitals
-VSTGUI::CFontRef fontValue ();      // Menlo 10 - every reading
-VSTGUI::CFontRef fontNote ();       // Helvetica Neue 11
-VSTGUI::CFontRef fontBadge ();      // Menlo, bold 12
+enum class Align
+{
+	Left,
+	Centre,
+	Right
+};
 
-/** A string in capitals - labels are stored as words and drawn as
-    small capitals. ASCII only, which is all the labels are. */
+/** DRAW A RUN OF LETTERING: `text` in `style`, its ink box vertically
+    centred on `centreY`, starting at, centred on or ending at `x`.
+    `strokeUnits` > 0 strokes the same glyphs at another weight without
+    moving them - the wordmark's inline cut. */
+void drawLettering (VSTGUI::CDrawContext* context, const std::string& text, const Lettering::Style& style,
+                    const VSTGUI::CColor& colour, VSTGUI::CCoord x, VSTGUI::CCoord centreY,
+                    Align align = Align::Left, double strokeUnits = -1.0);
+
+/** The faces the licence DIALOG still draws with (it keeps its old
+    look). The panel itself draws no font text. */
+VSTGUI::CFontRef fontTitle ();      // Helvetica Neue, bold 13
+VSTGUI::CFontRef fontValue ();      // Menlo 10
+
+/** A string in capitals. ASCII only, which is all the labels are. */
 std::string upper (const std::string& s);
 
 //------------------------------------------------------------------------
@@ -105,10 +133,9 @@ public:
 };
 
 //------------------------------------------------------------------------
-/** A ROTARY KNOB. The arc runs 270 degrees, from bottom left to bottom
-    right through the top; the value arc is drawn over a dark track in
-    the section's colour, from the left end - or, BIPOLAR, from the top,
-    so a tune of 0 or a triangle Shape shows as no arc at all.
+/** A ROTARY KNOB: black, knurled, a white line, a printed scale of
+    eleven ticks over 270 degrees (0 and 10 at the ends, or - and + on a
+    BIPOLAR knob - Tune, Shape, Env Amt).
 
     THE WHOLE RECTANGLE IS THE TARGET, reading and label included.
 
@@ -146,7 +173,9 @@ public:
 	static double angleOf (double normalized) { return 135.0 + 270.0 * normalized; }
 
 private:
-	Layout::Accent mAccent;
+	/** Its section. Every knob on the black panel is black and white,
+	    so nothing is coloured by it today; kept so a knob still knows. */
+	[[maybe_unused]] Layout::Accent mAccent;
 	int  mDiameter;
 	bool mBipolar;
 	std::string mLabel;
@@ -157,48 +186,60 @@ private:
 };
 
 //------------------------------------------------------------------------
-/** A SEGMENTED SWITCH: one segment per named position, the current one
-    lit in the section's colour. A click on a segment selects it; the
-    wheel steps. Positions are spread evenly over 0..1, the way an Enum
-    parameter's normalised values are. */
-class SegmentSwitch : public VSTGUI::CControl
+/** A ROTARY SELECTOR - every switch on the panel, two positions or
+    three: a chicken-head knob, its positions printed round it (the one
+    that is set in white with a red mark, the others dim), its name under
+    it. Geometry from Layout::selectorOf(), which the tests read too.
+
+      click a position's name (or anywhere off the knob towards it)
+                 that position
+      click the knob     the next position, round to the first again
+      wheel      steps
+
+    Positions are spread evenly over 0..1, the way an Enum parameter's
+    normalised values are. */
+class RotarySwitch : public VSTGUI::CControl
 {
 public:
-	SegmentSwitch (const VSTGUI::CRect& size, VSTGUI::IControlListener* listener, int32_t tag,
-	               Layout::Accent accent);
+	RotarySwitch (const VSTGUI::CRect& size, VSTGUI::IControlListener* listener, int32_t tag,
+	              const Layout::Control& layout);
 
-	void setNames (const std::vector<std::string>& names) { mNames = names; invalid (); }
+	void setNames (const std::vector<std::string>& names);
+	void setLabel (const std::string& label) { mLabel = upper (label); }
 
 	void draw (VSTGUI::CDrawContext* context) override;
 	void onMouseDownEvent (VSTGUI::MouseDownEvent& event) override;
 	void onMouseUpEvent (VSTGUI::MouseUpEvent& event) override;
 	void onMouseWheelEvent (VSTGUI::MouseWheelEvent& event) override;
 
-	CLASS_METHODS (SegmentSwitch, VSTGUI::CControl)
+	CLASS_METHODS (RotarySwitch, VSTGUI::CControl)
 
 private:
 	int count () const { return static_cast<int> (mNames.size ()); }
 	int currentIndex () const;
 	void select (int index);
 
-	Layout::Accent mAccent;
+	Layout::Control mLayout;
+	Layout::Selector mGeometry;
 	std::vector<std::string> mNames;
+	std::string mLabel;
 };
 
 //------------------------------------------------------------------------
-/** A SCREEN: a dark rounded plate with a grid, a caption top left, a
-    figure top right, and up to two traces.
+/** A SCREEN - a small colour OLED: a true-black glass with a dot grid, a
+    caption top left, a figure top right in the trace's colour, and up to
+    two traces. Its black cut-out in the panel is the Backdrop's.
 
-    The FIRST trace is the main one - drawn 2 px in its colour with a
-    translucent fill under it when setFill (true). The SECOND is a
-    companion, thinner and dimmer (the LFO's unpatched output). Both are
-    0..1, y up, and CLAMPED rather than scaled: the caller fixes the
-    scale, as the old envelope display did, so one curve cannot rescale
-    the picture.
+    The FIRST trace is the main one - crisp, in its colour, with a slight
+    bloom and, when setFill (true), a fill that fades from the line to
+    black. The SECOND is a companion, thin and grey (the knobs' curve
+    behind the live one; the LFO's unpatched output). Both are 0..1, y
+    up, and CLAMPED rather than scaled: the caller fixes the scale, so
+    one curve cannot rescale the picture.
 
-    Optional extras: a dot on the first trace (the filter's cutoff), a
-    dotted vertical line (where the key went up), a legend along the
-    foot. Mouse-disabled. */
+    Optional extras: a white ring on the first trace (the filter's
+    cutoff), a dotted vertical line (where the key went up), a legend
+    along the foot. Mouse-disabled. */
 class Scope : public VSTGUI::CView
 {
 public:
@@ -211,7 +252,7 @@ public:
 	void setAnnotation (const std::string& annotation) { mAnnotation = annotation; }
 	void setLegend (const std::string& main, const std::string& companion);
 
-	/** The dot, at (x, y) 0..1 of the plot; negative x for none. */
+	/** The ring, at (x, y) 0..1 of the plot; negative x for none. */
 	void setMarker (double x, double y) { mMarkerX = x; mMarkerY = y; }
 
 	/** A dotted vertical line at `fraction` of the width; negative for
@@ -225,7 +266,7 @@ public:
 private:
 	VSTGUI::CRect plotRect () const;
 	void drawTrace (VSTGUI::CDrawContext* context, const std::vector<float>& data,
-	                const VSTGUI::CColor& colour, VSTGUI::CCoord width, bool fill) const;
+	                const VSTGUI::CColor& colour, VSTGUI::CCoord width, bool fill, bool bloom) const;
 
 	VSTGUI::CColor mMain;
 	VSTGUI::CColor mCompanion;
@@ -242,8 +283,8 @@ private:
 };
 
 //------------------------------------------------------------------------
-/** The SELF-OSC lamp: a dot that glows when the resonance is at loop
-    gain 1 or more (selfOscillating()), and its name beside it. */
+/** The SELF-OSC lamp: a red lamp that lights when the resonance is at
+    loop gain 1 or more (selfOscillating()), and its name beside it. */
 class Lamp : public VSTGUI::CView
 {
 public:
@@ -256,6 +297,25 @@ public:
 private:
 	std::string mName;
 	bool mOn = false;
+};
+
+//------------------------------------------------------------------------
+/** ONE LINE OF LETTERING whose words change - the engine line in the
+    header, the info line under the modulation strip. Left-aligned,
+    vertically centred in the view. Mouse-disabled. */
+class TextLine : public VSTGUI::CView
+{
+public:
+	TextLine (const VSTGUI::CRect& size, const Lettering::Style& style, const VSTGUI::CColor& colour);
+	void setText (const std::string& text);
+	const std::string& getText () const { return mText; }
+	void draw (VSTGUI::CDrawContext* context) override;
+	CLASS_METHODS (TextLine, VSTGUI::CView)
+
+private:
+	Lettering::Style mStyle;
+	VSTGUI::CColor mColour;
+	std::string mText;
 };
 
 //------------------------------------------------------------------------

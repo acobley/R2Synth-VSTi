@@ -45,18 +45,12 @@ R2SynthEditor::R2SynthEditor (R2SynthController* controller)
 }
 
 //------------------------------------------------------------------------
-CTextLabel* R2SynthEditor::addTextLine (const Layout::Rect& r, CFontRef font,
-                                            const CColor& colour, CHoriTxtAlign align)
+Panel::TextLine* R2SynthEditor::addTextLine (const Layout::Rect& r, const Lettering::Style& style,
+                                             const CColor& colour)
 {
-	auto* label = new CTextLabel (toCRect (r), "");
-	label->setFont (font);
-	label->setFontColor (colour);
-	label->setTransparency (true);
-	label->setStyle (CParamDisplay::kNoFrame);
-	label->setHoriAlign (align);
-	label->setMouseEnabled (false);
-	frame->addView (label);
-	return label;
+	auto* line = new Panel::TextLine (toCRect (r), style, colour);
+	frame->addView (line);
+	return line;
 }
 
 //------------------------------------------------------------------------
@@ -81,17 +75,17 @@ bool PLUGIN_API R2SynthEditor::open (void* parent, const PlatformType& platformT
 		frame->addView (scope);
 		return scope;
 	};
-	mFilterView    = addScope (Layout::kFilterView, Layout::Accent::Filter, Panel::Palette::kDim, true);
-	mFilterEnvView = addScope (Layout::kFilterEnvView, Layout::Accent::Filter, Panel::Palette::kMuted, true);
-	mAmpEnvView    = addScope (Layout::kAmpEnvView, Layout::Accent::Amp, Panel::Palette::kMuted, true);
-	mLfoView       = addScope (Layout::kLfoView, Layout::Accent::Mod, Panel::Palette::kDim, false);
+	mFilterView    = addScope (Layout::kFilterView, Layout::Accent::Filter, Panel::Palette::kCompanion, true);
+	mFilterEnvView = addScope (Layout::kFilterEnvView, Layout::Accent::Filter, Panel::Palette::kCompanion, true);
+	mAmpEnvView    = addScope (Layout::kAmpEnvView, Layout::Accent::Amp, Panel::Palette::kCompanion, true);
+	mLfoView       = addScope (Layout::kLfoView, Layout::Accent::Mod, Panel::Palette::kCompanion, false);
 
 	// ---- the lamp, and the two lines of text that change -------------------
 	mSelfOscLamp = new Panel::Lamp (toCRect (Layout::kSelfOscLamp), "Self-osc");
 	frame->addView (mSelfOscLamp);
 
-	mEngineLabel  = addTextLine (Layout::kEngineLine, Panel::fontSubtitle (), Panel::Palette::kSubtle, kLeftText);
-	mModInfoLabel = addTextLine (Layout::kModInfoLine, Panel::fontValue (), Panel::Palette::kSubtle, kLeftText);
+	mEngineLabel  = addTextLine (Layout::kEngineLine, Layout::kTextEngine, Panel::Palette::kInk);
+	mModInfoLabel = addTextLine (Layout::kModInfoLine, Layout::kTextInfo, Panel::Palette::kInk);
 
 	// ---- the controls -----------------------------------------------------
 	for (const auto& c : Layout::kControls)
@@ -197,7 +191,8 @@ void R2SynthEditor::addControl (const Layout::Control& c)
 
 	if (c.kind == Layout::Kind::Switch)
 	{
-		auto* sw = new Panel::SegmentSwitch (r, this, static_cast<int32_t> (tag), c.accent);
+		auto* sw = new Panel::RotarySwitch (r, this, static_cast<int32_t> (tag), c);
+		sw->setLabel (controlLabel (c));
 
 		// THE NAMES COME FROM enumName(), the same list the controller's
 		// toString reads, so the panel and the host's automation lane
@@ -402,12 +397,9 @@ std::string R2SynthEditor::engineLine () const
 //------------------------------------------------------------------------
 void R2SynthEditor::refreshInfoLines ()
 {
-	auto set = [] (CTextLabel* label, const std::string& text) {
-		if (label)
-		{
-			label->setText (text.c_str ());
-			label->invalid ();
-		}
+	auto set = [] (Panel::TextLine* line, const std::string& text) {
+		if (line)
+			line->setText (text);
 	};
 	set (mModInfoLabel, modInfoLine ());
 	set (mEngineLabel, engineLine ());

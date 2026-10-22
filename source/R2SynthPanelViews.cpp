@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------
-// R2Synth - the "signal flow" panel's views
+// R2Synth - the panel's views (the black panel)
 //------------------------------------------------------------------------
 
 #include "R2SynthPanelViews.h"
@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <map>
 
 using namespace VSTGUI;
 
@@ -25,6 +26,12 @@ CPoint pointAt (const CPoint& centre, double radius, double degrees)
 	return CPoint (centre.x + radius * std::cos (t), centre.y + radius * std::sin (t));
 }
 
+/** The layout's angles: degrees from twelve o'clock, clockwise. */
+CPoint pointFromTop (const CPoint& centre, double radius, double degrees)
+{
+	return pointAt (centre, radius, degrees - 90.0);
+}
+
 CRect circleRect (const CPoint& centre, double radius)
 {
 	return CRect (centre.x - radius, centre.y - radius, centre.x + radius, centre.y + radius);
@@ -35,50 +42,79 @@ CRect toCRect (const Layout::Rect& r)
 	return CRect (r.left, r.top, r.right, r.bottom);
 }
 
-/** An arc from `from` to `to` degrees, stroked with round caps. */
-void strokeArc (CDrawContext* context, const CPoint& centre, double radius, double from, double to,
-                const CColor& colour, CCoord width)
+CLineStyle roundLine ()
 {
-	if (to - from < 0.5)
-		return;
-	auto path = owned (context->createGraphicsPath ());
-	if (!path)
-		return;
-	path->addArc (circleRect (centre, radius), from, to, true);
-	context->setFrameColor (colour);
-	context->setLineWidth (width);
-	context->setLineStyle (CLineStyle (CLineStyle::kLineCapRound, CLineStyle::kLineJoinRound));
-	context->drawGraphicsPath (path, CDrawContext::kPathStroked);
+	return CLineStyle (CLineStyle::kLineCapRound, CLineStyle::kLineJoinRound);
 }
 
-void fillRoundRect (CDrawContext* context, const CRect& r, CCoord radius, const CColor& fill,
-                    const CColor* stroke = nullptr)
+void strokeLine (CDrawContext* context, const CPoint& from, const CPoint& to, const CColor& colour, CCoord width)
+{
+	context->setFrameColor (colour);
+	context->setLineWidth (width);
+	context->setLineStyle (roundLine ());
+	context->drawLine (from, to);
+}
+
+void fillCircle (CDrawContext* context, const CPoint& centre, double radius, const CColor& fill)
+{
+	context->setFillColor (fill);
+	context->drawEllipse (circleRect (centre, radius), kDrawFilled);
+}
+
+void strokeCircle (CDrawContext* context, const CPoint& centre, double radius, const CColor& colour, CCoord width)
+{
+	context->setFrameColor (colour);
+	context->setLineWidth (width);
+	context->setLineStyle (kLineSolid);
+	context->drawEllipse (circleRect (centre, radius), kDrawStroked);
+}
+
+void roundRect (CDrawContext* context, const CRect& r, CCoord radius, const CColor* fill,
+                const CColor* stroke = nullptr, CCoord strokeWidth = 1.)
 {
 	auto path = owned (context->createGraphicsPath ());
 	if (!path)
 		return;
 	path->addRoundRect (r, radius);
-	context->setFillColor (fill);
-	context->drawGraphicsPath (path, CDrawContext::kPathFilled);
+	if (fill)
+	{
+		context->setFillColor (*fill);
+		context->drawGraphicsPath (path, CDrawContext::kPathFilled);
+	}
 	if (stroke)
 	{
 		context->setFrameColor (*stroke);
-		context->setLineWidth (1.);
+		context->setLineWidth (strokeWidth);
 		context->setLineStyle (kLineSolid);
 		context->drawGraphicsPath (path, CDrawContext::kPathStroked);
 	}
 }
 
-CFontRef fontSegment ()
+/** A black knob's cap: lit from the top left, a near-black at the rim. */
+void fillCap (CDrawContext* context, CGraphicsPath* path, const CPoint& centre, double radius)
 {
-	static SharedPointer<CFontDesc> font = makeOwned<CFontDesc> ("Helvetica Neue", 12, kBoldFace);
-	return font;
+	auto gradient = owned (CGradient::create (0.0, 1.0, CColor (58, 58, 58, 255), CColor (5, 5, 5, 255)));
+	if (!gradient)
+		return;
+	gradient->addColorStop (0.6, CColor (22, 22, 22, 255));
+	context->fillRadialGradient (path, *gradient, centre, radius * 1.4,
+	                             CPoint (-radius * 0.25, -radius * 0.35));
+}
+
+/** The glyphs, parsed once each. */
+const std::vector<Lettering::Command>& commandsOf (const Lettering::Glyph& glyph)
+{
+	static std::map<const char*, std::vector<Lettering::Command>> cache;
+	auto it = cache.find (glyph.path);
+	if (it == cache.end ())
+		it = cache.emplace (glyph.path, Lettering::parse (glyph.path)).first;
+	return it->second;
 }
 
 } // anonymous namespace
 
 //------------------------------------------------------------------------
-// Palette and faces
+// Palette, faces, lettering
 //------------------------------------------------------------------------
 namespace Palette {
 
@@ -86,12 +122,12 @@ CColor accent (Layout::Accent a)
 {
 	switch (a)
 	{
-		case Layout::Accent::Osc:    return CColor (242, 165,  65, 255);
-		case Layout::Accent::Filter: return CColor ( 86, 168, 245, 255);
-		case Layout::Accent::Amp:    return CColor ( 95, 208, 160, 255);
-		case Layout::Accent::Mod:    return CColor (176, 140, 255, 255);
+		case Layout::Accent::Osc:    return kInk;
+		case Layout::Accent::Filter: return CColor ( 47, 184, 255, 255);
+		case Layout::Accent::Amp:    return CColor ( 56, 240, 160, 255);
+		case Layout::Accent::Mod:    return CColor (194, 123, 255, 255);
 	}
-	return kText;
+	return kInk;
 }
 
 CColor accentAlpha (Layout::Accent a, uint8_t alpha)
@@ -101,53 +137,16 @@ CColor accentAlpha (Layout::Accent a, uint8_t alpha)
 	return c;
 }
 
-CColor accentInk (Layout::Accent a)
-{
-	switch (a)
-	{
-		case Layout::Accent::Osc:    return CColor ( 26,  18,   5, 255);
-		case Layout::Accent::Filter: return CColor (  6,  20,  36, 255);
-		case Layout::Accent::Amp:    return CColor (  6,  30,  20, 255);
-		case Layout::Accent::Mod:    return CColor ( 22,  15,  38, 255);
-	}
-	return kGround;
-}
-
 } // namespace Palette
 
-CFontRef fontWordmark ()
-{
-	static SharedPointer<CFontDesc> font = makeOwned<CFontDesc> ("Avenir Next Condensed", 23, kBoldFace);
-	return font;
-}
 CFontRef fontTitle ()
 {
 	static SharedPointer<CFontDesc> font = makeOwned<CFontDesc> ("Helvetica Neue", 13, kBoldFace);
 	return font;
 }
-CFontRef fontSubtitle ()
-{
-	static SharedPointer<CFontDesc> font = makeOwned<CFontDesc> ("Helvetica Neue", 12);
-	return font;
-}
-CFontRef fontLabel ()
-{
-	static SharedPointer<CFontDesc> font = makeOwned<CFontDesc> ("Helvetica Neue", 10, kBoldFace);
-	return font;
-}
 CFontRef fontValue ()
 {
 	static SharedPointer<CFontDesc> font = makeOwned<CFontDesc> ("Menlo", 10);
-	return font;
-}
-CFontRef fontNote ()
-{
-	static SharedPointer<CFontDesc> font = makeOwned<CFontDesc> ("Helvetica Neue", 11);
-	return font;
-}
-CFontRef fontBadge ()
-{
-	static SharedPointer<CFontDesc> font = makeOwned<CFontDesc> ("Menlo", 12, kBoldFace);
 	return font;
 }
 
@@ -157,6 +156,75 @@ std::string upper (const std::string& s)
 	for (auto& c : out)
 		c = static_cast<char> (std::toupper (static_cast<unsigned char> (c)));
 	return out;
+}
+
+void drawLettering (CDrawContext* context, const std::string& text, const Lettering::Style& style,
+                    const CColor& colour, CCoord x, CCoord centreY, Align align, double strokeUnits)
+{
+	double endUnits = 0.0;
+	const auto placed = Lettering::layout (text, style, &endUnits);
+	if (placed.empty ())
+		return;
+
+	const double s = style.scale ();
+	const double width = Lettering::width (text, style);
+	double left = x;
+	if (align == Align::Centre)
+		left = x - width / 2.0;
+	else if (align == Align::Right)
+		left = x - width;
+	const double top = centreY - style.height () / 2.0;
+	const double half = style.weight / 2.0;
+
+	auto path = owned (context->createGraphicsPath ());
+	if (!path)
+		return;
+
+	for (const auto& p : placed)
+	{
+		const double ox = left + (p.x + half) * s;
+		const double oy = top + half * s;
+		auto at = [&] (double gx, double gy) { return CPoint (ox + gx * s, oy + gy * s); };
+
+		CPoint current, start;
+		for (const auto& c : commandsOf (Lettering::glyphOrDot (p.code)))
+		{
+			switch (c.op)
+			{
+				case 'M':
+					current = start = at (c.x, c.y);
+					path->beginSubpath (current);
+					break;
+				case 'L':
+					current = at (c.x, c.y);
+					path->addLine (current);
+					break;
+				case 'Q':
+				{
+					// The quadratic as a cubic: c1 = p0 + 2/3 (q - p0),
+					// c2 = p2 + 2/3 (q - p2).
+					const CPoint q = at (c.x1, c.y1);
+					const CPoint end = at (c.x, c.y);
+					const CPoint c1 (current.x + 2.0 / 3.0 * (q.x - current.x), current.y + 2.0 / 3.0 * (q.y - current.y));
+					const CPoint c2 (end.x + 2.0 / 3.0 * (q.x - end.x), end.y + 2.0 / 3.0 * (q.y - end.y));
+					path->addBezierCurve (c1, c2, end);
+					current = end;
+					break;
+				}
+				case 'Z':
+					path->closeSubpath ();
+					current = start;
+					break;
+				default:
+					break;
+			}
+		}
+	}
+
+	context->setFrameColor (colour);
+	context->setLineWidth ((strokeUnits > 0.0 ? strokeUnits : style.weight) * s);
+	context->setLineStyle (roundLine ());
+	context->drawGraphicsPath (path, CDrawContext::kPathStroked);
 }
 
 //------------------------------------------------------------------------
@@ -175,108 +243,105 @@ void Backdrop::draw (CDrawContext* context)
 
 	context->setDrawMode (kAntiAliasing | kNonIntegralMode);
 
-	// ---- the ground and the header band --------------------------------
+	// ---- the ground, the header band and the white rule under it --------
 	context->setFillColor (Palette::kGround);
 	context->drawRect (all, kDrawFilled);
 	context->setFillColor (Palette::kHeader);
 	context->drawRect (CRect (all.left, all.top, all.right, all.top + kHeaderHeight), kDrawFilled);
-	context->setFillColor (Palette::kBorder);
-	context->drawRect (CRect (all.left, kHeaderHeight - 1, all.right, kHeaderHeight), kDrawFilled);
+	context->setFillColor (Palette::kHeaderRule);
+	context->drawRect (CRect (all.left, kHeaderHeight - 2, all.right, kHeaderHeight), kDrawFilled);
 
-	// ---- the wordmark: R2 in the text colour, SYNTH in amber -----------
+	// ---- the corner screws ------------------------------------------------
+	for (const auto& s : kScrews)
 	{
-		context->setFont (fontWordmark ());
-		const CCoord prefixWidth = context->getStringWidth ("R2");
-		CRect r = toCRect (kWordmark);
-		context->setFontColor (Palette::kText);
-		context->drawString ("R2", r, kLeftText, true);
-		r.left += prefixWidth + 1;
-		context->setFontColor (Palette::accent (Accent::Osc));
-		context->drawString ("SYNTH", r, kLeftText, true);
-
-		context->setFillColor (Palette::kBorder);
-		context->drawRect (CRect (kWordmark.right + 4, 16, kWordmark.right + 5, 40), kDrawFilled);
+		const CPoint c (s.x, s.y);
+		fillCircle (context, c, 3.2, Palette::kScrew);
+		strokeCircle (context, c, 3.2, CColor (0, 0, 0, 255), 0.6);
+		strokeLine (context, CPoint (c.x - 2.2, c.y - 2.2), CPoint (c.x + 2.2, c.y + 2.2), CColor (34, 34, 34, 255), 0.8);
 	}
 
-	// ---- the four sections ---------------------------------------------
+	// ---- the wordmark: R2 SYNTH, heavy, with the inline cut ---------------
+	{
+		const double centreY = kHeaderHeight / 2.0 + 1.0;
+		const double second = kWordmark.left + Lettering::width ("R2", kTextWordmark) + 12.0;
+		for (int pass = 0; pass < 2; ++pass)
+		{
+			const CColor ink = pass ? Palette::kHeader : Palette::kInk;
+			const double stroke = pass ? 0.32 : -1.0;
+			drawLettering (context, "R2", kTextWordmark, ink, kWordmark.left, centreY, Align::Left, stroke);
+			drawLettering (context, "SYNTH", kTextWordmark, ink, second, centreY, Align::Left, stroke);
+		}
+		context->setFillColor (Palette::kDivider);
+		context->drawRect (CRect (kHeaderDivider, 16, kHeaderDivider + 1, 40), kDrawFilled);
+	}
+
+	// ---- the four sections: boxed in white, the title in its own box -----
 	for (const auto& s : kSections)
 	{
 		CRect r = toCRect (s.r);
 		r.inset (0.5, 0.5);
-		fillRoundRect (context, r, kSectionRadius, Palette::kSection, &Palette::kBorder);
+		roundRect (context, r, kSectionRadius, &Palette::kSection, &Palette::kSectionEdge, 1.2);
 
-		const CCoord rowTop = s.r.top + kSectionPadTop;
-		const CPoint dot (s.r.left + kSectionPadX + 4, rowTop + kSectionTitleH / 2.);
-		context->setFillColor (Palette::accent (s.accent));
-		context->drawEllipse (circleRect (dot, 4), kDrawFilled);
-
-		context->setFont (fontTitle ());
-		context->setFontColor (Palette::kTitle);
-		const CCoord titleLeft = s.r.left + kSectionPadX + 16;
-		const CRect titleRect (titleLeft, rowTop, s.r.right - kSectionPadX, rowTop + kSectionTitleH);
-		context->drawString (s.title, titleRect, kLeftText, true);
-
+		const Box b = titleBox (s);
+		roundRect (context, CRect (b.left, b.top, b.right, b.bottom), 2., &Palette::kSection,
+		           &Palette::kSectionEdge, 1.2);
+		const double centre = (b.top + b.bottom) / 2.0;
+		drawLettering (context, s.title, kTextTitle, Palette::kInk, b.left + 8.0, centre);
 		if (s.subtitle && *s.subtitle)
-		{
-			const CCoord w = context->getStringWidth (s.title);
-			context->setFont (fontSubtitle ());
-			context->setFontColor (Palette::kSubtle);
-			CRect sub (titleRect);
-			sub.left += w + 10;
-			context->drawString (s.subtitle, sub, kLeftText, true);
-		}
+			drawLettering (context, s.subtitle, kTextSubtitle, Palette::kInkSoft, subtitleLeft (s), centre);
 	}
 
-	// ---- the chevrons: the signal goes this way -------------------------
+	// ---- the chevrons: the signal goes this way ---------------------------
 	for (const auto& c : kChevrons)
 	{
 		auto path = owned (context->createGraphicsPath ());
 		if (path)
 		{
-			path->beginSubpath (CPoint (c.x - 3, c.y - 8));
-			path->addLine (CPoint (c.x + 3, c.y));
-			path->addLine (CPoint (c.x - 3, c.y + 8));
-			context->setFrameColor (Palette::kDim);
-			context->setLineWidth (2.);
-			context->setLineStyle (CLineStyle (CLineStyle::kLineCapRound, CLineStyle::kLineJoinRound));
+			path->beginSubpath (CPoint (c.x - 5, c.y - 10));
+			path->addLine (CPoint (c.x + 4, c.y));
+			path->addLine (CPoint (c.x - 5, c.y + 10));
+			context->setFrameColor (Palette::kSectionEdge);
+			context->setLineWidth (2.2);
+			context->setLineStyle (roundLine ());
 			context->drawGraphicsPath (path, CDrawContext::kPathStroked);
 		}
 	}
 
-	// ---- the rules -------------------------------------------------------
+	// ---- the rules ----------------------------------------------------------
 	context->setFillColor (Palette::kRule);
 	for (const auto& r : kRules)
 		context->drawRect (toCRect (r), kDrawFilled);
 
-	// ---- the fixed captions ---------------------------------------------
+	// ---- the screens' black cut-outs: the OLEDs sit in them -----------------
+	for (const auto& s : kScreens)
+	{
+		CRect r = toCRect (bezelOf (s));
+		r.inset (0.5, 0.5);
+		roundRect (context, r, 4., &Palette::kBezel, &Palette::kBezelEdge, 1.);
+	}
+
+	// ---- the fixed captions -------------------------------------------------
 	for (const auto& c : kCaptions)
 	{
 		const CRect r = toCRect (c.r);
+		const double centre = (r.top + r.bottom) / 2.0;
 		switch (c.style)
 		{
 			case CaptionStyle::Block:
-				context->setFont (fontLabel ());
-				context->setFontColor (Palette::accent (c.accent));
-				context->drawString (upper (c.text).c_str (), r, kLeftText, true);
+				drawLettering (context, c.text, kTextBlock, Palette::kInk, r.left, centre);
 				break;
 			case CaptionStyle::Field:
-				context->setFont (fontLabel ());
-				context->setFontColor (Palette::kMuted);
-				context->drawString (upper (c.text).c_str (), r, kLeftText, true);
+				drawLettering (context, c.text, kTextLabel, Palette::kInk, r.left, centre);
 				break;
 			case CaptionStyle::Note:
-				context->setFont (fontNote ());
-				context->setFontColor (Palette::kSubtle);
-				context->drawString (c.text, r, kLeftText, true);
+				drawLettering (context, c.text, kTextNote, Palette::kInkSoft, r.left, centre);
 				break;
 			case CaptionStyle::Badge:
 			{
-				const CPoint centre ((r.left + r.right) / 2., (r.top + r.bottom) / 2.);
-				context->setFillColor (Palette::kCap);
-				context->drawEllipse (circleRect (centre, r.getHeight () / 2.), kDrawFilled);
-				context->setFont (fontBadge ());
-				context->setFontColor (Palette::accent (c.accent));
-				context->drawString (c.text, r, kCenterText, true);
+				const CPoint ring ((r.left + r.right) / 2., r.top + kBadgeSize / 2.);
+				strokeCircle (context, ring, kBadgeSize / 2. - 1., Palette::kSectionEdge, 1.4);
+				drawLettering (context, c.text, kTextBadge, Palette::kInk, ring.x, ring.y, Align::Centre);
+				drawLettering (context, "VCO", kTextBadgeSub, Palette::kInk, ring.x, ring.y + 20., Align::Centre);
 				break;
 			}
 		}
@@ -308,59 +373,77 @@ void Knob::draw (CDrawContext* context)
 	context->setDrawMode (kAntiAliasing | kNonIntegralMode);
 
 	const double v = std::clamp (static_cast<double> (getValueNormalized ()), 0.0, 1.0);
-	const CCoord stroke = (mDiameter >= 60) ? 5. : 4.;
 	const CPoint centre (r.left + r.getWidth () / 2., r.top + mDiameter / 2.);
-	const double radius = mDiameter / 2. - stroke / 2. - 1.;
-
-	// ---- the track and the value arc ------------------------------------
-	strokeArc (context, centre, radius, 135.0, 405.0, Palette::kTrack, stroke);
+	const double outer = mDiameter / 2.0;
+	const double body = outer - ((mDiameter >= 44) ? 6.0 : 5.0);
 	const double a = angleOf (v);
-	if (mBipolar)
-		strokeArc (context, centre, radius, std::min (a, 270.0), std::max (a, 270.0),
-		           Palette::accent (mAccent), stroke);
-	else
-		strokeArc (context, centre, radius, 135.0, a, Palette::accent (mAccent), stroke);
 
-	// A bipolar knob AT its centre has no arc at all; a dot at the top
-	// says where the centre is, so the knob does not read as dead.
-	if (mBipolar && std::fabs (a - 270.0) < 0.5)
+	// ---- the printed scale: eleven ticks, long at the ends and the middle
+	for (int i = 0; i <= 10; ++i)
 	{
-		context->setFillColor (Palette::accent (mAccent));
-		context->drawEllipse (circleRect (pointAt (centre, radius, 270.0), stroke / 2.), kDrawFilled);
+		const double t = 135.0 + 27.0 * i;
+		const bool longTick = (i == 0 || i == 5 || i == 10);
+		strokeLine (context, pointAt (centre, body + 1.5, t), pointAt (centre, outer - (longTick ? 0.0 : 1.8), t),
+		            Palette::kTick, longTick ? 1.3 : 0.9);
+	}
+	if (mDiameter >= 52)
+	{
+		const CPoint lo = pointFromTop (centre, outer + 2.0, -138.0);
+		const CPoint hi = pointFromTop (centre, outer + 2.0, 138.0);
+		drawLettering (context, mBipolar ? "-" : "0", Layout::kTextTick, Palette::kTick, lo.x - 2., lo.y + 4.,
+		               Align::Right);
+		drawLettering (context, mBipolar ? "+" : "10", Layout::kTextTick, Palette::kTick, hi.x + 2., hi.y + 4.,
+		               Align::Left);
 	}
 
-	// ---- the cap and its pointer -----------------------------------------
-	const double capRadius = radius - stroke / 2. - 4.;
-	context->setFillColor (Palette::kCap);
-	context->setFrameColor (Palette::kCapEdge);
-	context->setLineWidth (1.);
-	context->setLineStyle (kLineSolid);
-	context->drawEllipse (circleRect (centre, capRadius), kDrawFilledAndStroked);
+	// ---- the knurled body ---------------------------------------------------
+	{
+		auto rim = owned (context->createGraphicsPath ());
+		if (rim)
+		{
+			constexpr int kTeeth = 28;
+			for (int i = 0; i < kTeeth * 2; ++i)
+			{
+				const CPoint p = pointAt (centre, (i % 2 == 0) ? body : body - 1.4, 360.0 * i / (kTeeth * 2));
+				if (i == 0)
+					rim->beginSubpath (p);
+				else
+					rim->addLine (p);
+			}
+			rim->closeSubpath ();
+			context->setFillColor (Palette::kKnobBody);
+			context->drawGraphicsPath (rim, CDrawContext::kPathFilled);
+			context->setFrameColor (Palette::kKnobRim);
+			context->setLineWidth (0.6);
+			context->setLineStyle (kLineSolid);
+			context->drawGraphicsPath (rim, CDrawContext::kPathStroked);
+		}
+		auto cap = owned (context->createGraphicsPath ());
+		if (cap)
+		{
+			cap->addEllipse (circleRect (centre, body * 0.78));
+			fillCap (context, cap, centre, body * 0.78);
+			context->setFrameColor (CColor (0, 0, 0, 255));
+			context->setLineWidth (0.8);
+			context->setLineStyle (kLineSolid);
+			context->drawGraphicsPath (cap, CDrawContext::kPathStroked);
+		}
+	}
 
-	context->setFrameColor (Palette::kText);
-	context->setLineWidth (2.);
-	context->setLineStyle (CLineStyle (CLineStyle::kLineCapRound, CLineStyle::kLineJoinRound));
-	context->drawLine (pointAt (centre, capRadius * 0.2, a), pointAt (centre, capRadius - 2., a));
+	// ---- the white line -------------------------------------------------------
+	strokeLine (context, pointAt (centre, body * 0.15, a), pointAt (centre, body - 0.5, a), Palette::kInk,
+	            (mDiameter >= 44) ? 2.2 : 1.8);
 
-	// ---- the reading and the label ----------------------------------------
+	// ---- the reading and the label --------------------------------------------
 	const CCoord textTop = r.top + mDiameter + Layout::kKnobGap;
+	const CCoord cx = centre.x;
 	if (mFormatter)
-	{
-		context->setFont (fontValue ());
-		context->setFontColor (mDragging ? Palette::accent (mAccent) : Palette::kText);
-		context->drawString (mFormatter (getValueNormalized ()).c_str (),
-		                     CRect (r.left - 4, textTop, r.right + 4, textTop + Layout::kKnobValueH),
-		                     kCenterText, true);
-	}
+		drawLettering (context, mFormatter (getValueNormalized ()), Layout::kTextValue,
+		               Palette::kInk, cx,
+		               textTop + Layout::kKnobValueH / 2., Align::Centre);
 	if (!mLabel.empty ())
-	{
-		const CCoord labelTop = textTop + Layout::kKnobValueH;
-		context->setFont (fontLabel ());
-		context->setFontColor (Palette::kMuted);
-		context->drawString (mLabel.c_str (),
-		                     CRect (r.left - 4, labelTop, r.right + 4, labelTop + Layout::kKnobLabelH),
-		                     kCenterText, true);
-	}
+		drawLettering (context, mLabel, Layout::kTextLabel, Palette::kInk, cx,
+		               textTop + Layout::kKnobValueH + Layout::kKnobLabelH / 2., Align::Centre);
 
 	setDirty (false);
 }
@@ -441,17 +524,26 @@ void Knob::onMouseWheelEvent (MouseWheelEvent& event)
 	event.consumed = true;
 }
 
+
 //------------------------------------------------------------------------
-// SegmentSwitch
+// RotarySwitch
 //------------------------------------------------------------------------
-SegmentSwitch::SegmentSwitch (const CRect& size, IControlListener* listener, int32_t tag,
-                              Layout::Accent accent)
+RotarySwitch::RotarySwitch (const CRect& size, IControlListener* listener, int32_t tag,
+                            const Layout::Control& layout)
 : CControl (size, listener, tag)
-, mAccent (accent)
+, mLayout (layout)
+, mGeometry (Layout::selectorOf (layout, 2))
 {
 }
 
-int SegmentSwitch::currentIndex () const
+void RotarySwitch::setNames (const std::vector<std::string>& names)
+{
+	mNames = names;
+	mGeometry = Layout::selectorOf (mLayout, count ());
+	invalid ();
+}
+
+int RotarySwitch::currentIndex () const
 {
 	if (count () < 2)
 		return 0;
@@ -459,7 +551,7 @@ int SegmentSwitch::currentIndex () const
 	return std::clamp (i, 0, count () - 1);
 }
 
-void SegmentSwitch::select (int index)
+void RotarySwitch::select (int index)
 {
 	if (count () < 2)
 		return;
@@ -471,60 +563,77 @@ void SegmentSwitch::select (int index)
 	invalid ();
 }
 
-void SegmentSwitch::draw (CDrawContext* context)
+void RotarySwitch::draw (CDrawContext* context)
 {
-	const CRect r = getViewSize ();
 	context->setDrawMode (kAntiAliasing | kNonIntegralMode);
 
-	CRect outer (r);
-	outer.inset (0.5, 0.5);
-	fillRoundRect (context, outer, 7., Palette::kSegBack, &Palette::kBorder);
-
-	const int n = count ();
-	if (n == 0)
-	{
-		setDirty (false);
-		return;
-	}
-
-	const CCoord inner = 2.;
-	const CCoord segWidth = (r.getWidth () - 2. * inner) / n;
+	const auto& g = mGeometry;
+	const CPoint centre (g.cx, g.cy);
+	const int n = std::min (count (), g.positions);
 	const int current = currentIndex ();
 
-	context->setFont (fontSegment ());
+	// ---- the printed positions: a mark and a name for each ----------------
 	for (int i = 0; i < n; ++i)
 	{
-		const CRect seg (r.left + inner + i * segWidth, r.top + inner,
-		                 r.left + inner + (i + 1) * segWidth, r.bottom - inner);
-		if (i == current)
-		{
-			fillRoundRect (context, seg, 5., Palette::accent (mAccent));
-			context->setFontColor (Palette::accentInk (mAccent));
-		}
-		else
-			context->setFontColor (Palette::kMuted);
-		context->drawString (mNames[static_cast<size_t> (i)].c_str (), seg, kCenterText, true);
+		const bool set = (i == current);
+		const double t = g.angle[i];
+		strokeLine (context, pointFromTop (centre, g.radius + 2.5, t), pointFromTop (centre, g.radius + 8.0, t),
+		            set ? Palette::kRed : Palette::kTick, set ? 2.0 : 1.6);
+		const std::string name = upper (mNames[static_cast<size_t> (i)]);
+		const Layout::Box b = Layout::selectorLabelBox (g, i, name);
+		drawLettering (context, name, Layout::kTextLabel, set ? Palette::kInk : Palette::kInkDim, b.left,
+		               (b.top + b.bottom) / 2.);
 	}
+
+	// ---- the chicken head: a round hub and a beak that points ------------
+	const double a = (n > 0) ? g.angle[current] : 0.0;
+	fillCircle (context, centre, g.radius * 0.8, CColor (11, 11, 11, 255));
+	strokeCircle (context, centre, g.radius * 0.8, CColor (68, 68, 68, 255), 0.8);
+
+	auto beak = owned (context->createGraphicsPath ());
+	if (beak)
+	{
+		const CPoint tip = pointFromTop (centre, g.radius + 3.0, a);
+		const CPoint left = pointFromTop (centre, 8.0, a - 90.0);
+		const CPoint right = pointFromTop (centre, 8.0, a + 90.0);
+		const CPoint tail = pointFromTop (centre, g.radius, a + 180.0);
+		beak->beginSubpath (tip);
+		beak->addLine (right);
+		// The tail, a quadratic through `tail`, as a cubic.
+		const CPoint c1 (right.x + 2.0 / 3.0 * (tail.x - right.x), right.y + 2.0 / 3.0 * (tail.y - right.y));
+		const CPoint c2 (left.x + 2.0 / 3.0 * (tail.x - left.x), left.y + 2.0 / 3.0 * (tail.y - left.y));
+		beak->addBezierCurve (c1, c2, left);
+		beak->closeSubpath ();
+		fillCap (context, beak, centre, g.radius);
+		context->setFrameColor (CColor (0, 0, 0, 255));
+		context->setLineWidth (0.8);
+		context->setLineStyle (roundLine ());
+		context->drawGraphicsPath (beak, CDrawContext::kPathStroked);
+		strokeLine (context, pointFromTop (centre, 2.0, a), tip, Palette::kInk, 1.8);
+	}
+
+	// ---- its name, under it ---------------------------------------------------
+	if (!mLabel.empty ())
+		drawLettering (context, mLabel, Layout::kTextLabel, Palette::kInk, g.cx, g.nameCentreY, Align::Centre);
 
 	setDirty (false);
 }
 
-void SegmentSwitch::onMouseDownEvent (MouseDownEvent& event)
+void RotarySwitch::onMouseDownEvent (MouseDownEvent& event)
 {
-	if (!event.buttonState.isLeft () || count () == 0)
+	if (!event.buttonState.isLeft () || count () < 2)
 		return;
-	const CRect r = getViewSize ();
-	const double fraction = (event.mousePosition.x - r.left) / r.getWidth ();
-	select (static_cast<int> (fraction * count ()));
+	const int picked = Layout::selectorPositionAt (mGeometry, event.mousePosition.x, event.mousePosition.y);
+	select (picked >= 0 ? picked : (currentIndex () + 1) % count ());
 	event.consumed = true;
 }
 
-void SegmentSwitch::onMouseUpEvent (MouseUpEvent& event)
+void RotarySwitch::onMouseUpEvent (MouseUpEvent& event)
 {
 	event.consumed = true;
 }
 
-void SegmentSwitch::onMouseWheelEvent (MouseWheelEvent& event)
+void RotarySwitch::onMouseWheelEvent (MouseWheelEvent& event)
 {
 	if (event.deltaY > 0.)
 		select (currentIndex () + 1);
@@ -534,19 +643,20 @@ void SegmentSwitch::onMouseWheelEvent (MouseWheelEvent& event)
 }
 
 //------------------------------------------------------------------------
-// Scope
+// Scope - the small colour OLED
 //------------------------------------------------------------------------
 namespace {
 constexpr CCoord kScopeInset   = 6.;
 constexpr CCoord kScopeTextH   = 13.;
 constexpr CCoord kScopeGrid    = 24.;
-constexpr CCoord kScopeRadius  = 8.;
+constexpr CCoord kScopeDot     = 12.;
+constexpr CCoord kScopeRadius  = 2.;
 } // anonymous namespace
 
 Scope::Scope (const CRect& size)
 : CView (size)
-, mMain (Palette::kText)
-, mCompanion (Palette::kMuted)
+, mMain (Palette::kInk)
+, mCompanion (Palette::kCompanion)
 {
 	setMouseEnabled (false);
 }
@@ -585,7 +695,7 @@ CRect Scope::plotRect () const
 }
 
 void Scope::drawTrace (CDrawContext* context, const std::vector<float>& data, const CColor& colour,
-                       CCoord width, bool fill) const
+                       CCoord width, bool fill, bool bloom) const
 {
 	if (data.size () < 2)
 		return;
@@ -605,71 +715,69 @@ void Scope::drawTrace (CDrawContext* context, const std::vector<float>& data, co
 	for (size_t i = 1; i < data.size (); ++i)
 		path->addLine (pointAtIndex (i));
 
+	// THE FILL fades from the line's colour at the top of the plot to
+	// black at the floor, as an OLED's lit area does.
 	if (fill)
 	{
 		auto area = owned (context->createGraphicsPath ());
-		if (area)
+		auto gradient = owned (CGradient::create (0.0, 1.0, CColor (colour.red, colour.green, colour.blue, 97),
+		                                          CColor (colour.red, colour.green, colour.blue, 5)));
+		if (area && gradient)
 		{
 			area->beginSubpath (CPoint (p.left, p.bottom));
 			for (size_t i = 0; i < data.size (); ++i)
 				area->addLine (pointAtIndex (i));
 			area->addLine (CPoint (p.right, p.bottom));
 			area->closeSubpath ();
-			CColor tint (colour);
-			tint.alpha = 40;
-			context->setFillColor (tint);
-			context->drawGraphicsPath (area, CDrawContext::kPathFilled);
+			context->fillLinearGradient (area, *gradient, CPoint (p.left, p.top), CPoint (p.left, p.bottom));
 		}
 	}
 
+	context->setLineStyle (roundLine ());
+	if (bloom)
+	{
+		// A slight bloom: the same line, wide and faint, under it.
+		CColor glow (colour);
+		glow.alpha = 60;
+		context->setFrameColor (glow);
+		context->setLineWidth (width + 2.5);
+		context->drawGraphicsPath (path, CDrawContext::kPathStroked);
+	}
 	context->setFrameColor (colour);
 	context->setLineWidth (width);
-	context->setLineStyle (CLineStyle (CLineStyle::kLineCapRound, CLineStyle::kLineJoinRound));
 	context->drawGraphicsPath (path, CDrawContext::kPathStroked);
 }
 
 void Scope::draw (CDrawContext* context)
 {
+	using namespace Layout;
 	const CRect r = getViewSize ();
 	context->setDrawMode (kAntiAliasing | kNonIntegralMode);
 
-	// ---- the plate and its grid ---------------------------------------
-	CRect plate (r);
-	plate.inset (0.5, 0.5);
-	fillRoundRect (context, plate, kScopeRadius, Palette::kScreen);
+	// ---- the glass: true black, and a dot grid ------------------------------
+	roundRect (context, r, kScopeRadius, &Palette::kScreen);
 	{
-		ConcatClip clip (*context, plate);
-		context->setFillColor (Palette::kGrid);
+		ConcatClip clip (*context, r);
+		context->setFillColor (Palette::kGridDot);
 		for (CCoord x = r.left + kScopeGrid; x < r.right - 1; x += kScopeGrid)
-			context->drawRect (CRect (x, r.top + 1, x + 1, r.bottom - 1), kDrawFilled);
+			for (CCoord y = r.top + kScopeDot; y < r.bottom - 1; y += kScopeDot)
+				context->drawEllipse (circleRect (CPoint (x, y), 0.6), kDrawFilled);
 		for (CCoord y = r.top + kScopeGrid; y < r.bottom - 1; y += kScopeGrid)
-			context->drawRect (CRect (r.left + 1, y, r.right - 1, y + 1), kDrawFilled);
+			for (CCoord x = r.left + kScopeDot; x < r.right - 1; x += kScopeDot)
+				context->drawEllipse (circleRect (CPoint (x, y), 0.6), kDrawFilled);
 
-		// ---- lettering, before the traces so a curve crosses it ----------
-		context->setFont (fontValue ());
-		CRect text (r);
-		text.inset (kScopeInset + 2, 3.);
-		text.bottom = text.top + kScopeTextH;
+		// ---- lettering, before the traces so a curve crosses it ------------
+		const double headY = r.top + 10.;
 		if (!mCaption.empty ())
-		{
-			context->setFontColor (Palette::kSubtle);
-			context->drawString (mCaption.c_str (), text, kLeftText, true);
-		}
+			drawLettering (context, mCaption, kTextScreen, Palette::kScreenText, r.left + 8., headY);
 		if (!mAnnotation.empty ())
-		{
-			context->setFontColor (Palette::kSubtle);
-			context->drawString (mAnnotation.c_str (), text, kRightText, true);
-		}
-		if (!mMainLegend.empty () || !mCompanionLegend.empty ())
-		{
-			CRect foot (r);
-			foot.inset (kScopeInset + 2, 3.);
-			foot.top = foot.bottom - kScopeTextH;
-			context->setFontColor (mMain);
-			context->drawString (mMainLegend.c_str (), foot, kLeftText, true);
-			context->setFontColor (mCompanion);
-			context->drawString (mCompanionLegend.c_str (), foot, kRightText, true);
-		}
+			drawLettering (context, mAnnotation, kTextScreen, mMain, r.right - 8., headY, Align::Right);
+		const double footY = r.bottom - 9.;
+		if (!mMainLegend.empty ())
+			drawLettering (context, mMainLegend, kTextScreen, mMain, r.left + 8., footY);
+		if (!mCompanionLegend.empty ())
+			drawLettering (context, mCompanionLegend, kTextScreen, Palette::kScreenText, r.right - 8., footY,
+			               Align::Right);
 
 		// ---- where the key went up -----------------------------------------
 		const CRect p = plotRect ();
@@ -677,32 +785,38 @@ void Scope::draw (CDrawContext* context)
 		{
 			const CCoord x = p.left + mGate * p.getWidth ();
 			const CCoord dashes[] = { 3., 3. };
-			context->setFrameColor (Palette::kDim);
+			context->setFrameColor (Palette::kScreenText);
 			context->setLineWidth (1.);
 			context->setLineStyle (CLineStyle (CLineStyle::kLineCapButt, CLineStyle::kLineJoinMiter, 0., 2, dashes));
 			context->drawLine (CPoint (x, p.top), CPoint (x, p.bottom));
 		}
 
-		// ---- the traces: the companion under, the main one over ---------------
-		drawTrace (context, mCompanionData, mCompanion, 1.5, false);
-		drawTrace (context, mMainData, mMain, 2., mFill);
+		// ---- the traces: the companion under, the main one over -------------
+		drawTrace (context, mCompanionData, mCompanion, 1.4, false, false);
+		drawTrace (context, mMainData, mMain, 1.6, mFill, true);
 
-		// ---- the dot ---------------------------------------------------------------
+		// ---- the ring ---------------------------------------------------------
 		if (mMarkerX >= 0.0 && mMarkerX <= 1.0)
 		{
 			const CPoint dot (p.left + mMarkerX * p.getWidth (),
 			                  p.bottom - std::clamp (mMarkerY, 0.0, 1.0) * p.getHeight ());
-			context->setFillColor (Palette::kScreen);
-			context->setFrameColor (mMain);
-			context->setLineWidth (2.);
-			context->setLineStyle (kLineSolid);
-			context->drawEllipse (circleRect (dot, 4.5), kDrawFilledAndStroked);
+			fillCircle (context, dot, 4., Palette::kScreen);
+			strokeCircle (context, dot, 4., Palette::kInk, 1.6);
 		}
-	}
 
-	// The edge last, over everything, so the corners stay clean.
-	context->setLineStyle (kLineSolid);
-	fillRoundRect (context, plate, kScopeRadius, CColor (0, 0, 0, 0), &Palette::kScreenEdge);
+		// ---- the glass: a faint sheen at the top left, a hairline highlight -
+		auto sheen = owned (context->createGraphicsPath ());
+		auto gradient = owned (CGradient::create (0.0, 0.46, CColor (255, 255, 255, 18), CColor (255, 255, 255, 0)));
+		if (sheen && gradient)
+		{
+			gradient->addColorStop (0.45, CColor (255, 255, 255, 4));
+			sheen->addRect (r);
+			context->fillLinearGradient (sheen, *gradient, CPoint (r.left, r.top),
+			                             CPoint (r.left + 0.35 * r.getWidth (), r.bottom));
+		}
+		strokeLine (context, CPoint (r.left + 3., r.top + 0.8), CPoint (r.right - 3., r.top + 0.8),
+		            CColor (255, 255, 255, 30), 0.6);
+	}
 
 	setDirty (false);
 }
@@ -731,32 +845,54 @@ void Lamp::draw (CDrawContext* context)
 	const CRect r = getViewSize ();
 	context->setDrawMode (kAntiAliasing | kNonIntegralMode);
 
-	context->setFont (fontLabel ());
-	const CCoord textWidth = context->getStringWidth (mName.c_str ());
-	const CCoord textLeft = r.right - textWidth;
-	const CPoint dot (textLeft - 10., (r.top + r.bottom) / 2.);
+	const double centreY = (r.top + r.bottom) / 2.;
+	const double textLeft = r.right - Lettering::width (mName, Layout::kTextLabel);
+	const CPoint dot (textLeft - 12., centreY);
 
+	// A lamp in a black bezel: dark red when off, lit red with a glow.
+	fillCircle (context, dot, 5.5, CColor (0, 0, 0, 255));
+	strokeCircle (context, dot, 5.5, Palette::kSectionEdge, 1.);
 	if (mOn)
 	{
 		CColor glow (Palette::kLampOn);
 		glow.alpha = 70;
-		context->setFillColor (glow);
-		context->drawEllipse (circleRect (dot, 7.), kDrawFilled);
-		context->setFillColor (Palette::kLampOn);
-		context->drawEllipse (circleRect (dot, 4.), kDrawFilled);
+		fillCircle (context, dot, 8., glow);
+		fillCircle (context, dot, 4., Palette::kLampOn);
 	}
 	else
+		fillCircle (context, dot, 4., Palette::kLampOff);
+	fillCircle (context, CPoint (dot.x - 1.2, dot.y - 1.2), 1.3, CColor (255, 255, 255, 64));
+
+	drawLettering (context, mName, Layout::kTextLabel, Palette::kInk, r.right, centreY, Align::Right);
+
+	setDirty (false);
+}
+
+//------------------------------------------------------------------------
+// TextLine
+//------------------------------------------------------------------------
+TextLine::TextLine (const CRect& size, const Lettering::Style& style, const CColor& colour)
+: CView (size)
+, mStyle (style)
+, mColour (colour)
+{
+	setMouseEnabled (false);
+}
+
+void TextLine::setText (const std::string& text)
+{
+	if (text != mText)
 	{
-		context->setFillColor (Palette::kLampOff);
-		context->setFrameColor (Palette::kLampEdge);
-		context->setLineWidth (1.);
-		context->setLineStyle (kLineSolid);
-		context->drawEllipse (circleRect (dot, 4.), kDrawFilledAndStroked);
+		mText = text;
+		invalid ();
 	}
+}
 
-	context->setFontColor (mOn ? Palette::kLampOn : Palette::kSubtle);
-	context->drawString (mName.c_str (), CRect (textLeft, r.top, r.right, r.bottom), kLeftText, true);
-
+void TextLine::draw (CDrawContext* context)
+{
+	const CRect r = getViewSize ();
+	context->setDrawMode (kAntiAliasing | kNonIntegralMode);
+	drawLettering (context, mText, mStyle, mColour, r.left, (r.top + r.bottom) / 2.);
 	setDirty (false);
 }
 

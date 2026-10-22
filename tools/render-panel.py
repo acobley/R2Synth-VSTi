@@ -15,8 +15,14 @@ Helvetica Neue and Menlo. It exists so that a control in the wrong place
 HERE is a control in the wrong place in the plug-in - the only way to
 judge a layout without a host.
 
-THE "SIGNAL FLOW" PANEL (branch UpdatedUI). The licence pill shows a
-sample evaluation line; the real words come from LicenceState.
+THE "SIGNAL FLOW" PANEL (branch UpdatedUI), dressed as THE BLACK PANEL
+(branch PolivoksUI, 22 Oct 2026): white printing on black, knurled knobs,
+chicken-head selectors, small colour OLED screens, and every letter in the
+70s sci-fi lettering - stroked from the glyphs dump-layout prints, parsed
+by SciFiLettering.h, so this script keeps no copy of the face. Faces are
+no longer this machine's business: the panel draws no font text. The
+licence pill shows a sample evaluation line; the real words come from
+LicenceState.
 
     python3 tools/render-panel.py [out.png]
 
@@ -31,7 +37,9 @@ import subprocess
 import sys
 import tempfile
 
-from PIL import Image, ImageDraw, ImageFont
+import math
+
+from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..'))
@@ -66,62 +74,29 @@ def dump_layout():
 # ---------------------------------------------------------------------------
 # The palette - R2SynthPanelViews.h
 # ---------------------------------------------------------------------------
-GROUND = (20, 21, 24)
-HEADER = (26, 28, 32)
-BORDER = (42, 45, 51)
-SECTION = (28, 30, 34)
-RULE = (36, 38, 43)
-TRACK = (46, 49, 55)
-CAP = (42, 44, 49)
-CAP_EDGE = (60, 64, 71)
-TEXT = (236, 234, 228)
-TITLE = (201, 204, 210)
-MUTED = (156, 161, 170)
-SUBTLE = (126, 131, 140)
-DIM = (74, 78, 86)
-SCREEN = (15, 16, 18)
-SCREEN_EDGE = (38, 41, 46)
-GRID = (26, 29, 33)
-SEG_BACK = (18, 19, 22)
-LAMP_ON = (255, 138, 61)
-LAMP_OFF = (58, 42, 32)
-LAMP_EDGE = (90, 58, 40)
+GROUND = (18, 18, 18)
+HEADER = (12, 12, 12)
+HEADER_RULE = (233, 230, 220)
+SECTION = (21, 21, 21)
+SECTION_EDGE = (217, 214, 204)
+INK = (244, 241, 232)
+INK_SOFT = (185, 182, 174)
+INK_DIM = (143, 140, 133)
+DIVIDER = (90, 88, 82)
+RULE = (58, 58, 58)
+TICK = (233, 230, 220)
+RED = (226, 52, 43)
+SCREW = (58, 58, 58)
+KNOB_BODY = (10, 10, 10)
+KNOB_RIM = (47, 47, 47)
+BEZEL = (5, 5, 5)
+BEZEL_EDGE = (60, 60, 60)
+GRID_DOT = (42, 45, 51)
+SCREEN_TEXT = (141, 150, 163)
+LAMP_ON = (255, 59, 47)
+LAMP_OFF = (58, 21, 18)
 
-ACCENT = {'osc': (242, 165, 65), 'filter': (86, 168, 245), 'amp': (95, 208, 160), 'mod': (176, 140, 255)}
-INK = {'osc': (26, 18, 5), 'filter': (6, 20, 36), 'amp': (6, 30, 20), 'mod': (22, 15, 38)}
-
-
-# ---------------------------------------------------------------------------
-# Faces: the nearest this machine has to Helvetica Neue and Menlo
-# ---------------------------------------------------------------------------
-def face(candidates, size):
-    for path in candidates:
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, int(size * SS))
-            except OSError:
-                pass
-    return ImageFont.load_default()
-
-SANS = ['/System/Library/Fonts/HelveticaNeue.ttc', '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf']
-SANS_BOLD = ['/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-             '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf']
-MONO = ['/System/Library/Fonts/Menlo.ttc', '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
-        '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf']
-MONO_BOLD = ['/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf',
-             '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf']
-CONDENSED = ['/System/Library/Fonts/Avenir Next Condensed.ttc',
-             '/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf']
-
-F_WORDMARK = face(CONDENSED, 23)
-F_TITLE = face(SANS_BOLD, 13)
-F_SUBTITLE = face(SANS, 12)
-F_LABEL = face(SANS_BOLD, 10)
-F_VALUE = face(MONO, 10)
-F_NOTE = face(SANS, 11)
-F_BADGE = face(MONO_BOLD, 12)
-F_SEGMENT = face(SANS_BOLD, 12)
+TRACE = {'osc': INK, 'filter': (47, 184, 255), 'amp': (56, 240, 160), 'mod': (194, 123, 255)}
 
 
 # ---------------------------------------------------------------------------
@@ -131,225 +106,366 @@ def p(v):
     return v * SS
 
 
-def box(r):
-    return [p(r[0]), p(r[1]), p(r[2]), p(r[3])]
+def pt(x, y):
+    return (p(x), p(y))
 
 
-def text_in(d, r, msg, fill, fnt, align='left'):
-    """VSTGUI's drawString in a rect: vertically centred."""
-    y = p((r[1] + r[3]) / 2)
-    if align == 'left':
-        d.text((p(r[0]), y), msg, fill=fill, font=fnt, anchor='lm')
-    elif align == 'right':
-        d.text((p(r[2]), y), msg, fill=fill, font=fnt, anchor='rm')
-    else:
-        d.text((p((r[0] + r[2]) / 2), y), msg, fill=fill, font=fnt, anchor='mm')
+def from_top(cx, cy, r, deg):
+    """The layout's angles: degrees from twelve o'clock, clockwise."""
+    t = math.radians(deg)
+    return cx + r * math.sin(t), cy - r * math.cos(t)
 
 
-def text_width(d, msg, fnt):
-    return d.textlength(msg, font=fnt) / SS
+def vstgui_angle(cx, cy, r, deg):
+    """VSTGUI's angles: 0 at three o'clock, clockwise (y down)."""
+    t = math.radians(deg)
+    return cx + r * math.cos(t), cy + r * math.sin(t)
 
 
-def round_rect(d, r, radius, fill=None, outline=None):
-    d.rounded_rectangle(box(r), radius=p(radius), fill=fill, outline=outline, width=SS if outline else 0)
+def stroke(d, pts, colour, width):
+    """A polyline with round caps and joins."""
+    if len(pts) == 1:
+        pts = pts * 2
+    d.line([pt(x, y) for x, y in pts], fill=colour, width=max(1, round(p(width))))
+    rr = width / 2
+    for x, y in pts:
+        d.ellipse([p(x - rr), p(y - rr), p(x + rr), p(y + rr)], fill=colour)
 
 
-def arc(d, cx, cy, radius, start, end, colour, width):
-    if end - start < 0.5:
-        return
-    bb = [p(cx - radius - width / 2), p(cy - radius - width / 2), p(cx + radius + width / 2), p(cy + radius + width / 2)]
-    d.arc(bb, start, end, fill=colour, width=p(width))
-    import math
-    for a in (start, end):       # round caps
-        t = math.radians(a)
-        x, y = cx + radius * math.cos(t), cy + radius * math.sin(t)
-        d.ellipse([p(x - width / 2), p(y - width / 2), p(x + width / 2), p(y + width / 2)], fill=colour)
-
-
-def disc(d, cx, cy, radius, fill=None, outline=None, width=1):
+def disc(d, cx, cy, radius, fill=None, outline=None, width=1.0):
     d.ellipse([p(cx - radius), p(cy - radius), p(cx + radius), p(cy + radius)], fill=fill, outline=outline,
-              width=p(width) if outline else 0)
+              width=max(1, round(p(width))) if outline else 0)
+
+
+def round_rect(d, r, radius, fill=None, outline=None, width=1.0):
+    d.rounded_rectangle([p(r[0]), p(r[1]), p(r[2]), p(r[3])], radius=p(radius), fill=fill, outline=outline,
+                        width=max(1, round(p(width))) if outline else 0)
+
+
+def quad(p0, q, p2, steps=8):
+    return [((1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * q[0] + t * t * p2[0],
+             (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * q[1] + t * t * p2[1])
+            for t in (i / steps for i in range(1, steps + 1))]
+
+
+def blend(c1, c2, t):
+    return tuple(int(round(a + (b - a) * t)) for a, b in zip(c1, c2))
+
+
+# ---------------------------------------------------------------------------
+# The lettering - the glyphs as dump-layout printed them
+# ---------------------------------------------------------------------------
+L = None
+
+
+def code_points(text):
+    out = []
+    for ch in text:
+        c = ord(ch)
+        if ord('a') <= c <= ord('z'):
+            c -= 32
+        elif 0xC0 <= c <= 0xFF and c not in (0xD7, 0xF7):
+            c = ord('Y') if c == 0xFF else ord('AAAAAAACEEEEIIIIDNOOOOO*OUUUUYTS'[(c & ~0x20) - 0xC0])
+        out.append(c)
+    return out
+
+
+def glyph(c):
+    return L['glyphs'].get(str(c)) or L['glyphs']['missing']
+
+
+def placed(text, style):
+    x, out = 0.0, []
+    for c in code_points(text):
+        if c == 32:
+            x += L['space']
+            continue
+        out.append((c, x))
+        x += glyph(c)[0] + style['weight'] + style['track']
+    return out, x
+
+
+def text_width(text, style):
+    _, end = placed(text, style)
+    return (end - style['track']) * style['cap'] / 6 if end > 0 else 0.0
+
+
+def lettering(d, text, style, colour, x, cy, align='left', stroke_units=None):
+    s = style['cap'] / 6
+    w = text_width(text, style)
+    left = x - w if align == 'right' else (x - w / 2 if align == 'centre' else x)
+    top = cy - (style['cap'] + style['weight'] * s) / 2
+    half = style['weight'] / 2
+    lw = (stroke_units or style['weight']) * s
+    glyphs, _ = placed(text, style)
+    for c, gx in glyphs:
+        ox, oy = left + (gx + half) * s, top + half * s
+        at = lambda u, v: (ox + u * s, oy + v * s)
+        line, start = [], None
+        for op, x1, y1, ex, ey in glyph(c)[1]:
+            if op == 'M':
+                if len(line) > 0:
+                    stroke(d, line, colour, lw)
+                line = [at(ex, ey)]
+                start = line[0]
+            elif op == 'L':
+                line.append(at(ex, ey))
+            elif op == 'Q':
+                line += quad(line[-1], at(x1, y1), at(ex, ey))
+            elif op == 'Z':
+                line.append(start)
+        if line:
+            stroke(d, line, colour, lw)
 
 
 # ---------------------------------------------------------------------------
 # The panel
 # ---------------------------------------------------------------------------
-def backdrop(d, L):
+def backdrop(d):
     W, H, HH = L['width'], L['height'], L['headerHeight']
+    S = L['styles']
     d.rectangle([0, 0, p(W), p(H)], fill=GROUND)
     d.rectangle([0, 0, p(W), p(HH)], fill=HEADER)
-    d.rectangle([0, p(HH - 1), p(W), p(HH)], fill=BORDER)
+    d.rectangle([0, p(HH - 2), p(W), p(HH)], fill=HEADER_RULE)
+
+    for x, y in L['screws']:
+        disc(d, x, y, 3.2, fill=SCREW, outline=(0, 0, 0), width=0.6)
+        stroke(d, [(x - 2.2, y - 2.2), (x + 2.2, y + 2.2)], (34, 34, 34), 0.8)
 
     wm = L['wordmark']
-    text_in(d, wm, 'R2', TEXT, F_WORDMARK)
-    w = text_width(d, 'R2', F_WORDMARK)
-    text_in(d, [wm[0] + w + 1, wm[1], wm[2], wm[3]], 'SYNTH', ACCENT['osc'], F_WORDMARK)
-    d.rectangle([p(wm[2] + 4), p(16), p(wm[2] + 5), p(40)], fill=BORDER)
+    cy = HH / 2 + 1
+    second = wm[0] + text_width('R2', S['wordmark']) + 12
+    for ink, units in ((INK, None), (HEADER, 0.32)):
+        lettering(d, 'R2', S['wordmark'], ink, wm[0], cy, stroke_units=units)
+        lettering(d, 'SYNTH', S['wordmark'], ink, second, cy, stroke_units=units)
+    dv = L['headerDivider']
+    d.rectangle([p(dv), p(16), p(dv + 1), p(40)], fill=DIVIDER)
 
-    for s in L['sections']:
-        r = s['rect']
-        round_rect(d, r, L['sectionRadius'], fill=SECTION, outline=BORDER)
-        top = r[1] + L['sectionPadTop']
-        disc(d, r[0] + L['sectionPadX'] + 4, top + L['sectionTitleH'] / 2, 4, fill=ACCENT[s['accent']])
-        tr = [r[0] + L['sectionPadX'] + 16, top, r[2] - L['sectionPadX'], top + L['sectionTitleH']]
-        text_in(d, tr, s['title'], TITLE, F_TITLE)
-        if s['subtitle']:
-            w = text_width(d, s['title'], F_TITLE)
-            text_in(d, [tr[0] + w + 10, tr[1], tr[2], tr[3]], s['subtitle'], SUBTLE, F_SUBTITLE)
+    for sec in L['sections']:
+        r = sec['rect']
+        round_rect(d, [r[0] + 0.5, r[1] + 0.5, r[2] - 0.5, r[3] - 0.5], L['sectionRadius'], fill=SECTION,
+                   outline=SECTION_EDGE, width=1.2)
+        b = sec['titleBox']
+        round_rect(d, b, 2, fill=SECTION, outline=SECTION_EDGE, width=1.2)
+        c = (b[1] + b[3]) / 2
+        lettering(d, sec['title'], S['title'], INK, b[0] + 8, c)
+        if sec['subtitle']:
+            lettering(d, sec['subtitle'], S['subtitle'], INK_SOFT, sec['subtitleLeft'], c)
 
     for x, y in L['chevrons']:
-        d.line([p(x - 3), p(y - 8), p(x + 3), p(y), p(x - 3), p(y + 8)], fill=DIM, width=p(2), joint='curve')
+        stroke(d, [(x - 5, y - 10), (x + 4, y), (x - 5, y + 10)], SECTION_EDGE, 2.2)
 
     for r in L['rules']:
         d.rectangle([p(r[0]), p(r[1]), p(r[2]) - 1, p(r[3]) - 1], fill=RULE)
 
+    bz = L['screenBezel']
+    for s in L['screens']:
+        r = s['rect']
+        round_rect(d, [r[0] - bz + 0.5, r[1] - bz + 0.5, r[2] + bz - 0.5, r[3] + bz - 0.5], 4, fill=BEZEL,
+                   outline=BEZEL_EDGE, width=1)
+
     for c in L['captions']:
         r, st = c['rect'], c['style']
+        cy = (r[1] + r[3]) / 2
         if st == 'block':
-            text_in(d, r, c['text'].upper(), ACCENT[c['accent']], F_LABEL)
+            lettering(d, c['text'], S['block'], INK, r[0], cy)
         elif st == 'field':
-            text_in(d, r, c['text'].upper(), MUTED, F_LABEL)
+            lettering(d, c['text'], S['label'], INK, r[0], cy)
         elif st == 'note':
-            text_in(d, r, c['text'], SUBTLE, F_NOTE)
+            lettering(d, c['text'], S['note'], INK_SOFT, r[0], cy)
         else:
-            disc(d, (r[0] + r[2]) / 2, (r[1] + r[3]) / 2, (r[3] - r[1]) / 2, fill=CAP)
-            text_in(d, r, c['text'], ACCENT[c['accent']], F_BADGE, 'centre')
+            bs = L['badgeSize']
+            x, y = (r[0] + r[2]) / 2, r[1] + bs / 2
+            disc(d, x, y, bs / 2 - 1, outline=SECTION_EDGE, width=1.4)
+            lettering(d, c['text'], S['badge'], INK, x, y, 'centre')
+            lettering(d, 'VCO', S['badgeSub'], INK, x, y + 20, 'centre')
 
 
-def knob(d, L, c):
-    r, dia, acc = c['rect'], c['diameter'], ACCENT[c['accent']]
-    stroke = 5 if dia >= 60 else 4
+def cap(d, cx, cy, radius):
+    """A black cap lit from the top left: concentric discs, the light
+    drifting towards the highlight as they shrink."""
+    steps = 24
+    for i in range(steps):
+        t = i / (steps - 1)
+        rr = radius * (1 - t * 0.85)
+        ox, oy = -radius * 0.25 * t, -radius * 0.35 * t
+        col = blend((5, 5, 5), (22, 22, 22), min(1, t / 0.4)) if t < 0.4 else blend((22, 22, 22), (58, 58, 58), (t - 0.4) / 0.6)
+        disc(d, cx + ox, cy + oy, rr, fill=col)
+
+
+def knob(d, c):
+    S = L['styles']
+    r, dia = c['rect'], c['diameter']
     cx, cy = (r[0] + r[2]) / 2, r[1] + dia / 2
-    radius = dia / 2 - stroke / 2 - 1
-    v = max(0.0, min(1.0, c['value']))
-    a = 135 + 270 * v
-    arc(d, cx, cy, radius, 135, 405, TRACK, stroke)
-    if c['bipolar']:
-        arc(d, cx, cy, radius, min(a, 270), max(a, 270), acc, stroke)
-        if abs(a - 270) < 0.5:
-            disc(d, cx, cy - radius, stroke / 2, fill=acc)
-    else:
-        arc(d, cx, cy, radius, 135, a, acc, stroke)
-    cap = radius - stroke / 2 - 4
-    disc(d, cx, cy, cap, fill=CAP, outline=CAP_EDGE)
-    import math
-    t = math.radians(a)
-    d.line([p(cx + cap * 0.2 * math.cos(t)), p(cy + cap * 0.2 * math.sin(t)),
-            p(cx + (cap - 2) * math.cos(t)), p(cy + (cap - 2) * math.sin(t))], fill=TEXT, width=p(2))
+    outer = dia / 2
+    body = outer - (6 if dia >= 44 else 5)
+    a = 135 + 270 * max(0.0, min(1.0, c['value']))
+
+    for i in range(11):
+        t = 135 + 27 * i
+        long_ = i in (0, 5, 10)
+        stroke(d, [vstgui_angle(cx, cy, body + 1.5, t), vstgui_angle(cx, cy, outer - (0 if long_ else 1.8), t)],
+               TICK, 1.3 if long_ else 0.9)
+    if dia >= 52:
+        lo = from_top(cx, cy, outer + 2, -138)
+        hi = from_top(cx, cy, outer + 2, 138)
+        lettering(d, '-' if c['bipolar'] else '0', S['tick'], TICK, lo[0] - 2, lo[1] + 4, 'right')
+        lettering(d, '+' if c['bipolar'] else '10', S['tick'], TICK, hi[0] + 2, hi[1] + 4)
+
+    teeth = [vstgui_angle(cx, cy, body if i % 2 == 0 else body - 1.4, 360 * i / 56) for i in range(56)]
+    d.polygon([pt(x, y) for x, y in teeth], fill=KNOB_BODY, outline=KNOB_RIM)
+    cap(d, cx, cy, body * 0.78)
+    disc(d, cx, cy, body * 0.78, outline=(0, 0, 0), width=0.8)
+    stroke(d, [vstgui_angle(cx, cy, body * 0.15, a), vstgui_angle(cx, cy, body - 0.5, a)], INK,
+           2.2 if dia >= 44 else 1.8)
+
     top = r[1] + dia + L['knobGap']
-    text_in(d, [r[0] - 4, top, r[2] + 4, top + L['knobValueH']], c['text'], TEXT, F_VALUE, 'centre')
-    top += L['knobValueH']
-    text_in(d, [r[0] - 4, top, r[2] + 4, top + L['knobLabelH']], c['label'].upper(), MUTED, F_LABEL, 'centre')
+    lettering(d, c['text'], S['value'], INK, cx, top + L['knobValueH'] / 2, 'centre')
+    lettering(d, c['label'], S['label'], INK, cx, top + L['knobValueH'] + L['knobLabelH'] / 2, 'centre')
 
 
-def switch(d, c):
-    r, names = c['rect'], c['names']
-    round_rect(d, r, 7, fill=SEG_BACK, outline=BORDER)
-    n = len(names)
-    cur = int(round(c['value'] * (n - 1))) if n > 1 else 0
-    seg = (r[2] - r[0] - 4) / n
+def selector(d, c):
+    S = L['styles']
+    g = c['selector']
+    cx, cy, rad = g['cx'], g['cy'], g['radius']
+    names = c['names']
+    cur = int(round(c['value'] * (len(names) - 1)))
     for i, name in enumerate(names):
-        sr = [r[0] + 2 + i * seg, r[1] + 2, r[0] + 2 + (i + 1) * seg, r[3] - 2]
-        if i == cur:
-            round_rect(d, sr, 5, fill=ACCENT[c['accent']])
-            text_in(d, sr, name, INK[c['accent']], F_SEGMENT, 'centre')
-        else:
-            text_in(d, sr, name, MUTED, F_SEGMENT, 'centre')
+        t = g['angles'][i]
+        on = i == cur
+        stroke(d, [from_top(cx, cy, rad + 2.5, t), from_top(cx, cy, rad + 8, t)], RED if on else TICK, 2 if on else 1.6)
+        b = g['labelBoxes'][i]
+        lettering(d, name, S['label'], INK if on else INK_DIM, b[0], (b[1] + b[3]) / 2)
+
+    a = g['angles'][cur]
+    disc(d, cx, cy, rad * 0.8, fill=(11, 11, 11), outline=(68, 68, 68), width=0.8)
+    tip = from_top(cx, cy, rad + 3, a)
+    left = from_top(cx, cy, 8, a - 90)
+    right = from_top(cx, cy, 8, a + 90)
+    tail = from_top(cx, cy, rad, a + 180)
+    beak = [tip, right] + quad(right, tail, left)
+    d.polygon([pt(x, y) for x, y in beak], fill=(26, 26, 26))
+    stroke(d, beak + [tip], (0, 0, 0), 0.8)
+    stroke(d, [from_top(cx, cy, 2, a), tip], INK, 1.8)
+    lettering(d, c['label'], S['label'], INK, cx, g['nameY'], 'centre')
 
 
-def screen(img, d, s):
+def screen(img, s):
+    S = L['styles']
     r = s['rect']
-    acc = ACCENT[s['accent']]
-    round_rect(d, r, 8, fill=SCREEN)
+    trace = TRACE[s['accent']]
+    d = ImageDraw.Draw(img)
+    round_rect(d, r, 2, fill=(0, 0, 0))
     for x in range(r[0] + 24, r[2] - 1, 24):
-        d.rectangle([p(x), p(r[1] + 1), p(x + 1) - 1, p(r[3] - 1)], fill=GRID)
+        for y in range(r[1] + 12, r[3] - 1, 12):
+            disc(d, x, y, 0.6, fill=GRID_DOT)
     for y in range(r[1] + 24, r[3] - 1, 24):
-        d.rectangle([p(r[0] + 1), p(y), p(r[2] - 1), p(y + 1) - 1], fill=GRID)
-    inset, th = 6, 13
-    tr = [r[0] + inset + 2, r[1] + 3, r[2] - inset - 2, r[1] + 3 + th]
-    if s['caption']:
-        text_in(d, tr, s['caption'], SUBTLE, F_VALUE)
-    if s['annotation']:
-        text_in(d, tr, s['annotation'], SUBTLE, F_VALUE, 'right')
-    fr = [r[0] + inset + 2, r[3] - 3 - th, r[2] - inset - 2, r[3] - 3]
-    if s['legend'][0]:
-        text_in(d, fr, s['legend'][0], acc, F_VALUE)
-    if s['legend'][1]:
-        text_in(d, fr, s['legend'][1], DIM if s['accent'] == 'mod' else MUTED, F_VALUE, 'right')
+        for x in range(r[0] + 12, r[2] - 1, 12):
+            disc(d, x, y, 0.6, fill=GRID_DOT)
 
-    pl, pt, pr, pb = r[0] + inset, r[1] + inset, r[2] - inset, r[3] - inset
+    if s['caption']:
+        lettering(d, s['caption'], S['screen'], SCREEN_TEXT, r[0] + 8, r[1] + 10)
+    if s['annotation']:
+        lettering(d, s['annotation'], S['screen'], trace, r[2] - 8, r[1] + 10, 'right')
+    if s['legend'][0]:
+        lettering(d, s['legend'][0], S['screen'], trace, r[0] + 8, r[3] - 9)
+    if s['legend'][1]:
+        lettering(d, s['legend'][1], S['screen'], SCREEN_TEXT, r[2] - 8, r[3] - 9, 'right')
+
+    inset, th = 6, 13
+    pl, ptop, pr, pb = r[0] + inset, r[1] + inset, r[2] - inset, r[3] - inset
     if s['caption'] or s['annotation']:
-        pt += th
+        ptop += th
     if s['legend'][0] or s['legend'][1]:
         pb -= th
 
     def pts(data):
         n = len(data)
-        return [(p(pl + (pr - pl) * i / (n - 1)), p(pb - max(0.0, min(1.0, v)) * (pb - pt))) for i, v in enumerate(data)]
+        return [(pl + (pr - pl) * i / (n - 1), pb - max(0.0, min(1.0, v)) * (pb - ptop)) for i, v in enumerate(data)]
 
     if 0 <= s['gate'] <= 1:
         x = pl + s['gate'] * (pr - pl)
-        y = pt
+        y = ptop
         while y < pb:
-            d.line([p(x), p(y), p(x), p(min(y + 3, pb))], fill=DIM, width=SS)
+            stroke(d, [(x, y), (x, min(y + 3, pb))], SCREEN_TEXT, 1)
             y += 6
 
     if s['companion']:
-        d.line(pts(s['companion']), fill=DIM if s['accent'] == 'mod' else MUTED, width=int(p(1.5)), joint='curve')
+        stroke(d, pts(s['companion']), blend((0, 0, 0), SCREEN_TEXT, 0.6), 1.4)
+
     main = pts(s['main'])
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
     if s['fill']:
-        overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
-        od = ImageDraw.Draw(overlay)
-        od.polygon([(p(pl), p(pb))] + main + [(p(pr), p(pb))], fill=acc + (40,))
-        img.alpha_composite(overlay)
-    d.line(main, fill=acc, width=p(2), joint='curve')
+        # The fill fades from the line's colour at the top of the plot to
+        # black at the floor: a vertical gradient through a polygon mask.
+        mask = Image.new('L', img.size, 0)
+        ImageDraw.Draw(mask).polygon([pt(pl, pb)] + [pt(x, y) for x, y in main] + [pt(pr, pb)], fill=255)
+        grad = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        gd = ImageDraw.Draw(grad)
+        for yy in range(int(p(ptop)), int(p(pb)) + 1):
+            t = (yy - p(ptop)) / max(1, p(pb) - p(ptop))
+            gd.line([(p(pl), yy), (p(pr), yy)], fill=trace + (int(97 + (5 - 97) * t),))
+        overlay.paste(grad, (0, 0), mask)
+    stroke(od, main, trace + (60,), 4.1)       # the bloom
+    img.alpha_composite(overlay)
+    d = ImageDraw.Draw(img)
+    stroke(d, main, trace, 1.6)
     if s['marker'][0] >= 0:
         mx = pl + s['marker'][0] * (pr - pl)
-        my = pb - max(0.0, min(1.0, s['marker'][1])) * (pb - pt)
-        disc(d, mx, my, 4.5, fill=SCREEN, outline=acc, width=2)
-    round_rect(d, r, 8, outline=SCREEN_EDGE)
+        my = pb - max(0.0, min(1.0, s['marker'][1])) * (pb - ptop)
+        disc(d, mx, my, 4, fill=(0, 0, 0), outline=INK, width=1.6)
+    # the glass: a hairline highlight along the top
+    sheen = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    stroke(ImageDraw.Draw(sheen), [(r[0] + 3, r[1] + 0.8), (r[2] - 3, r[1] + 0.8)], (255, 255, 255, 30), 0.6)
+    img.alpha_composite(sheen)
 
 
-def lamp(d, L):
+def lamp(d):
+    S = L['styles']
     r, on = L['lamp']['rect'], L['lamp']['on']
-    w = text_width(d, 'SELF-OSC', F_LABEL)
-    left = r[2] - w
     cy = (r[1] + r[3]) / 2
-    if on:
-        disc(d, left - 10, cy, 4, fill=LAMP_ON)
-    else:
-        disc(d, left - 10, cy, 4, fill=LAMP_OFF, outline=LAMP_EDGE)
-    text_in(d, [left, r[1], r[2], r[3]], 'SELF-OSC', LAMP_ON if on else SUBTLE, F_LABEL)
+    left = r[2] - text_width('SELF-OSC', S['label'])
+    x = left - 12
+    disc(d, x, cy, 5.5, fill=(0, 0, 0), outline=SECTION_EDGE, width=1)
+    disc(d, x, cy, 4, fill=LAMP_ON if on else LAMP_OFF)
+    lettering(d, 'SELF-OSC', S['label'], INK, r[2], cy, 'right')
 
 
-def pill(d, L):
+def pill(d):
+    S = L['styles']
     r = L['badge']
-    msg = 'Evaluation - 7 days left - activate...'
-    w = min(r[2] - r[0], text_width(d, msg, F_TITLE) + 40)
+    msg = L['pillText']
+    w = min(r[2] - r[0], text_width(msg, S['pill']) + 46)
     pr = [r[2] - w, r[1], r[2], r[3]]
-    round_rect(d, pr, (r[3] - r[1]) / 2, fill=(42, 36, 24), outline=(74, 59, 30))
-    disc(d, pr[0] + 16, (r[1] + r[3]) / 2, 4, fill=ACCENT['osc'])
-    text_in(d, [pr[0] + 28, pr[1], pr[2], pr[3]], msg, (242, 194, 122), F_TITLE)
+    round_rect(d, [pr[0] + 0.6, pr[1] + 0.6, pr[2] - 0.6, pr[3] - 0.6], 3, fill=(12, 12, 12), outline=RED, width=1.2)
+    cy = (r[1] + r[3]) / 2
+    disc(d, pr[0] + 16, cy, 4.5, fill=RED)
+    lettering(d, msg, S['pill'], INK, pr[0] + 30, cy)
 
 
 def main():
+    global L
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'docs', 'panel.png')
     L = dump_layout()
     img = Image.new('RGBA', (p(L['width']), p(L['height'])), GROUND + (255,))
     d = ImageDraw.Draw(img)
-    backdrop(d, L)
+    backdrop(d)
     for s in L['screens']:
-        screen(img, d, s)
-        d = ImageDraw.Draw(img)
-    lamp(d, L)
-    text_in(d, L['engineLine']['rect'], L['engineLine']['text'], SUBTLE, F_SUBTITLE)
-    text_in(d, L['info']['rect'], L['info']['text'], SUBTLE, F_VALUE)
+        screen(img, s)
+    d = ImageDraw.Draw(img)
+    lamp(d)
+    S = L['styles']
+    er = L['engineLine']['rect']
+    lettering(d, L['engineLine']['text'], S['engine'], INK, er[0], (er[1] + er[3]) / 2)
+    ir = L['info']['rect']
+    lettering(d, L['info']['text'], S['info'], INK, ir[0], (ir[1] + ir[3]) / 2)
     for c in L['controls']:
         if c['kind'] == 'knob':
-            knob(d, L, c)
+            knob(d, c)
         else:
-            switch(d, c)
-    pill(d, L)
+            selector(d, c)
+    pill(d)
     img = img.convert('RGB').resize((L['width'] * SCALE, L['height'] * SCALE), Image.LANCZOS)
     img.save(out)
     print('wrote %s (%dx%d)' % (out, img.width, img.height))

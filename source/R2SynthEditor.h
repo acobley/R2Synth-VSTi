@@ -5,8 +5,10 @@
 // left to right in the order the sound goes through them, the modulation
 // underneath, a header across the top. R2SynthLayout.h has the
 // picture and the numbers; R2SynthPanelViews.h has the knobs,
-// switches and screens. It replaced the FilterDrum grid of bar sliders -
+// selectors and screens. It replaced the FilterDrum grid of bar sliders -
 // the parameters, the controller and the processor are unchanged.
+// Dressed as THE BLACK PANEL (branch PolivoksUI, 22 Oct 2026): rotary
+// selectors for every switch, OLED screens, 70s sci-fi lettering.
 //
 // TWO RULES THIS PANEL KEEPS, and they are the ones that get broken
 // first:
@@ -23,8 +25,8 @@
 //   2. The layout is DATA, in R2SynthLayout.h, not positions typed
 //      into the middle of open().
 //
-// NO BITMAPS. Everything is drawn with paths and text, so the panel is
-// resolution-independent and resource/ needs no artwork.
+// NO BITMAPS. Everything is drawn with paths - the lettering too - so
+// the panel is resolution-independent and resource/ needs no artwork.
 //
 // TOOLTIPS MAY NEVER APPEAR ON macOS - see PORTING-GUIDE.md section 6.
 // So what the LFOs are doing is printed along the foot of the
@@ -82,8 +84,8 @@ public:
 
 private:
 	void addControl (const Layout::Control& control);
-	VSTGUI::CTextLabel* addTextLine (const Layout::Rect& r, VSTGUI::CFontRef font,
-	                                 const VSTGUI::CColor& colour, VSTGUI::CHoriTxtAlign align);
+	Panel::TextLine* addTextLine (const Layout::Rect& r, const Lettering::Style& style,
+	                              const VSTGUI::CColor& colour);
 	void registerControl (Steinberg::Vst::ParamID tag, VSTGUI::CControl* control);
 
 	/** Everything that depends on a parameter besides the control that
@@ -114,8 +116,8 @@ private:
 	Panel::Scope*       mAmpEnvView    = nullptr;
 	Panel::Scope*       mLfoView       = nullptr;
 	Panel::Lamp*        mSelfOscLamp   = nullptr;
-	VSTGUI::CTextLabel* mEngineLabel   = nullptr;
-	VSTGUI::CTextLabel* mModInfoLabel  = nullptr;
+	Panel::TextLine*    mEngineLabel   = nullptr;
+	Panel::TextLine*    mModInfoLabel  = nullptr;
 
 	/** The Shape LFO 1 is really running at, from kLfoShapeLive, and
 	    whether one has arrived since the Shape knob last moved. Without
