@@ -22,6 +22,11 @@ a project made with 1.0 opens and plays exactly as before.
 - **A lived-in finish**: dust, fine scratches, knob tops polished and marked
   by turning (the marks turn with the knob), and dust and fingerprints on
   the displays' glass. Light enough that every label stays readable.
+- **Twelve factory presets**: Init, Fat Bass, Acid Squelch, Sharp Lead,
+  Slow Pad, Wobble Bass, Brass, Pluck, Sub Bass, MS-20 Scream, Siren and
+  Tremolo Organ, for both the VST3 and the Audio Unit. They are an optional
+  part of the installer, in `/Library/Audio/Presets/AE Cobley/R2Synth`,
+  and show in your host's preset list.
 
 ## What it is
 
@@ -46,6 +51,7 @@ separately:
 
     /Library/Audio/Plug-Ins/VST3/R2Synth.vst3
     /Library/Audio/Plug-Ins/Components/R2Synth.component
+    /Library/Audio/Presets/AE Cobley/R2Synth        (the factory presets)
 
 Quit your DAW first - a running host holds the old copy open. Signed with a
 Developer ID and notarised by Apple, so it installs without any
@@ -74,7 +80,6 @@ activation code is a way of supporting the official signed build.
 ## Known gaps
 
 * **No pitch bend or mod wheel.** Neither is mapped to a parameter yet.
-* **No factory presets.** Save your own in your host.
 
 ## Uninstalling
 
@@ -83,6 +88,7 @@ A `.pkg` never will, so:
 ```sh
 sudo rm -rf /Library/Audio/Plug-Ins/VST3/R2Synth.vst3
 sudo rm -rf /Library/Audio/Plug-Ins/Components/R2Synth.component
+sudo rm -rf "/Library/Audio/Presets/AE Cobley/R2Synth"
 ```
 
 Your activation code lives in

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Controller State</key>
+	<data>
+	</data>
+	<key>Processor State</key>
+	<data>
+	AQAAACEAAACrqqqqqqrqPwAAAAAAAAAAAAAAAAAA4D8AAAAAAADwPwAAAAAA
+	APA/AAAAAAAAAABmZmZmZmbmPwAAAAAAAAAAG+i0gU4b4D8zMzMzMzPjP4dA
+	6siQR+Y/AAAAAAAA4D8AAAAAAAAAAAAAAAAAAAAAAHTlwQYX2T8AAAAAAADQ
+	P5qZmZmZmdk/AAAAAAAAAABVVVVVVVXpP+N6CeLg6rE/91E8Gki94j+amZmZ
+	mZm5Pz/Z8cYpouA/AAAAAAAAAADjegni4OqxP3/eJ9QE0eQ/MzMzMzMz6z9+
+	m3d8DnPeP1ZZQMqd0t0/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	AAAAAAAA
+	</data>
+	<key>manufacturer</key>
+	<integer>1095058287</integer>
+	<key>name</key>
+	<string>Fat Bass</string>
+	<key>subtype</key>
+	<integer>1399411577</integer>
+	<key>type</key>
+	<integer>1635085685</integer>
+	<key>version</key>
+	<integer>0</integer>
+</dict>
+</plist>

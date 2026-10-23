@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Controller State</key>
+	<data>
+	</data>
+	<key>Processor State</key>
+	<data>
+	AQAAACEAAAAcx3Ecx3HsPwAAAAAAAAAAAAAAAAAA4D8AAAAAAADwPwAAAAAA
+	APA/AAAAAAAAAAAAAAAAAADgPwAAAAAAAAAAAAAAAAAA4D8AAAAAAAAAAIdA
+	6siQR+Y/AAAAAAAA4D8AAAAAAAAAAAAAAAAAAAAAquIn0Yn34j+amZmZmZnJ
+	PwAAAAAAAOA/AAAAAAAAAAAAAAAAAADoP6XQvuOjws0/v/rJ8iTR4z8zMzMz
+	MzPTP7/6yfIk0eM/AAAAAAAAAABf4hpTdCjHP78Q7JV9l+U/mpmZmZmZ6T9/
+	Idgr+y7jP1ZZQMqd0t0/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	AAAAAAAA
+	</data>
+	<key>manufacturer</key>
+	<integer>1095058287</integer>
+	<key>name</key>
+	<string>Init</string>
+	<key>subtype</key>
+	<integer>1399411577</integer>
+	<key>type</key>
+	<integer>1635085685</integer>
+	<key>version</key>
+	<integer>0</integer>
+</dict>
+</plist>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Controller State</key>
+	<data>
+	</data>
+	<key>Processor State</key>
+	<data>
+	AQAAACEAAAA5juM4juPoPwAAAAAAAAAAAAAAAAAA4D8AAAAAAADwPwAAAAAA
+	AAAAIiIiIiIi4D+amZmZmZnpPwAAAAAAAAAAvLu7u7u73z+amZmZmZnpP+zs
+	Wqh7iso/AAAAAAAA4D8AAAAAAADwPwAAAAAAAAAAql1VT1+i4T8zMzMzMzPD
+	PwAAAAAAAOA/MzMzMzMzsz8AAAAAAADkP6N/KD8nJuk/P+8TaoJo6j8zMzMz
+	MzPjP38LtoiiaOk/AAAAAAAAAADEJeRiwtbnP38LtoiiaOk/MzMzMzMz6z8/
+	7xNqgmjqP1ZZQMqd0s0/mpmZmZmZ2T8AAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	AAAAAAAA
+	</data>
+	<key>manufacturer</key>
+	<integer>1095058287</integer>
+	<key>name</key>
+	<string>Slow Pad</string>
+	<key>subtype</key>
+	<integer>1399411577</integer>
+	<key>type</key>
+	<integer>1635085685</integer>
+	<key>version</key>
+	<integer>0</integer>
+</dict>
+</plist>

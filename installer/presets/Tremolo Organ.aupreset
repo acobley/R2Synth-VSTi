@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Controller State</key>
+	<data>
+	</data>
+	<key>Processor State</key>
+	<data>
+	AQAAACEAAAA5juM4juPoPwAAAAAAAPA/AAAAAAAA4D8AAAAAAADwPwAAAAAA
+	APA/AAAAAAAA8D8zMzMzMzPjPwAAAAAAAPA/VVVVVVVV6T+amZmZmZnZPxMm
+	utd5uug/AAAAAAAA4D8AAAAAAADwPwAAAAAAAAAAqulvjViL6D8AAAAAAAAA
+	AAAAAAAAAOA/AAAAAAAAAAAAAAAAAADgP6XQvuOjws0/v/rJ8iTR4z8AAAAA
+	AADwP7/6yfIk0eM/mpmZmZmZ2T+l0L7jo8LNP78Q7JV9l+U/AAAAAAAA8D9+
+	m3d8DnPeP1ZZQMqd0t0/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	AAAAAAAA
+	</data>
+	<key>manufacturer</key>
+	<integer>1095058287</integer>
+	<key>name</key>
+	<string>Tremolo Organ</string>
+	<key>subtype</key>
+	<integer>1399411577</integer>
+	<key>type</key>
+	<integer>1635085685</integer>
+	<key>version</key>
+	<integer>0</integer>
+</dict>
+</plist>

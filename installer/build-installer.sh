@@ -51,8 +51,9 @@ PRESETS_ID="audio.r2synth.presets"
 # each: VST3 uses $COMPANY/$PLUGIN-NAME (Steinberg's Preset Locations), and
 # an Audio Unit uses <manufacturer>/<plug-in> taken from the component's name
 # - "AE Cobley: R2Synth" - which lands in the same place. (No full stops in
-# the maker's name: REAPER cuts an AU name at the first one.) R2Synth ships
-# no presets yet; the component appears when installer/presets has some.
+# the maker's name: REAPER cuts an AU name at the first one.) The presets
+# come from installer/presets (tools/make-presets.sh writes them); with
+# none there, the component is left out.
 PRESETS_DIR="/Library/Audio/Presets/AE Cobley/$NAME"
 
 #-----------------------------------------------------------------------------

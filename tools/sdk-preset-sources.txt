@@ -1,0 +1,14 @@
+# The VST3 SDK sources that PresetFile drags in, for tools/make-presets.cpp.
+# Paths are relative to the SDK root. The same set as ForTran's.
+public.sdk/source/vst/vstpresetfile.cpp
+public.sdk/source/common/memorystream.cpp
+base/source/fstreamer.cpp
+base/source/fbuffer.cpp
+base/source/fstring.cpp
+base/source/fobject.cpp
+base/source/fdebug.cpp
+base/source/baseiids.cpp
+base/source/updatehandler.cpp
+base/thread/source/flock.cpp
+pluginterfaces/base/funknown.cpp
+pluginterfaces/base/coreiids.cpp

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Controller State</key>
+	<data>
+	</data>
+	<key>Processor State</key>
+	<data>
+	AQAAACEAAABCewntJbTnPwAAAAAAAPA/AAAAAAAA4D8AAAAAAADwPwAAAAAA
+	APA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4D8AAAAAAAAAAPJ+
+	K27ecNM/AAAAAAAA8D8AAAAAAAAAAAAAAAAAAPA/qmSdCy425z+amZmZmZnJ
+	PwAAAAAAAOA/AAAAAAAAAAAAAAAAAADgP6XQvuOjws0/v/rJ8iTR4z8AAAAA
+	AADwP7/6yfIk0eM/AAAAAAAAAACl0L7jo8LNP78Q7JV9l+U/AAAAAAAA8D9/
+	3ifUBNHkP1ZZQMqd0t0/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	AAAAAAAA
+	</data>
+	<key>manufacturer</key>
+	<integer>1095058287</integer>
+	<key>name</key>
+	<string>Siren</string>
+	<key>subtype</key>
+	<integer>1399411577</integer>
+	<key>type</key>
+	<integer>1635085685</integer>
+	<key>version</key>
+	<integer>0</integer>
+</dict>
+</plist>

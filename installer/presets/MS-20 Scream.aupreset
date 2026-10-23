@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Controller State</key>
+	<data>
+	</data>
+	<key>Processor State</key>
+	<data>
+	AQAAACEAAABCewntJbTnPwAAAAAAAAAAAAAAAAAA4D8AAAAAAADwPwAAAAAA
+	AAAAvLu7u7u73z9mZmZmZmbmPwAAAAAAAAAAAAAAAAAA4D8AAAAAAAAAABMm
+	utd5uug/AAAAAAAA4D8AAAAAAADwPxEREREREZE/a1q4y1V44D8zMzMzMzPr
+	PwAAAAAAAOA/AAAAAAAAAAAAAAAAAADoP6XQvuOjws0//+ndXKc55j8zMzMz
+	MzPTP7/6yfIk0eM/AAAAAAAAAABf4hpTdCjHP78Q7JV9l+U/zczMzMzM7D8/
+	7xNqgmjiP1ZZQMqd0t0/AAAAAAAAAAAAAAAAAAAAAJ5cN5az/OE/AAAAAAAA
+	4D8AAAAA
+	</data>
+	<key>manufacturer</key>
+	<integer>1095058287</integer>
+	<key>name</key>
+	<string>MS-20 Scream</string>
+	<key>subtype</key>
+	<integer>1399411577</integer>
+	<key>type</key>
+	<integer>1635085685</integer>
+	<key>version</key>
+	<integer>0</integer>
+</dict>
+</plist>
