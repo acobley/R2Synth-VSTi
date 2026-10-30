@@ -729,8 +729,11 @@ private:
     thread. Sample-rate independent: it is indexed by Hz / fs. */
 struct LadderTuning
 {
-	static constexpr int    kPoints = 256;
-	static constexpr double kMinNorm = 1.0e-4;               // 4.4 Hz at 44.1 k
+	// The span reaches 2.5e-5 because the engine runs at kOversample x
+	// the host: 20 Hz at 2 x 192 kHz is 5.2e-5. (It was 1e-4 at 1x.) The
+	// point count grew with the span, so the table is as dense as it was.
+	static constexpr int    kPoints = 300;
+	static constexpr double kMinNorm = 2.5e-5;               // 9.6 Hz at a 384 k engine
 	static constexpr double kMaxNorm = kMaxCutoffFraction;   // the ceiling
 
 	double coefficient[kPoints];
@@ -984,15 +987,64 @@ double traceEnvelopes (const AdsrSpec& vcf, const AdsrSpec& vca,
 void traceLfo (LfoOutput output, double shape, float* out, int count, double cycles);
 
 //------------------------------------------------------------------------
+/** THE ENGINE RUNS AT kOversample x THE HOST'S RATE.
+
+    The MS-20 and MS-20 Late filters solve a diode clipper (and the Late
+    one an OTA tanh) inside their zero-delay feedback loops. Clipping makes
+    harmonics, and at the host's rate the ones above Nyquist fold back as
+    inharmonic tones: with a bright cutoff, high resonance and the upper
+    octaves the worst spur was -36 dB below the note at 1x, -63 dB at 2x
+    (AUDIT-denormals-aliasing.md). So the whole voice - VCOs, LFOs,
+    envelopes, filters - runs at 2x and HalfbandDecimator brings it back.
+
+    A synth makes its own signal, so there is no upsampler: only the one
+    decimator at the end. What stays at the HOST's rate is what the user
+    sees: the cutoff ceiling (cutoffCeilingHz of the host rate, which the
+    panel prints) and the output level smoother, which runs after the
+    decimator. */
+constexpr int kOversample = 2;
+
+/** The engine's own rate - the one every coefficient is computed at, and
+    the one the panel's filter trace must use to draw what is heard. */
+inline double engineRate (double hostRate) { return hostRate * kOversample; }
+
+/** 2:1 decimation through a polyphase IIR half-band: two chains of four
+    first-order allpasses, the even input sample through one and the odd
+    through the other, averaged (the structure and design method of
+    Laurent de Soras's HIIR). Eight coefficients, transition band 0.04:
+    flat to 20 kHz at 96 kHz in, and everything from 28 kHz up - which
+    is what would fold below 20 kHz - down by more than 100 dB. A few
+    samples' group delay at low frequencies; no latency to report.
+
+    SDK-free and allocation-free. The allpass states are flushed below
+    1e-30: in silence they otherwise stick in the denormal range. */
+class HalfbandDecimator
+{
+public:
+	static constexpr int kCoefs = 8;
+
+	void reset ();
+
+	/** Two engine-rate samples, in order, in; one host-rate sample out. */
+	double process (double first, double second);
+
+private:
+	double mX[kCoefs] = {};     ///< each allpass's previous input
+	double mY[kCoefs] = {};     ///< each allpass's previous output
+};
+
+//------------------------------------------------------------------------
 class R2SynthDsp
 {
 public:
 	R2SynthDsp ();
 
 	/** Recomputes EVERY rate-dependent coefficient and resets state.
-	    Call it from setupProcessing, never from process(). */
+	    Call it from setupProcessing, never from process(). The rate is
+	    the HOST's; the engine runs at engineRate() of it - see
+	    kOversample. */
 	void setSampleRate (double sampleRate);
-	double sampleRate () const { return mSampleRate; }
+	double sampleRate () const { return mHostRate; }
 
 	/** The largest block the host will ask for. Called from
 	    setupProcessing only; nothing in render() allocates. */
@@ -1095,9 +1147,12 @@ public:
 private:
 	float renderSample ();
 
-	double mSampleRate   = 44100.0;
+	double mHostRate     = 44100.0;   ///< what the host runs at
+	double mSampleRate   = 88200.0;   ///< what the engine runs at: kOversample x
 	int    mMaxBlockSize = 0;
 	double mOutputDb     = 0.0;
+
+	HalfbandDecimator mDecimator;
 
 	Vco   mVco[kNumVcos];
 	MsLfo mLfo;

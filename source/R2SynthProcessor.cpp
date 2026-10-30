@@ -3,6 +3,7 @@
 //------------------------------------------------------------------------
 
 #include "R2SynthProcessor.h"
+#include "DenormalGuard.h"
 #include "R2SynthIDs.h"
 
 #include "base/source/fstreamer.h"
@@ -275,6 +276,10 @@ void R2SynthProcessor::writeOutput (ProcessData& data, int32 offset, int32 numSa
 //------------------------------------------------------------------------
 tresult PLUGIN_API R2SynthProcessor::process (ProcessData& data)
 {
+	// Flush-to-zero for this call only; the host's FPU mode comes back on
+	// return. See DenormalGuard.h.
+	ScopedFlushDenormals noDenormals;
+
 	// PARAMETERS FIRST, ALWAYS - before the early return below, or a
 	// parameter-only block would be thrown away along with the block.
 	//

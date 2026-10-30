@@ -713,7 +713,8 @@ void R2SynthDsp::setSampleRate (double sampleRate)
 	if (sampleRate < 1000.0)
 		sampleRate = 44100.0;
 
-	mSampleRate = sampleRate;
+	mHostRate   = sampleRate;
+	mSampleRate = engineRate (sampleRate);   // see kOversample
 
 	// EVERY rate-dependent coefficient, here and nowhere else.
 	for (int i = 0; i < kNumVcos; ++i)
@@ -729,7 +730,7 @@ void R2SynthDsp::setSampleRate (double sampleRate)
 	mLfoRes.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mLfo2Level.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
 	mEnvAmount.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
-	mOutput.setSampleRate (mSampleRate, kTrimSmoothingSeconds);
+	mOutput.setSampleRate (mHostRate, kTrimSmoothingSeconds);   // after the decimator
 
 	mLfo.setSampleRate (mSampleRate);
 	mLfo2.setSampleRate (mSampleRate);
@@ -774,6 +775,7 @@ void R2SynthDsp::reset ()
 	mLastLfoShape = mLfoShapeKnob;
 	mLfo.reset ();
 	mFilter.reset ();
+	mDecimator.reset ();
 	mMs20.reset ();
 	mMs20Late.reset ();
 	mFilterFadeSamples = 0;
@@ -1078,7 +1080,9 @@ float R2SynthDsp::renderSample ()
 	                     + mKeyTrack * (note - 60.0) / 12.0;
 
 	double cutoff = std::exp2 (octaves);
-	cutoff = std::clamp (cutoff, kMinCutoffHz, cutoffCeilingHz (mSampleRate));
+	// The ceiling is the HOST rate's, the one the panel prints - not the
+	// engine's, which would let the knob's top end move with kOversample.
+	cutoff = std::clamp (cutoff, kMinCutoffHz, cutoffCeilingHz (mHostRate));
 	mLastCutoffHz = cutoff;
 
 	// The noise floor - see kFilterNoiseLevel. A 32-bit LCG: cheap,
@@ -1146,9 +1150,13 @@ void R2SynthDsp::render (float* left, float* right, int numSamples)
 	if (numSamples <= 0 || left == nullptr || right == nullptr)
 		return;
 
+	// kOversample engine samples per host sample, then the half-band.
+	static_assert (kOversample == 2, "HalfbandDecimator is 2:1");
 	for (int i = 0; i < numSamples; ++i)
 	{
-		const float s = renderSample ();
+		const double a = renderSample ();
+		const double b = renderSample ();
+		const float s = static_cast<float> (mDecimator.process (a, b));
 		left[i]  = s;
 		right[i] = s;
 	}
@@ -1156,6 +1164,51 @@ void R2SynthDsp::render (float* left, float* right, int numSamples)
 	applyOutputLevel (left, right, numSamples);
 }
 
+//------------------------------------------------------------------------
+// HalfbandDecimator
+//------------------------------------------------------------------------
+namespace {
+/** HIIR's compute_coefs_spec_order_tbw (8, 0.04), to double precision.
+    Even-indexed coefficients run the second (later) input sample, odd
+    ones the first. Measured through this class at 96 kHz in: 0.0 dB to
+    20 kHz; -107 dB at 28 kHz, -119 at 30, -105 at 36, -100 at 44. */
+constexpr double kHalfbandCoefs[HalfbandDecimator::kCoefs] = {
+	0.04063346092419326, 0.1505051290226746, 0.3007570559918741, 0.4607745049614506,
+	0.6095243148961883,  0.7385038411188573, 0.8492238103920661, 0.9497427837050002,
+};
+
+inline double flushTiny (double v)
+{
+	return (v > -1.0e-30 && v < 1.0e-30) ? 0.0 : v;
+}
+} // namespace
+
+void HalfbandDecimator::reset ()
+{
+	for (int i = 0; i < kCoefs; ++i)
+		mX[i] = mY[i] = 0.0;
+}
+
+double HalfbandDecimator::process (double first, double second)
+{
+	double a = second;                  // path A: coefficients 0, 2, 4, 6
+	double b = first;                   // path B: coefficients 1, 3, 5, 7
+	for (int i = 0; i < kCoefs; i += 2)
+	{
+		const double ya = kHalfbandCoefs[i] * (a - mY[i]) + mX[i];
+		mX[i] = a;
+		mY[i] = flushTiny (ya);
+		a = mY[i];
+
+		const double yb = kHalfbandCoefs[i + 1] * (b - mY[i + 1]) + mX[i + 1];
+		mX[i + 1] = b;
+		mY[i + 1] = flushTiny (yb);
+		b = mY[i + 1];
+	}
+	return 0.5 * (a + b);
+}
+
+//------------------------------------------------------------------------
 void R2SynthDsp::applyOutputLevel (float* left, float* right, int numSamples)
 {
 	if (numSamples <= 0 || left == nullptr || right == nullptr)

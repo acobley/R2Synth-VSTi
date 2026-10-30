@@ -522,17 +522,89 @@ From `tests/DspTests.cpp`, printed on every run:
 
 | Case | Peak |
 |---|---|
-| Default patch, notes C2–C6, at 44.1 / 48 / 96 k | **−6.9 dBFS** |
-| Worst case — three squares in unison, full resonance — at 0 dB Output Level | +0.1 dBFS (+6.1 at the +6 dB maximum) |
+| Default patch, notes C2–C6, at 44.1 / 48 / 96 k | **−6.4 dBFS** (−6.9 before 2× oversampling) |
+| Worst case — three squares in unison, full resonance — at 0 dB Output Level | −1.3 dBFS (+4.7 at the +6 dB maximum; +0.1 / +6.1 before) |
 | Self-oscillation alone, all VCOs off | −5.7 dBFS |
-| MS-20 I: default patch | −8.6 dBFS peak; RMS −16.7 dB (ladder −16.6) |
-| MS-20 I: worst case at 0 dB Output Level | −7.0 dBFS |
+| MS-20 I: default patch | −7.9 dBFS peak; RMS −16.7 dB (ladder −16.6) |
+| MS-20 I: worst case at 0 dB Output Level | −7.0 dBFS (measured at 1×) |
 | MS-20 I: self-oscillation alone | −9.3 dBFS |
-| MS-20 II: default patch | −7.9 dBFS peak; RMS −16.5 dB (ladder −16.6) |
-| MS-20 II: worst case at 0 dB Output Level | −5.2 dBFS |
+| MS-20 II: default patch | −7.4 dBFS peak; RMS −16.5 dB (ladder −16.6) |
+| MS-20 II: worst case at 0 dB Output Level | −5.2 dBFS (measured at 1×) |
 | MS-20 II: self-oscillation alone | −9.6 dBFS |
 
 `kMixerGain` (0.5) and `kVoiceGain` (0.9) were set from these numbers.
+
+Since 2× oversampling the peaks have moved by up to 0.7 dB while every RMS is
+unchanged. The half-band decimator is an IIR, so its phase response is not
+linear, and that reshapes waveform peaks without changing their energy.
+
+## Oversampling the engine (30 Oct 2026)
+
+From the DXi-DEv audit (`AUDIT-denormals-aliasing.md`). The MS-20 and MS-20 Late
+filters solve a diode clipper (the Late one also has an OTA tanh) inside their
+zero-delay loops. At the host's rate, the harmonics the clipping makes above
+Nyquist folded back as inharmonic tones. With one saw, cutoff 6 kHz, full
+resonance and C7, the worst spur was **−36 dB** below the note (MS-20) and
+**−42 dB** (Late).
+
+**The whole engine now runs at `kOversample` (2) × the host rate.** That is the
+VCOs, LFOs, envelopes, smoothers and all three filters. `HalfbandDecimator`
+brings it back: a polyphase IIR half-band built from two chains of four
+first-order allpasses, using HIIR's design (8 coefficients, transition band
+0.04). Measured through the class at 96 kHz in, it is flat to 20 kHz within
+0.01 dB, and 28–44 kHz (everything that would fold below 20 kHz) is down more
+than 100 dB. There is no upsampler, because a synth makes its own signal, and
+no latency to report.
+
+What stays at the host's rate is what the user sees:
+
+* the **cutoff ceiling**, `cutoffCeilingHz (host rate)`, which the panel prints.
+  The engine-rate ceiling would be twice as high and would move the knob's top
+  end;
+* the **output level smoother**, which runs after the decimator;
+* `R2SynthDsp::sampleRate()`, which reports the host's rate. `engineRate()`
+  gives the engine's.
+
+`filterDisplayData` now clamps the cutoff to the host ceiling itself, then
+draws `traceFilterResponse` at the **engine** rate, because that is the filter
+that is heard. The ladder's tuning table had to reach lower normalised
+frequencies: `kMinNorm` went from 1e-4 to 2.5e-5 (20 Hz on a 2 × 192 kHz
+engine is 5.2e-5), and `kPoints` from 256 to 300 to keep the table as dense.
+
+Measured, with one saw at cutoff 6 kHz (worst spur relative to the note):
+
+| Filter, resonance | A5 before | A5 after | C7 before | C7 after |
+|---|---|---|---|---|
+| Moog, 0 (the polyBLEP residue) | −79 | −95 | −71 | −91 |
+| MS-20, 0 | −70 | −83 | −61 | −79 |
+| MS-20, 1.0 | **−47** | −70 | **−36** | −63 |
+| MS-20 Late, 0 | −69 | −82 | −61 | −79 |
+| MS-20 Late, 1.0 | **−53** | −64 | **−42** | −72 |
+
+The cost is twice the CPU, as expected: one note, three VCOs, on the arm64
+Linux VM:
+
+| Filter | 1× | 2× |
+|---|---|---|
+| Moog | 3.3 ms | 6.3 ms |
+| MS-20 | 9.2 ms | 18.6 ms |
+| MS-20 Late | 9.6 ms | 19.3 ms |
+
+The figures are CPU per second of audio, so under 2 % of a core.
+
+`DspTests` `testOversampling` checks:
+
+* `sampleRate()` is the host's and `engineRate` is 2× it;
+* the half-band is flat at 1 and 20 kHz and down 95 dB at 28, 30, 36 and 44 kHz;
+* MS-20 and MS-20 Late at C7, 6 kHz and full resonance: the worst spur is under
+  −55 dB (it measures −62 and −72);
+* the spur search finds a naive saw's aliases (the negative control);
+* the decimator ends at exactly zero, never denormal, in silence.
+
+`ScopedFlushDenormals` (`source/DenormalGuard.h`, from SpaceDub) now wraps
+`R2SynthProcessor::process` as belt and braces. The DSP already flushed its own
+state. Adding the header adds a file to `source/`, so re-run
+`./setup-xcode.sh` before the next Xcode build.
 
 ## Verification
 

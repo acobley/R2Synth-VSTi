@@ -2196,6 +2196,194 @@ static void testLadderResponse ()
 	check (nyq[3] == -120.f, "points above Nyquist read -120 dB");
 }
 
+//------------------------------------------------------------------------
+// OVERSAMPLING. The engine runs at kOversample x the host rate and
+// HalfbandDecimator brings it back, because the MS-20 filters' diode
+// clippers alias at 1x (AUDIT-denormals-aliasing.md: worst spur -36 dB
+// below the note at C7, cutoff 6 kHz, full resonance).
+//------------------------------------------------------------------------
+namespace {
+/** In-place radix-2 FFT, for the spur search. n a power of two. */
+void fft (std::vector<double>& re, std::vector<double>& im)
+{
+	const std::size_t n = re.size ();
+	for (std::size_t i = 1, j = 0; i < n; ++i)
+	{
+		std::size_t bit = n >> 1;
+		for (; j & bit; bit >>= 1)
+			j ^= bit;
+		j ^= bit;
+		if (i < j)
+		{
+			std::swap (re[i], re[j]);
+			std::swap (im[i], im[j]);
+		}
+	}
+	for (std::size_t len = 2; len <= n; len <<= 1)
+	{
+		const double ang = -2.0 * 3.14159265358979323846 / static_cast<double> (len);
+		for (std::size_t i = 0; i < n; i += len)
+			for (std::size_t k = 0; k < len / 2; ++k)
+			{
+				const double wr = std::cos (ang * k), wi = std::sin (ang * k);
+				const double xr = re[i + k + len / 2] * wr - im[i + k + len / 2] * wi;
+				const double xi = re[i + k + len / 2] * wi + im[i + k + len / 2] * wr;
+				re[i + k + len / 2] = re[i + k] - xr;
+				im[i + k + len / 2] = im[i + k] - xi;
+				re[i + k] += xr;
+				im[i + k] += xi;
+			}
+	}
+}
+
+/** The strongest bin more than 6 bins from any harmonic of f0 below
+    Nyquist, in dB relative to the fundamental: how loud the worst alias
+    is. 4-term Blackman-Harris, the last 16384 samples of `x`. */
+double worstSpurDb (const std::vector<float>& x, double fs, double f0)
+{
+	const std::size_t n = 16384;
+	std::vector<double> re (n), im (n, 0.0);
+	const double pi = 3.14159265358979323846;
+	for (std::size_t i = 0; i < n; ++i)
+	{
+		const double t = 2.0 * pi * static_cast<double> (i) / static_cast<double> (n);
+		const double w = 0.35875 - 0.48829 * std::cos (t) + 0.14128 * std::cos (2 * t) - 0.01168 * std::cos (3 * t);
+		re[i] = w * x[x.size () - n + i];
+	}
+	fft (re, im);
+	const double df = fs / static_cast<double> (n);
+	double fund = 0.0, spur = 0.0;
+	for (std::size_t b = 1; b < n / 2; ++b)
+	{
+		const double hz = b * df;
+		if (hz < 20.0)
+			continue;
+		const double p = re[b] * re[b] + im[b] * im[b];
+		const double nearest = std::round (hz / f0) * f0;
+		const bool harmonic = nearest > 0.0 && std::fabs (hz - nearest) <= 6.0 * df;
+		if (std::fabs (hz - f0) <= 6.0 * df)
+			fund = std::max (fund, p);
+		else if (!harmonic)
+			spur = std::max (spur, p);
+	}
+	return 10.0 * std::log10 ((spur + 1e-300) / (fund + 1e-300));
+}
+
+/** One saw VCO, steady, through `type` at `resonance`, cutoff fixed. */
+std::vector<float> renderSteady (FilterType type, double resonance, int note, double cutoffHz, double fs)
+{
+	R2SynthDsp d;
+	d.setSampleRate (fs);
+	for (int v = 0; v < kNumVcos; ++v)
+	{
+		d.setVcoWave (v, Vco::Wave::Saw);
+		d.setVcoTune (v, 0.0);
+		d.setVcoLevel (v, v == 0 ? 1.0 : 0.0);
+	}
+	d.setLfoPitchDepth (0.0);
+	d.setLfoCutoffDepth (0.0);
+	d.setLfoVcaDepth (0.0);
+	d.setLfoResonanceDepth (0.0);
+	d.setLfo2Level (0.0);
+	d.setCutoffHz (cutoffHz);
+	d.setResonance (resonance);
+	d.setKeyTrack (0.0);
+	d.setVcfEnvAmount (0.0);
+	AdsrSpec a;
+	a.attack = 0.001; a.decay = 0.1; a.sustain = 1.0; a.release = 0.1;
+	d.setVcfEnvelope (a);
+	d.setVcaEnvelope (a);
+	d.setFilterType (type);
+	d.setPortamento (0.0);
+	d.reset ();
+	d.setFilterType (type);
+	d.noteOn (note, 1.f);
+	const int n = static_cast<int> (fs * 1.5);
+	std::vector<float> l (static_cast<std::size_t> (n)), r (static_cast<std::size_t> (n));
+	for (int i = 0; i < n; i += 512)
+		d.render (&l[static_cast<std::size_t> (i)], &r[static_cast<std::size_t> (i)], std::min (512, n - i));
+	return l;
+}
+} // namespace
+
+static void testOversampling ()
+{
+	std::printf ("oversampling: the engine at 2x, decimated by a half-band\n");
+
+	R2SynthDsp probe;
+	probe.setSampleRate (48000.0);
+	check (probe.sampleRate () == 48000.0, "sampleRate() reports the HOST's rate");
+	check (engineRate (48000.0) == 96000.0, "the engine runs at kOversample x it");
+
+	// The decimator on its own, at 96 kHz in: flat below 20 kHz, and
+	// everything that would fold below 20 kHz gone.
+	auto through = [] (double hz)
+	{
+		// RMS against a full-scale sine's, not the peak: at 48 kHz out a
+		// sine at 18 kHz is sampled at only eight phases and its sample
+		// peak is 0.7 dB under its true one.
+		HalfbandDecimator dec;
+		double sum = 0.0;
+		int count = 0;
+		for (int i = 0; i < 52000; ++i)
+		{
+			const double a = std::sin (2.0 * 3.14159265358979323846 * hz * (2 * i) / 96000.0);
+			const double b = std::sin (2.0 * 3.14159265358979323846 * hz * (2 * i + 1) / 96000.0);
+			const double y = dec.process (a, b);
+			if (i >= 4000)
+			{
+				sum += y * y;
+				++count;
+			}
+		}
+		return 10.0 * std::log10 (2.0 * sum / count + 1e-300);
+	};
+	check (std::fabs (through (1000.0)) < 0.01, "half-band: 1 kHz passes within 0.01 dB");
+	check (std::fabs (through (20000.0)) < 0.01, "half-band: 20 kHz passes within 0.01 dB");
+	for (double hz : { 28000.0, 30000.0, 36000.0, 44000.0 })
+		check (through (hz) < -95.0, "half-band: " + std::to_string (static_cast<int> (hz)) +
+		       " Hz is down more than 95 dB (got " + std::to_string (through (hz)) + ")");
+
+	// THE FIX ITSELF. MS-20 at full resonance, cutoff 6 kHz, C7 (MIDI 96):
+	// -36.3 dB at 1x, before; about -63 at 2x.
+	const double c7 = noteToHz (96);
+	const double ms20 = worstSpurDb (renderSteady (FilterType::Ms20, 1.0, 96, 6000.0, 48000.0), 48000.0, c7);
+	const double late = worstSpurDb (renderSteady (FilterType::Ms20Late, 1.0, 96, 6000.0, 48000.0), 48000.0, c7);
+	std::printf ("    worst alias spur at C7, cutoff 6 kHz, resonance 1.0: MS-20 %.1f dB, MS-20 Late %.1f dB\n", ms20, late);
+	check (ms20 < -55.0, "MS-20: the worst alias is more than 55 dB under the note (was -36 at 1x)");
+	check (late < -55.0, "MS-20 Late: the worst alias is more than 55 dB under the note (was -42 at 1x)");
+
+	// NEGATIVE CONTROL: the spur search does see aliasing - a naive,
+	// un-band-limited saw at C7, 48 kHz.
+	{
+		std::vector<float> naive (72000);
+		double phase = 0.0;
+		for (float& v : naive)
+		{
+			v = static_cast<float> (2.0 * phase - 1.0);
+			phase += c7 / 48000.0;
+			if (phase >= 1.0)
+				phase -= 1.0;
+		}
+		check (worstSpurDb (naive, 48000.0, c7) > -40.0, "NEGATIVE CONTROL: a naive saw's aliases are found");
+	}
+
+	// IN SILENCE THE DECIMATOR GOES TO EXACTLY ZERO. Its allpasses would
+	// otherwise stick in the denormal range; flushTiny stops that.
+	{
+		HalfbandDecimator dec;
+		dec.process (1.0, -1.0);
+		bool sub = false;
+		double y = 1.0;
+		for (int i = 0; i < 200000; ++i)
+		{
+			y = dec.process (0.0, 0.0);
+			sub = sub || std::fpclassify (y) == FP_SUBNORMAL;
+		}
+		check (y == 0.0 && ! sub, "half-band: an impulse then silence ends at exactly zero, never denormal");
+	}
+}
+
 int main ()
 {
 	std::printf ("R2Synth DSP tests\n");
@@ -2218,6 +2406,7 @@ int main ()
 	testModulation ();
 	testTraces ();
 	testDegenerate ();
+	testOversampling ();
 	measureDefaultLevel ();
 
 	std::printf ("---------------------\n");

@@ -321,22 +321,28 @@ void filterDisplayData (double cutoffHz, double resonanceK, double sampleRate,
 	if (selfOscillating (resonanceK))
 		resonanceK = 0.999;
 
-	if (curve != nullptr && count > 0)
-	{
-		traceFilterResponse (type, cutoffHz, resonanceK, sampleRate, kFilterMinHz, kFilterMaxHz, curve, count);
-		for (int i = 0; i < count; ++i)
-			curve[i] = static_cast<float> (toY (curve[i]));
-	}
-
-	// The dot: at the cutoff the FILTER uses - clamped to the ceiling
-	// exactly as process() clamps it - and on the curve there.
+	// The cutoff the FILTER uses - clamped to the HOST rate's ceiling
+	// exactly as process() clamps it - and the filter drawn at the
+	// ENGINE's rate (kOversample x the host's), because that is the
+	// filter that is heard. traceFilterResponse would clamp to the
+	// engine's ceiling, which is higher, so the clamp is done here first.
 	if (sampleRate < 1000.0)
 		sampleRate = 44100.0;
 	double hz = cutoffHz;
 	if (hz < kMinCutoffHz) hz = kMinCutoffHz;
 	if (hz > cutoffCeilingHz (sampleRate)) hz = cutoffCeilingHz (sampleRate);
+	const double engine = engineRate (sampleRate);
+
+	if (curve != nullptr && count > 0)
+	{
+		traceFilterResponse (type, hz, resonanceK, engine, kFilterMinHz, kFilterMaxHz, curve, count);
+		for (int i = 0; i < count; ++i)
+			curve[i] = static_cast<float> (toY (curve[i]));
+	}
+
+	// The dot: at that cutoff, on the curve.
 	float db = 0.f;
-	traceFilterResponse (type, cutoffHz, resonanceK, sampleRate, hz, hz, &db, 1);
+	traceFilterResponse (type, hz, resonanceK, engine, hz, hz, &db, 1);
 	markerX = std::log (hz / kFilterMinHz) / std::log (kFilterMaxHz / kFilterMinHz);
 	markerY = toY (db);
 }

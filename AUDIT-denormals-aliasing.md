@@ -20,7 +20,7 @@ needs only that file.
 |---|---|---|---|
 | **MasterLoud** | **Problem.** Unflushed biquads go into permanent denormals once audio stops; CPU rises 4–5× and stays there (measured) | None | **1: fix** |
 | **Project6** | **Problem.** Level smoothers aimed at 0 (any fader at the bottom) stick at a denormal for good; ~30× the cost of that loop (measured) | **Problem.** Linear interpolation when Varispeed speeds a loop up, or a file's rate is above the session's | **2: fix** |
-| **R2Synth** | Handled | **Problem.** MS-20 and MS-20 Late filters at high resonance and bright cutoff: alias spurs at −36 to −47 dB at 1×, −63 to −70 dB at 2× (measured) | **3: fix** |
+| **R2Synth** | Handled | **Fixed 30 Oct.** Was: MS-20 and MS-20 Late filters at high resonance and bright cutoff: alias spurs at −36 to −47 dB at 1×, −63 to −70 dB at 2× (measured) | done |
 | **FilterDrum** | Handled | **Problem.** Self-oscillation above ~4 kHz: alias tones at −26 / −29 dB right beside a 6 kHz pitch (measured) | **4: fix** |
 | **ForTran** | Minor: output gain smoother at 0 | **Problem.** Partials above Nyquist are not culled; notes from about D♯7 up alias | **5: fix** |
 | **VocalFilter** | Minor: Mix and Trim smoothers stick when aimed at 0 | None (linear) | 6: tidy |
@@ -207,6 +207,8 @@ attenuated. Two ways to fix it:
 ## C. This project's findings
 
 ### R2Synth: aliasing, priority 3 (denormals handled)
+
+> **Status: fixed 30 Oct 2026** on R2Synth branch `ms20-oversampling` (see its `PORTING-NOTES.md`, "Oversampling the engine"). The whole voice runs at 2× and goes through an 8-coefficient IIR half-band. MS-20 at C7, full resonance: −36 → −63 dB; Late: −42 → −72 dB. CPU doubles, to under 2 % of a core.
 
 **Denormals: handled.**
 
