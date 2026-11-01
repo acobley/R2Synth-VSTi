@@ -22,6 +22,7 @@
 //------------------------------------------------------------------------
 
 #include "R2SynthDsp.h"
+#include "DenormalGuard.h"
 
 #include <algorithm>
 #include <cmath>
@@ -2381,6 +2382,20 @@ static void testOversampling ()
 			sub = sub || std::fpclassify (y) == FP_SUBNORMAL;
 		}
 		check (y == 0.0 && ! sub, "half-band: an impulse then silence ends at exactly zero, never denormal");
+	}
+
+	// The guard process() runs under. Every value through memory: the
+	// guard orders memory accesses round its mode switch, not register
+	// arithmetic.
+	if (ScopedFlushDenormals::supported ())
+	{
+		volatile float tiny = 1.0e-37f, half = 0.01f;
+		volatile float before = tiny * half;
+		volatile float inside = 1.f;
+		{ ScopedFlushDenormals guard; inside = tiny * half; }
+		volatile float after = tiny * half;
+		check (before != 0.f && inside == 0.f && after == before,
+		       "ScopedFlushDenormals: flush-to-zero inside, the host's mode restored after");
 	}
 }
 
