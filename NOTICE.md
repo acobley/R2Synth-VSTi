@@ -22,23 +22,17 @@ If you distribute a modified version, give it a different name, so that
 nobody mistakes it for the official build or asks the author to support it.
 You may still say truthfully that your version is based on R2Synth.
 
-## The official build and activation codes
+## The official build
 
-The signed installer published by the author includes a 7-day evaluation,
-after which the plug-in shows a reminder until an activation code is entered.
-Activation codes are issued, currently free of charge, at
-<https://www.r2-dvd.net/activate.jsp>.
+The signed and notarised installer published by the author has no
+evaluation period, no reminder and no activation code: R2Synth works in full,
+with no time limit.
 
-- The GPL gives you the freedom to build R2Synth from this source
-  yourself, with or without the reminder. The activation code is a way of
-  supporting the official, signed and notarised build; it is not a
-  restriction on the software.
-- **An activation code is personal to the person it was issued to.** Please
-  do not publish or share it. This is a condition of the registration
-  service, not of this licence.
-- Activation codes are signed with a private key that is **not** part of
-  this source. The public key in `source/LicencePublicKey.h` only verifies
-  codes; it cannot make them.
+The source still contains the activation-code system (the `Licence*` files
+in `source/`), switched off by `kLicensingEnabled = false` in
+`source/LicenceConfig.h`. Codes would be signed with a private key that is
+**not** part of this source; the public key in `source/LicencePublicKey.h`
+only verifies codes and cannot make them.
 
 ## Third-party components
 
