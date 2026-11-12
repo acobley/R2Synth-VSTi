@@ -67,7 +67,7 @@ sudo rm -rf "/Library/Audio/Presets/AE Cobley/R2Synth"
 ## Checksum
 
 ```
-SHA-256: <paste from: shasum -a 256 installer/R2Synth-1.1.2.0.pkg>
+SHA-256: 7ec978f3ffbe8f893511bed4c5e1bbfea96e6d0c81805d42821543ce3d3f63ce
 ```
 
 ---
