@@ -518,8 +518,8 @@ it, silently. This is the last cheap moment to be sure.
   instantiate is the failure the whole script exists to prevent.
 * Publish a checksum beside the asset: `shasum -a 256 R2Synth-<version>.pkg`.
 * Put the deliberate surprises in the release notes — monophonic with every
-  note retriggering, velocity ignored, and the evaluation reminder after 7
-  days. All are choices recorded in PORTING-NOTES; none will look like one to
+  note retriggering, velocity ignored (and, if `kLicensingEnabled` is ever
+  turned back on, the evaluation reminder after 7 days). All are choices recorded in PORTING-NOTES; none will look like one to
   somebody meeting the plug-in for the first time.
 * Say how to uninstall, because a `.pkg` never will:
 
