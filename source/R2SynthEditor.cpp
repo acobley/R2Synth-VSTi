@@ -3,6 +3,7 @@
 //------------------------------------------------------------------------
 
 #include "R2SynthEditor.h"
+#include "LicenceConfig.h"
 #include "LicenceViews.h"
 #include "R2SynthController.h"
 #include "R2SynthDsp.h"
@@ -102,6 +103,11 @@ bool PLUGIN_API R2SynthEditor::open (void* parent, const PlatformType& platformT
 	// clock or shows the reminder: a host scanning plug-ins, or auval,
 	// never opens an editor, so never sees either. Nothing here touches
 	// the audio path; an unlicensed R2Synth sounds exactly the same.
+	//
+	// kLicensingEnabled (LicenceConfig.h) false: none of this runs - no
+	// badge, so no way to the dialog, and no evaluation clock. if
+	// constexpr, not #if, so the block still compiles and can't rot.
+	if constexpr (R2Licence::kLicensingEnabled)
 	{
 		const auto decision = mLicence.editorOpened (R2Licence::LicenceStore::today ());
 		mLicenceBadge = new LicenceBadge (toCRect (Layout::kBadge));

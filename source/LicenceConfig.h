@@ -3,6 +3,8 @@
 //
 // The per-release knobs from the design doc, in one place:
 //
+//   kLicensingEnabled   false: the editor shows no badge and no reminder
+//                       and starts no evaluation. The code stays in.
 //   kEvaluationDays     days from the first editor open before the
 //                       reminder starts (day 0..kEvaluationDays: no nag).
 //                       Change the number and rebuild; nothing else.
@@ -29,6 +31,13 @@
 namespace R2Licence {
 
 constexpr int kEvaluationDays = 7;
+
+// THE MASTER SWITCH (12 Nov 2026: off). false = no badge, no reminder,
+// no evaluation clock (firstRun is never written), so turning it back on
+// later gives everyone a fresh kEvaluationDays from then. The licence
+// code still compiles in every build (R2SynthEditor uses if constexpr,
+// not #if) and tests/LicenceTests.cpp still runs all of it.
+constexpr bool kLicensingEnabled = false;
 
 constexpr std::array<uint16_t, 2> kAcceptedProducts = {kProductBundleV1, kProductR2SynthFree};
 

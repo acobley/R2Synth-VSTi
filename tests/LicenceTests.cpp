@@ -273,6 +273,9 @@ void testThisBuild ()
 {
 	std::printf ("This build (LicenceConfig.h / LicencePublicKey.h)\n");
 	check (kEvaluationDays > 0, "evaluation period is positive");
+	if (!kLicensingEnabled)
+		std::printf ("  NOTE: kLicensingEnabled = false - this build shows no badge, no reminder\n"
+		             "        and starts no evaluation (the code below is still tested)\n");
 	bool hasV1 = false;
 	for (auto p : kAcceptedProducts)
 		hasV1 = hasV1 || p == kProductBundleV1;
